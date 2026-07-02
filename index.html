@@ -1,0 +1,3043 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Marcar">
+    <meta name="theme-color" content="#211a2b">
+    <link rel="manifest" href="data:application/manifest+json,{%22name%22:%22Marcar%20para%20Existir%22,%22short_name%22:%22Marcar%22,%22start_url%22:%22/%22,%22scope%22:%22/%22,%22display%22:%22standalone%22,%22theme_color%22:%22%23211a2b%22,%22background_color%22:%22%23211a2b%22,%22icons%22:[{%22src%22:%22data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%23211a2b' width='192' height='192'/><rect fill='%23ff7a6b' x='40' y='40' width='112' height='112' rx='8' transform='rotate(-6 96 96)'/><text x='96' y='130' font-size='90' text-anchor='middle' fill='%23211a2b' font-family='Georgia,serif' font-style='italic'>M</text></svg>%22,%22sizes%22:%22192x192%22,%22type%22:%22image/svg+xml%22,%22purpose%22:%22any%22}]}">
+    <title>Marcar para Existir — Editor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Lora:ital,wght@0,400;0,700;1,400&family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip/dist/jszip.min.js"></script>
+    <style>
+        /* ============================================================
+           MARCAR PARA EXISTIR — Design System
+           Hand × Machine: marcação humana → leitura por máquina
+           ============================================================ */
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            /* Layer 1: Ground & Paper */
+            --ground: #211a2b;
+            --ground-2: #2a2238;
+            --ground-deep: #171221;
+            --paper: #f6eede;
+            --paper-edge: #e9dcc2;
+            --ink: #2c2438;
+            --ink-soft: #5c5168;
+            --cream: #f0e7d6;
+            --cream-soft: #bcae9e;
+
+            /* Layer 2: Rainbow accents */
+            --c-coral: #ff7a6b;
+            --c-orange: #ff9d52;
+            --c-amber: #f5c64f;
+            --c-green: #7fcf72;
+            --c-teal: #3fc7b4;
+            --c-sky: #56b6ea;
+            --c-blue: #6f86f2;
+            --c-indigo: #9079ee;
+            --c-violet: #b574e4;
+            --c-pink: #ee79b6;
+
+            /* Default accent (coral — the opening color) */
+            --accent: #ff7a6b;
+
+            /* Semantic aliases (used by inline JS) */
+            --danger: #ff7a6b;
+            --success: #7fcf72;
+
+            /* Fonts */
+            --hand: "Caveat", cursive;
+            --serif-display: "Fraunces", Georgia, serif;
+            --body: "Lora", Georgia, serif;
+            --mono: "Courier Prime", "Courier New", monospace;
+
+            /* Editor font size (toggle) */
+            --editor-font-size: 13px;
+
+            --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        html, body {
+            height: 100%;
+            background-color: var(--ground);
+            color: var(--cream);
+            font-family: var(--body);
+            font-size: 14px;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            overflow: hidden;
+        }
+
+        #app {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            height: 100dvh;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* ============================================================
+           BACKGROUND WASHES (ambient texture)
+           ============================================================ */
+        .wash {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(60px);
+            opacity: 0.12;
+            z-index: 0;
+            pointer-events: none;
+        }
+        .wash-1 { width: 300px; height: 300px; background: var(--c-coral); top: -80px; right: -100px; }
+        .wash-2 { width: 260px; height: 260px; background: var(--c-indigo); bottom: -60px; left: -90px; }
+
+        /* ============================================================
+           HEADER (Run-Head)
+           ============================================================ */
+        header {
+            flex: 0 0 auto;
+            padding: 0.85rem 1rem 0.95rem;
+            background-color: var(--ground);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            position: relative;
+            z-index: 50;
+        }
+
+        header::after {
+            content: "";
+            position: absolute;
+            left: 1rem;
+            right: 1rem;
+            bottom: 0;
+            height: 2px;
+            background: repeating-linear-gradient(
+                90deg,
+                var(--cream-soft) 0 7px,
+                transparent 7px 12px
+            );
+            opacity: 0.25;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .header-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        .brand-chip {
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+            background: var(--accent);
+            transform: rotate(-6deg);
+            box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.18) inset;
+            flex-shrink: 0;
+        }
+
+        .header-title {
+            font-family: var(--hand);
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: var(--cream);
+            line-height: 1;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-menu {
+            width: 42px;
+            height: 42px;
+            border: none;
+            border-radius: 8px;
+            background-color: transparent;
+            cursor: pointer;
+            color: var(--cream);
+            transition: background-color var(--transition);
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-menu:active {
+            background-color: rgba(255, 255, 255, 0.08);
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 0.15rem;
+        }
+
+        .btn-icon {
+            width: 42px;
+            height: 42px;
+            border: none;
+            border-radius: 8px;
+            background-color: transparent;
+            cursor: pointer;
+            color: var(--cream);
+            transition: background-color var(--transition);
+            font-size: 1.15rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-icon:active {
+            background-color: rgba(255, 255, 255, 0.08);
+        }
+
+        .btn-icon:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
+
+        .btn-drive {
+            position: relative;
+        }
+
+        .drive-dot {
+            position: absolute;
+            bottom: 6px;
+            right: 6px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--cream-soft);
+            border: 1.5px solid var(--ground);
+            transition: background-color var(--transition);
+        }
+
+        .drive-dot.connected { background-color: var(--c-green); }
+        .drive-dot.syncing { background-color: var(--accent); animation: spin 1.5s linear infinite; }
+        .drive-dot.error { background-color: var(--c-coral); animation: pulse-danger 2s ease-in-out infinite; }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes pulse-danger { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+        /* ============================================================
+           MAIN CONTAINER
+           ============================================================ */
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* ============================================================
+           SIDEBAR (Project cards)
+           ============================================================ */
+        .sidebar {
+            width: 280px;
+            background-color: var(--ground-2);
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: transform var(--transition);
+            position: relative;
+            z-index: 100;
+        }
+
+        .sidebar.hidden {
+            transform: translateX(-100%);
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            box-shadow: 4px 0 24px rgba(0, 0, 0, 0.3);
+        }
+
+        .sidebar-header {
+            padding: 1rem 1rem 0.85rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .sidebar-title {
+            font-family: var(--mono);
+            font-size: 9px;
+            font-weight: 700;
+            color: var(--cream-soft);
+            text-transform: uppercase;
+            letter-spacing: 0.28em;
+        }
+
+        .sidebar-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .projects-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.75rem;
+        }
+
+        /* Project group cards */
+        .project-group {
+            margin-bottom: 0.6rem;
+            background: rgba(255, 255, 255, 0.025);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            border-radius: 10px;
+            overflow: hidden;
+            transition: border-color var(--transition);
+        }
+
+        .project-group:hover {
+            border-color: rgba(255, 255, 255, 0.13);
+        }
+
+        .project-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.7rem 0.75rem;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .project-header.active .project-name {
+            color: var(--accent);
+        }
+
+        .project-toggle {
+            font-size: 0.7rem;
+            color: var(--cream-soft);
+            transition: transform var(--transition);
+            flex-shrink: 0;
+            transform: rotate(90deg);
+        }
+
+        .project-toggle.expanded {
+            transform: rotate(90deg);
+        }
+
+        .project-toggle:not(.expanded) {
+            transform: rotate(0deg);
+        }
+
+        .project-name {
+            flex: 1;
+            font-family: var(--body);
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: var(--cream);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .project-menu {
+            width: 28px;
+            height: 28px;
+            border: none;
+            border-radius: 6px;
+            background: transparent;
+            color: var(--cream-soft);
+            cursor: pointer;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color var(--transition);
+            flex-shrink: 0;
+        }
+
+        .project-menu:active {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .project-files {
+            padding: 0 0.5rem 0.5rem;
+            display: none;
+        }
+
+        .project-files.expanded {
+            display: block;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.6rem;
+            border-radius: 7px;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            transition: background-color var(--transition), transform var(--transition);
+        }
+
+        .file-item:hover {
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .file-item.active {
+            background: rgba(255, 255, 255, 0.07);
+        }
+
+        .file-item.active::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 3px;
+            height: 60%;
+            background: var(--accent);
+            border-radius: 0 2px 2px 0;
+        }
+
+        .file-item.swiped {
+            transform: translateX(-72px);
+        }
+
+        .file-checkbox {
+            width: 15px;
+            height: 15px;
+            accent-color: var(--accent);
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .file-name {
+            flex: 1;
+            font-family: var(--body);
+            font-size: 0.78rem;
+            color: var(--cream);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 0.25rem;
+            position: absolute;
+            right: -72px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .file-item.swiped .file-actions {
+            right: 0.4rem;
+        }
+
+        .file-action-btn {
+            width: 30px;
+            height: 30px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+
+        .file-action-btn.rename { background: var(--c-sky); }
+        .file-action-btn.delete { background: var(--c-coral); }
+
+        /* Sidebar footer */
+        .sidebar-footer {
+            padding: 0.75rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .sidebar-footer-btn {
+            flex: 1;
+            padding: 0.65rem 0.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 8px;
+            background-color: rgba(255, 255, 255, 0.02);
+            color: var(--cream);
+            cursor: pointer;
+            transition: all var(--transition);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.4rem;
+            min-height: 56px;
+        }
+
+        .sidebar-footer-btn:active {
+            background-color: rgba(255, 255, 255, 0.06);
+            border-color: var(--accent);
+        }
+
+        .sidebar-footer-btn:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
+
+        .sidebar-footer-icon {
+            font-size: 1.1rem;
+        }
+
+        .sidebar-footer-label {
+            font-family: var(--mono);
+            font-size: 8px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--cream-soft);
+            text-align: center;
+            line-height: 1;
+        }
+
+        #installBtn { display: none; }
+        #installBtn.show { display: flex; }
+
+        @media (max-width: 380px) {
+            .sidebar-footer-label { display: none; }
+            .sidebar-footer-btn { min-height: 44px; }
+        }
+
+        /* ============================================================
+           CONTENT AREA
+           ============================================================ */
+        .content-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-width: 0;
+        }
+
+        /* Toolbar (breadcrumbs) */
+        .toolbar {
+            flex: 0 0 auto;
+            padding: 0.6rem 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .breadcrumbs {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-family: var(--mono);
+            font-size: 10px;
+            letter-spacing: 0.05em;
+            color: var(--cream-soft);
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+
+        .breadcrumb.empty {
+            font-style: italic;
+            opacity: 0.6;
+        }
+
+        .breadcrumb-sep {
+            opacity: 0.4;
+        }
+
+        .breadcrumb-current {
+            color: var(--cream);
+            font-weight: 700;
+        }
+
+        .btn-download {
+            padding: 0.45rem 0.7rem;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--cream);
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all var(--transition);
+        }
+
+        .btn-download:active:not(:disabled) {
+            background: var(--accent);
+        }
+
+        .btn-download:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+        }
+
+        /* Main editor/preview area */
+        main {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .pane {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .pane.hidden { display: none; }
+
+        /* ===== EDITOR (Machine Panel) — PRIMARY FOCUS ===== */
+        /* ===== EDITOR PANE (Machine — full-bleed) ===== */
+        .editor-pane {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .editor-label {
+            position: absolute;
+            top: 0.75rem;
+            left: 1rem;
+            font-family: var(--mono);
+            font-size: 8.5px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--cream-soft);
+            background: var(--ground-deep);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            padding: 2px 8px;
+            border-radius: 3px;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        #editor {
+            flex: 1;
+            width: 100%;
+            padding: 2.5rem 1.25rem 1.25rem;
+            border: none;
+            background-color: var(--ground-deep);
+            color: var(--cream);
+            font-family: var(--mono);
+            font-size: var(--editor-font-size);
+            line-height: 1.7;
+            resize: none;
+            overflow-y: auto;
+            tab-size: 2;
+        }
+
+        #editor:focus { outline: none; }
+
+        #editor::placeholder {
+            color: var(--cream-soft);
+            opacity: 0.5;
+            font-style: italic;
+        }
+
+        /* ===== PREVIEW PANE (Paper — folha sobre mesa) ===== */
+        .preview-pane {
+            background: var(--ground);
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .preview-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .preview-label {
+            font-family: var(--mono);
+            font-size: 8.5px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            background: var(--accent);
+            color: var(--ground);
+            padding: 3px 10px;
+            border-radius: 3px 3px 0 0;
+            font-weight: 700;
+            align-self: flex-start;
+            margin-left: 12px;
+            flex-shrink: 0;
+        }
+
+        .preview-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.5rem 1.5rem 2rem;
+            background-color: var(--paper);
+            color: var(--ink);
+            border-radius: 0 10px 10px 10px;
+            box-shadow: 0 6px 0 -2px rgba(0, 0, 0, 0.2), 0 4px 20px rgba(0, 0, 0, 0.25);
+        }
+
+        /* Rendered markdown styles (paper) */
+        .preview-content h1 {
+            font-family: var(--hand);
+            font-weight: 700;
+            font-size: 2.2rem;
+            line-height: 0.95;
+            color: var(--ink);
+            margin: 0 0 0.5rem;
+        }
+
+        .preview-content h2 {
+            font-family: var(--serif-display);
+            font-weight: 600;
+            font-size: 1.4rem;
+            color: var(--ink);
+            margin: 1.2rem 0 0.5rem;
+        }
+
+        .preview-content h3 {
+            font-family: var(--serif-display);
+            font-weight: 600;
+            font-size: 1.1rem;
+            color: var(--ink);
+            margin: 1rem 0 0.4rem;
+        }
+
+        .preview-content h4,
+        .preview-content h5,
+        .preview-content h6 {
+            font-family: var(--serif-display);
+            font-weight: 600;
+            color: var(--ink);
+            margin: 0.8rem 0 0.3rem;
+        }
+
+        .preview-content p {
+            font-family: var(--body);
+            font-size: 0.95rem;
+            line-height: 1.7;
+            color: var(--ink);
+            margin: 0 0 0.75rem;
+        }
+
+        .preview-content a {
+            color: #3a6ea5;
+            text-decoration: underline;
+            text-underline-offset: 2px;
+        }
+
+        .preview-content strong { font-weight: 700; }
+        .preview-content em { font-style: italic; }
+
+        .preview-content code {
+            font-family: var(--mono);
+            font-size: 0.85em;
+            background: #ece2cd;
+            padding: 1px 5px;
+            border-radius: 3px;
+            color: var(--ink);
+        }
+
+        .preview-content pre {
+            background: var(--ground-deep);
+            border-radius: 8px;
+            padding: 1rem;
+            overflow-x: auto;
+            margin: 0 0 0.75rem;
+        }
+
+        .preview-content pre code {
+            background: none;
+            color: var(--cream);
+            padding: 0;
+            font-size: 0.8rem;
+            line-height: 1.5;
+        }
+
+        .preview-content blockquote {
+            font-family: var(--serif-display);
+            font-style: italic;
+            font-size: 1rem;
+            line-height: 1.5;
+            color: var(--ink);
+            padding: 0.5rem 0 0.5rem 1rem;
+            border-left: 3px solid var(--accent);
+            margin: 0 0 0.75rem;
+        }
+
+        .preview-content ul,
+        .preview-content ol {
+            margin: 0 0 0.75rem;
+            padding-left: 1.5rem;
+        }
+
+        .preview-content li {
+            font-family: var(--body);
+            font-size: 0.92rem;
+            line-height: 1.55;
+            color: var(--ink);
+            margin: 0.25rem 0;
+        }
+
+        .preview-content hr {
+            border: none;
+            border-top: 2px dashed var(--paper-edge);
+            margin: 1.2rem 0;
+        }
+
+        .preview-content img {
+            max-width: 100%;
+            border-radius: 8px;
+            margin: 0.5rem 0;
+        }
+
+        .preview-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0 0 0.75rem;
+            font-size: 0.88rem;
+        }
+
+        .preview-content th,
+        .preview-content td {
+            border: 1px solid var(--paper-edge);
+            padding: 0.4rem 0.6rem;
+            text-align: left;
+            color: var(--ink);
+        }
+
+        .preview-content th {
+            background: #ece2cd;
+            font-family: var(--serif-display);
+            font-weight: 600;
+        }
+
+        /* ===== BATCH DOWNLOAD AREA ===== */
+        .batch-download-area {
+            flex: 1;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            text-align: center;
+            gap: 0.5rem;
+        }
+
+        .batch-download-area.visible {
+            display: flex;
+        }
+
+        .batch-icon {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .batch-title {
+            font-family: var(--hand);
+            font-size: 1.8rem;
+            color: var(--cream);
+        }
+
+        .batch-description {
+            font-family: var(--mono);
+            font-size: 9px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--cream-soft);
+            margin-bottom: 1rem;
+        }
+
+        .batch-files-list {
+            width: 100%;
+            max-width: 320px;
+            margin-bottom: 1rem;
+            text-align: left;
+        }
+
+        .batch-file-item {
+            font-family: var(--mono);
+            font-size: 0.78rem;
+            color: var(--cream);
+            padding: 0.5rem 0.7rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 7px;
+            margin-bottom: 0.4rem;
+        }
+
+        .batch-file-project {
+            font-size: 8px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--cream-soft);
+            margin-bottom: 0.15rem;
+        }
+
+        .batch-file-name {
+            color: var(--cream);
+        }
+
+        .btn-download-batch {
+            padding: 0.7rem 1.5rem;
+            background: var(--accent);
+            color: var(--ground);
+            border: none;
+            border-radius: 6px;
+            font-family: var(--body);
+            font-size: 0.9rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all var(--transition);
+        }
+
+        .btn-download-batch:active:not(:disabled) {
+            transform: translateY(1px);
+        }
+
+        .btn-download-batch:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
+        /* ============================================================
+           FOOTER (Diptych Toggle: Machine ↔ Paper)
+           ============================================================ */
+        footer {
+            flex: 0 0 auto;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            background: var(--ground);
+        }
+
+        .footer-row {
+            display: flex;
+            align-items: center;
+            padding: 0.5rem 1rem;
+        }
+
+        .footer-row:first-child {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .footer-left {
+            display: flex;
+            gap: 1rem;
+            flex: 1;
+        }
+
+        .footer-stat {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-family: var(--mono);
+            font-size: 9px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--cream-soft);
+        }
+
+        .footer-stat-value {
+            color: var(--cream);
+            font-weight: 700;
+        }
+
+        .btn-copy {
+            padding: 0.4rem 0.6rem;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--cream);
+            cursor: pointer;
+            font-size: 0.95rem;
+            transition: all var(--transition);
+        }
+
+        .btn-copy:active {
+            background: var(--accent);
+        }
+
+        .footer-tab-group {
+            display: flex;
+            gap: 0.3rem;
+            margin: 0 auto;
+            background: var(--ground-deep);
+            padding: 0.25rem;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .footer-btn {
+            padding: 0.45rem 1.1rem;
+            border: none;
+            border-radius: 6px;
+            background: transparent;
+            color: var(--cream-soft);
+            cursor: pointer;
+            font-family: var(--body);
+            font-size: 0.82rem;
+            font-weight: 700;
+            transition: all var(--transition);
+        }
+
+        .footer-btn.active {
+            background: var(--accent);
+            color: var(--ground);
+        }
+
+        .footer-btn:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
+
+        /* ============================================================
+           SPLASH SCREEN
+           ============================================================ */
+        .splash-screen {
+            position: fixed;
+            inset: 0;
+            background-color: var(--ground);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2.5rem;
+            z-index: 2000;
+            opacity: 1;
+            transition: opacity 0.5s var(--transition);
+            overflow: hidden;
+        }
+
+        .splash-screen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .splash-screen .wash {
+            position: absolute;
+            opacity: 0.18;
+        }
+
+        .splash-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.25rem;
+            text-align: center;
+            padding: 2rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .splash-mark {
+            width: 80px;
+            height: 80px;
+            background: var(--accent);
+            border-radius: 8px;
+            transform: rotate(-6deg);
+            box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.18) inset;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .splash-mark span {
+            font-family: var(--serif-display);
+            font-style: italic;
+            font-weight: 600;
+            font-size: 2.8rem;
+            color: var(--ground);
+            transform: rotate(6deg);
+        }
+
+        .splash-kicker {
+            font-family: var(--mono);
+            font-size: 9px;
+            letter-spacing: 0.28em;
+            text-transform: uppercase;
+            color: var(--cream-soft);
+        }
+
+        .splash-title {
+            font-family: var(--hand);
+            font-size: 2.8rem;
+            font-weight: 700;
+            color: var(--cream);
+            line-height: 0.95;
+        }
+
+        .splash-subtitle {
+            font-family: var(--serif-display);
+            font-style: italic;
+            font-size: 0.95rem;
+            color: var(--cream);
+            opacity: 0.85;
+            max-width: 280px;
+        }
+
+        .splash-footer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.25rem;
+            width: 100%;
+            max-width: 300px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .splash-checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-family: var(--mono);
+            font-size: 10px;
+            letter-spacing: 0.05em;
+            color: var(--cream-soft);
+        }
+
+        .splash-checkbox-group input {
+            cursor: pointer;
+            accent-color: var(--accent);
+            width: 15px;
+            height: 15px;
+        }
+
+        .splash-checkbox-group label { cursor: pointer; }
+
+        .btn-splash-dismiss {
+            padding: 0.75rem 2.5rem;
+            background-color: var(--accent);
+            color: var(--ground);
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: var(--body);
+            font-size: 0.9rem;
+            font-weight: 700;
+            transition: all var(--transition);
+            box-shadow: 0 4px 0 -1px rgba(0, 0, 0, 0.25);
+        }
+
+        .btn-splash-dismiss:active {
+            transform: translateY(2px);
+            box-shadow: 0 2px 0 -1px rgba(0, 0, 0, 0.25);
+        }
+
+        /* ============================================================
+           MODALS (Drive + Config) — Paper cards
+           ============================================================ */
+        .drive-modal-overlay,
+        .config-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(23, 18, 33, 0.7);
+            backdrop-filter: blur(3px);
+            z-index: 500;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity var(--transition);
+            padding: 1rem;
+        }
+
+        .drive-modal-overlay.visible,
+        .config-modal-overlay.visible {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .drive-modal,
+        .config-modal {
+            background-color: var(--ground-2);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 14px;
+            padding: 1.5rem;
+            width: 340px;
+            max-width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .drive-modal-header,
+        .config-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .drive-modal-title,
+        .config-modal-title {
+            font-family: var(--hand);
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--cream);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .drive-modal-close,
+        .config-modal-close {
+            width: 32px;
+            height: 32px;
+            border: none;
+            border-radius: 7px;
+            background-color: transparent;
+            cursor: pointer;
+            color: var(--cream-soft);
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color var(--transition);
+        }
+
+        .drive-modal-close:active,
+        .config-modal-close:active {
+            background-color: rgba(255, 255, 255, 0.08);
+        }
+
+        .drive-status {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.85rem;
+            background-color: rgba(255, 255, 255, 0.03);
+            border-radius: 9px;
+            font-family: var(--body);
+            font-size: 0.85rem;
+            color: var(--cream-soft);
+        }
+
+        .drive-status-icon {
+            font-size: 1.25rem;
+            flex-shrink: 0;
+        }
+
+        .drive-status-text { flex: 1; line-height: 1.4; }
+
+        .drive-status-name {
+            font-family: var(--body);
+            font-weight: 700;
+            color: var(--cream);
+            font-size: 0.85rem;
+        }
+
+        .drive-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .btn-drive-action {
+            padding: 0.8rem 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 8px;
+            background-color: rgba(255, 255, 255, 0.02);
+            color: var(--cream);
+            cursor: pointer;
+            font-family: var(--body);
+            font-size: 0.88rem;
+            font-weight: 700;
+            text-align: left;
+            transition: all var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .btn-drive-action:active {
+            background-color: rgba(255, 255, 255, 0.06);
+            border-color: var(--accent);
+        }
+
+        .btn-drive-action:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .btn-drive-action.primary {
+            background-color: var(--accent);
+            color: var(--ground);
+            border-color: var(--accent);
+        }
+
+        .btn-drive-action.danger {
+            color: var(--c-coral);
+            border-color: rgba(255, 122, 107, 0.4);
+        }
+
+        .btn-drive-action .action-icon {
+            font-size: 1.1rem;
+            flex-shrink: 0;
+        }
+
+        .btn-drive-action .action-label { flex: 1; }
+
+        .btn-drive-action .action-desc {
+            font-family: var(--mono);
+            font-size: 9px;
+            letter-spacing: 0.03em;
+            color: var(--cream-soft);
+            display: block;
+            font-weight: 400;
+            margin-top: 2px;
+        }
+
+        .btn-drive-action.primary .action-desc {
+            color: rgba(33, 26, 43, 0.7);
+        }
+
+        .drive-sync-status {
+            padding: 0.75rem;
+            border-radius: 8px;
+            font-family: var(--mono);
+            font-size: 10px;
+            letter-spacing: 0.03em;
+            background-color: rgba(255, 255, 255, 0.03);
+            color: var(--cream-soft);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .drive-sync-time {
+            font-weight: 700;
+            color: var(--cream);
+        }
+
+        .drive-sync-spinner {
+            display: inline-block;
+            animation: spin 1s linear infinite;
+        }
+
+        /* Config modal specifics */
+        .config-section {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .config-section-title {
+            font-family: var(--mono);
+            font-size: 9px;
+            font-weight: 700;
+            color: var(--cream-soft);
+            text-transform: uppercase;
+            letter-spacing: 0.28em;
+        }
+
+        .config-input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .config-label {
+            font-family: var(--body);
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: var(--cream);
+        }
+
+        .config-input {
+            padding: 0.75rem;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 7px;
+            background-color: rgba(255, 255, 255, 0.04);
+            color: var(--cream);
+            font-family: var(--mono);
+            font-size: 0.82rem;
+            transition: border-color var(--transition);
+        }
+
+        .config-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(255, 122, 107, 0.15);
+        }
+
+        .config-input::placeholder {
+            color: var(--cream-soft);
+            opacity: 0.5;
+        }
+
+        .config-status {
+            padding: 0.7rem 0.85rem;
+            border-radius: 8px;
+            font-family: var(--mono);
+            font-size: 10px;
+            letter-spacing: 0.05em;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .config-status.configured {
+            background-color: rgba(127, 207, 114, 0.12);
+            color: var(--c-green);
+        }
+
+        .config-status.not-configured {
+            background-color: rgba(255, 122, 107, 0.12);
+            color: var(--c-coral);
+        }
+
+        .config-actions {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .btn-config-action {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 7px;
+            background-color: rgba(255, 255, 255, 0.02);
+            color: var(--cream);
+            cursor: pointer;
+            font-family: var(--body);
+            font-size: 0.85rem;
+            font-weight: 700;
+            transition: all var(--transition);
+        }
+
+        .btn-config-action:active {
+            background-color: rgba(255, 255, 255, 0.06);
+            border-color: var(--accent);
+        }
+
+        .btn-config-action.primary {
+            background-color: var(--accent);
+            color: var(--ground);
+            border-color: var(--accent);
+        }
+
+        .config-help-text {
+            font-family: var(--body);
+            font-size: 0.78rem;
+            color: var(--cream-soft);
+            line-height: 1.5;
+        }
+
+        /* ============================================================
+           PROJECT MENU DROPDOWN
+           ============================================================ */
+        .dropdown-menu {
+            position: fixed;
+            background-color: var(--ground-2);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 10px;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+            z-index: 600;
+            min-width: 190px;
+            overflow: hidden;
+            padding: 0.3rem;
+        }
+
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.6rem 0.7rem;
+            border: none;
+            background: transparent;
+            color: var(--cream);
+            cursor: pointer;
+            font-family: var(--body);
+            font-size: 0.85rem;
+            width: 100%;
+            text-align: left;
+            border-radius: 7px;
+            transition: background-color var(--transition);
+        }
+
+        .dropdown-item:active {
+            background-color: rgba(255, 255, 255, 0.06);
+        }
+
+        /* ============================================================
+           TOAST
+           ============================================================ */
+        .toast {
+            position: fixed;
+            bottom: 1.5rem;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 0.85rem 1.25rem;
+            background-color: var(--ground-2);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-left: 3px solid var(--c-green);
+            color: var(--cream);
+            border-radius: 9px;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+            font-family: var(--body);
+            font-size: 0.85rem;
+            font-weight: 500;
+            z-index: 3000;
+            max-width: 90vw;
+            animation: toast-in 0.3s var(--transition);
+        }
+
+        @keyframes toast-in {
+            from { transform: translateX(-50%) translateY(100px); opacity: 0; }
+            to { transform: translateX(-50%) translateY(0); opacity: 1; }
+        }
+
+        .toast.hide {
+            animation: toast-out 0.3s var(--transition) forwards;
+        }
+
+        @keyframes toast-out {
+            from { transform: translateX(-50%) translateY(0); opacity: 1; }
+            to { transform: translateX(-50%) translateY(100px); opacity: 0; }
+        }
+
+        .toast.error { border-left-color: var(--c-coral); }
+        .toast.warning { border-left-color: var(--c-amber); }
+
+        /* ============================================================
+           ACCESSIBILITY & MOTION
+           ============================================================ */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+                scroll-behavior: auto !important;
+            }
+        }
+
+        /* ============================================================
+           MOBILE
+           ============================================================ */
+        @media (max-width: 768px) {
+            .sidebar {
+                position: absolute;
+                left: 0;
+                top: 0;
+                height: 100%;
+                box-shadow: 4px 0 24px rgba(0, 0, 0, 0.3);
+            }
+        }
+
+        @media (max-width: 480px) {
+            .header-title { font-size: 1.4rem; }
+            .btn-icon, .btn-menu { width: 38px; height: 38px; }
+            .preview-content { padding: 1.5rem 1rem; }
+        }
+
+        /* Scrollbars */
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.12);
+            border-radius: 5px;
+            border: 2px solid transparent;
+            background-clip: padding-box;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+            background-clip: padding-box;
+        }
+    </style>
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client"></script>
+</head>
+<body>
+    <!-- Ambient washes -->
+    <div class="wash wash-1"></div>
+    <div class="wash wash-2"></div>
+
+    <!-- SPLASH SCREEN -->
+    <div class="splash-screen" id="splashScreen">
+        <div class="wash" style="width:300px;height:300px;background:var(--c-coral);top:10%;left:-10%;"></div>
+        <div class="wash" style="width:260px;height:260px;background:var(--c-indigo);bottom:10%;right:-10%;"></div>
+        <div class="splash-content">
+            <div class="splash-mark"><span>M</span></div>
+            <div class="splash-kicker">Editor de Markdown</div>
+            <div class="splash-title">Marcar para Existir</div>
+            <div class="splash-subtitle">Você marca com a mão. A máquina lê a estrutura.</div>
+        </div>
+        <div class="splash-footer">
+            <div class="splash-checkbox-group">
+                <input type="checkbox" id="splashDontShow">
+                <label for="splashDontShow">Não mostrar de novo</label>
+            </div>
+            <button class="btn-splash-dismiss" id="splashDismiss">Começar a marcar</button>
+        </div>
+    </div>
+
+    <div id="app">
+        <header>
+            <div class="header-left">
+                <button class="btn-menu" id="menuBtn" title="Projetos">☰</button>
+                <div class="header-brand">
+                    <span class="brand-chip"></span>
+                    <span class="header-title">Marcar</span>
+                </div>
+            </div>
+            <div class="header-right">
+                <button class="btn-icon btn-drive" id="driveBtn" title="Google Drive">
+                    ☁️
+                    <span class="drive-dot" id="driveDot"></span>
+                </button>
+                <button class="btn-icon" id="fontSizeBtn" title="Tamanho do texto">Aa</button>
+                <button class="btn-icon" id="fullscreenBtn" title="Tela cheia">⛶</button>
+            </div>
+        </header>
+
+        <div class="main-container">
+            <div class="sidebar" id="sidebar">
+                <div class="sidebar-header">
+                    <span class="sidebar-title">Projetos</span>
+                </div>
+                <div class="sidebar-content">
+                    <div class="projects-list" id="projectsList"></div>
+                    <div class="sidebar-footer">
+                        <button class="sidebar-footer-btn" id="newProjectBtn" title="Novo projeto">
+                            <span class="sidebar-footer-icon">➕</span>
+                            <span class="sidebar-footer-label">Novo</span>
+                        </button>
+                        <button class="sidebar-footer-btn" id="importZipBtn" title="Importar ZIP">
+                            <span class="sidebar-footer-icon">📥</span>
+                            <span class="sidebar-footer-label">Importar</span>
+                        </button>
+                        <button class="sidebar-footer-btn" id="configBtn" title="Configurações">
+                            <span class="sidebar-footer-icon">⚙️</span>
+                            <span class="sidebar-footer-label">Config</span>
+                        </button>
+                        <button class="sidebar-footer-btn" id="installBtn" title="Instalar app">
+                            <span class="sidebar-footer-icon">📲</span>
+                            <span class="sidebar-footer-label">Instalar</span>
+                        </button>
+                    </div>
+                </div>
+                <input type="file" id="fileInput" accept=".md,.markdown,.txt" multiple style="display:none;">
+                <input type="file" id="importZipInput" accept=".zip" style="display:none;">
+            </div>
+
+            <div class="content-area">
+                <div class="toolbar">
+                    <div class="breadcrumbs" id="breadcrumbs">
+                        <span class="breadcrumb empty">Nenhum arquivo aberto</span>
+                    </div>
+                    <button class="btn-download" id="downloadBtn" disabled title="Baixar arquivo">⬇️</button>
+                </div>
+
+                <main>
+                    <div class="pane editor-pane">
+                        <span class="editor-label">Markdown</span>
+                        <textarea id="editor" placeholder="Comece a escrever em Markdown…&#10;&#10;# Um título&#10;**negrito**, *itálico*, `código`"></textarea>
+                    </div>
+                    <div class="pane preview-pane hidden">
+                        <div class="preview-wrapper">
+                            <div class="preview-label">Resultado</div>
+                            <div class="preview-content" id="preview"></div>
+                        </div>
+                    </div>
+                    <div class="batch-download-area" id="batchDownloadArea">
+                        <div class="batch-icon">📦</div>
+                        <div class="batch-title">Vários arquivos</div>
+                        <div class="batch-description">Prontos para baixar</div>
+                        <div class="batch-files-list" id="batchFilesList"></div>
+                        <button class="btn-download-batch" id="downloadBatchBtn" disabled>Baixar ZIP</button>
+                    </div>
+                </main>
+
+                <footer>
+                    <div class="footer-row">
+                        <div class="footer-left">
+                            <div class="footer-stat">
+                                <span>Caracteres</span>
+                                <span class="footer-stat-value" id="charCount">0</span>
+                            </div>
+                            <div class="footer-stat">
+                                <span>Tokens</span>
+                                <span class="footer-stat-value" id="tokenCount">0</span>
+                            </div>
+                        </div>
+                        <button class="btn-copy" id="copyBtn" title="Copiar tudo">📋</button>
+                    </div>
+                    <div class="footer-row">
+                        <div class="footer-tab-group">
+                            <button class="footer-btn active" data-view="edit" id="footerEditBtn">Marcar</button>
+                            <button class="footer-btn" data-view="preview" id="footerPreviewBtn">Resultado</button>
+                        </div>
+                    </div>
+                </footer>
+            </div>
+        </div>
+    </div>
+
+    <!-- CONFIG MODAL -->
+    <div class="config-modal-overlay" id="configModalOverlay">
+        <div class="config-modal" id="configModal">
+            <div class="config-modal-header">
+                <span class="config-modal-title">Configurações</span>
+                <button class="config-modal-close" id="configModalClose">✕</button>
+            </div>
+            <div class="config-section">
+                <div class="config-section-title">Google Drive</div>
+                <div class="config-input-group">
+                    <label class="config-label" for="configClientId">Client ID</label>
+                    <input type="password" id="configClientId" class="config-input" placeholder="xxxxxxx.apps.googleusercontent.com">
+                </div>
+                <div id="configStatus" class="config-status not-configured">Não configurado</div>
+                <div class="config-help-text">
+                    Para sincronizar com o Drive, crie um projeto no Google Cloud Console, ative a Drive API e gere credenciais OAuth.
+                </div>
+            </div>
+            <div class="config-actions">
+                <button class="btn-config-action primary" id="configSaveBtn">Salvar</button>
+                <button class="btn-config-action" id="configResetBtn">Limpar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- GOOGLE DRIVE MODAL -->
+    <div class="drive-modal-overlay" id="driveModalOverlay">
+        <div class="drive-modal" id="driveModal">
+            <div class="drive-modal-header">
+                <span class="drive-modal-title">Google Drive</span>
+                <button class="drive-modal-close" id="driveModalClose">✕</button>
+            </div>
+            <div class="drive-status" id="driveStatus">
+                <span class="drive-status-icon">☁️</span>
+                <span class="drive-status-text" id="driveStatusText">Não conectado</span>
+            </div>
+            <div class="drive-actions" id="driveActions"></div>
+        </div>
+    </div>
+
+    <script>
+        // PWA Service Worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('data:application/javascript,self.addEventListener("install",e=>self.skipWaiting());self.addEventListener("activate",e=>e.waitUntil(clients.claim()));self.addEventListener("fetch",e=>e.respondWith(fetch(e.request).catch(()=>new Response("offline",{status:503}))));', { scope: '/' }).catch(() => {});
+        }
+
+        // ========== STATE ==========
+        let projects = JSON.parse(localStorage.getItem('projects')) || {};
+        let currentProject = null;
+        let currentFile = null;
+        let currentView = 'edit';
+
+        // ========== DOM ==========
+        const sidebar = document.getElementById('sidebar');
+        const menuBtn = document.getElementById('menuBtn');
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const editor = document.getElementById('editor');
+        const preview = document.getElementById('preview');
+        const projectsList = document.getElementById('projectsList');
+        const newProjectBtn = document.getElementById('newProjectBtn');
+        const fileInput = document.getElementById('fileInput');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const downloadBatchBtn = document.getElementById('downloadBatchBtn');
+        const breadcrumbs = document.getElementById('breadcrumbs');
+        const themeToggle = document.getElementById('themeToggle');
+        const editorPane = document.querySelector('.editor-pane');
+        const previewPane = document.querySelector('.preview-pane');
+        const batchDownloadArea = document.getElementById('batchDownloadArea');
+        const batchFilesList = document.getElementById('batchFilesList');
+        const footerEditBtn = document.getElementById('footerEditBtn');
+        const footerPreviewBtn = document.getElementById('footerPreviewBtn');
+        const charCount = document.getElementById('charCount');
+        const tokenCount = document.getElementById('tokenCount');
+        const copyBtn = document.getElementById('copyBtn');
+        const html = document.documentElement;
+
+        // ========== TOAST ==========
+        // Declarado primeiro para estar disponível em todos os listeners abaixo
+        let _lastToastMsg = '';
+        let _lastToastTime = 0;
+
+        function showToast(message, type = 'success') {
+            const now = Date.now();
+            if (message === _lastToastMsg && now - _lastToastTime < 500) return;
+            _lastToastMsg = message;
+            _lastToastTime = now;
+
+            const toast = document.createElement('div');
+            toast.className = 'toast' + (type !== 'success' ? ` ${type}` : '');
+            toast.textContent = message;
+            document.body.appendChild(toast);
+
+            if (type !== 'success') console.error('[Toast]', message);
+            else console.log('[Toast]', message);
+
+            const duration = type === 'error' ? 6000 : type === 'warning' ? 4000 : 2000;
+            setTimeout(() => {
+                toast.classList.add('hide');
+                setTimeout(() => toast.remove(), 300);
+            }, duration);
+        }
+
+        // ========== THEME ==========
+        function initTheme() {
+            const saved = localStorage.getItem('theme');
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const theme = saved || (prefersDark ? 'dark' : 'light');
+            setTheme(theme);
+        }
+
+        function setTheme(theme) {
+            html.setAttribute('data-theme', theme);
+            if (themeToggle) themeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+            localStorage.setItem('theme', theme);
+        }
+
+        if (themeToggle) {
+            themeToggle.addEventListener('click', () => {
+                const current = html.getAttribute('data-theme');
+                setTheme(current === 'dark' ? 'light' : 'dark');
+            });
+        }
+
+        // ========== FONT SIZE ==========
+        const fontSizeBtn = document.getElementById('fontSizeBtn');
+        const fontSizes = ['13px', '15px', '17px'];
+        let currentFontSize = localStorage.getItem('fontScale') || '13px';
+
+        function setFontSize(size) {
+            html.style.setProperty('--editor-font-size', size);
+            localStorage.setItem('fontScale', size);
+            currentFontSize = size;
+        }
+
+        fontSizeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            // Encontra índice atual, avança para próximo (com wrap-around)
+            const currentIndex = fontSizes.indexOf(currentFontSize);
+            const nextIndex = (currentIndex + 1) % fontSizes.length;
+            setFontSize(fontSizes[nextIndex]);
+        });
+
+        // Aplicar font size salvo ao carregar
+        setFontSize(currentFontSize);
+
+        // ========== FULLSCREEN ==========
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        fullscreenBtn.addEventListener('click', toggleFullscreen);
+
+        document.addEventListener('fullscreenchange', () => {
+            fullscreenBtn.textContent = document.fullscreenElement ? '⛔' : '🖥';
+        });
+
+        // Request fullscreen on load
+        setTimeout(() => {
+            if (!document.fullscreenElement && screen.height > 600) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            }
+        }, 500);
+
+        // ========== MENU & CLICK OUTSIDE ==========
+        menuBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('hidden');
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!sidebar.contains(e.target) && !menuBtn.contains(e.target)) {
+                sidebar.classList.add('hidden');
+            }
+        });
+
+        // ========== NEW PROJECT ==========
+        newProjectBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const name = prompt('Nome do novo projeto:');
+            if (name && name.trim()) {
+                const trimmedName = name.trim();
+                if (projects[trimmedName]) {
+                    showToast('Projeto já existe', 'warning');
+                    return;
+                }
+                projects[trimmedName] = {};
+                localStorage.setItem('projects', JSON.stringify(projects));
+                renderProjects();
+                currentProject = trimmedName;
+                showToast('✅ Projeto criado', 'success');
+            }
+        });
+
+        // ========== FILE UPLOAD ==========
+        fileInput.addEventListener('change', (e) => {
+            const files = Array.from(e.target.files);
+            if (files.length === 0 || !currentProject) {
+                showToast('Selecione um projeto', 'warning');
+                return;
+            }
+
+            files.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const cleanName = file.name.replace(/\.[^/.]+$/, '');
+                    projects[currentProject][cleanName] = {
+                        name: cleanName,
+                        content: event.target.result,
+                        size: event.target.result.length,
+                        timestamp: new Date().toISOString()
+                    };
+                };
+                reader.readAsText(file);
+            });
+
+            setTimeout(() => {
+                localStorage.setItem('projects', JSON.stringify(projects));
+                renderProjects();
+                fileInput.value = '';
+                showToast(`✅ ${files.length} arquivo(s) importado(s)`, 'success');
+            }, 500);
+        });
+
+        // ========== IMPORT ZIP ==========
+        const importZipBtn = document.getElementById('importZipBtn');
+        const importZipInput = document.getElementById('importZipInput');
+
+        importZipBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            importZipInput.click();
+        });
+
+        importZipInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            importZipInput.value = '';
+
+            try {
+                showToast('Importando…', 'success');
+                const zip = await JSZip.loadAsync(file);
+                const imported = {};
+                const promises = [];
+
+                zip.forEach((relativePath, zipEntry) => {
+                    if (zipEntry.dir) return;
+                    // Espera estrutura: ProjNome/arquivo.md
+                    const parts = relativePath.split('/');
+                    if (parts.length < 2) return;
+                    const projectName = parts[0];
+                    const rawFileName = parts[parts.length - 1];
+                    const fileName = rawFileName.replace(/\.md$/i, '');
+                    if (!fileName) return;
+
+                    const p = zipEntry.async('string').then((content) => {
+                        if (!imported[projectName]) imported[projectName] = {};
+                        imported[projectName][fileName] = {
+                            name: fileName,
+                            content,
+                            size: content.length,
+                            timestamp: new Date().toISOString()
+                        };
+                    });
+                    promises.push(p);
+                });
+
+                await Promise.all(promises);
+
+                if (Object.keys(imported).length === 0) {
+                    showToast('ZIP sem arquivos .md válidos', 'warning');
+                    return;
+                }
+
+                // Mescla: ZIP prevalece em conflito de arquivo, projetos locais não afetados
+                Object.entries(imported).forEach(([proj, files]) => {
+                    if (!projects[proj]) projects[proj] = {};
+                    Object.assign(projects[proj], files);
+                });
+
+                localStorage.setItem('projects', JSON.stringify(projects));
+                renderProjects();
+
+                const projCount = Object.keys(imported).length;
+                const fileCount = Object.values(imported).reduce((acc, f) => acc + Object.keys(f).length, 0);
+                showToast(`✅ ${projCount} projeto(s), ${fileCount} arquivo(s)`, 'success');
+            } catch (err) {
+                console.error('Import ZIP error:', err);
+                showToast('Erro ao importar: ' + err.message, 'error');
+            }
+        });
+        function renderProjects() {
+            projectsList.innerHTML = '';
+            Object.entries(projects).forEach(([projectName, files]) => {
+                const projectGroup = document.createElement('div');
+                projectGroup.className = 'project-group';
+
+                const projectHeader = document.createElement('div');
+                projectHeader.className = 'project-header' + (currentProject === projectName ? ' active' : '');
+                projectHeader.innerHTML = `
+                    <span class="project-toggle expanded">▶</span>
+                    <span class="project-name">${projectName}</span>
+                    <button class="project-menu">⋮</button>
+                `;
+
+                const filesContainer = document.createElement('div');
+                filesContainer.className = 'project-files expanded';
+
+                Object.entries(files).forEach(([fileName, fileData]) => {
+                    const fileItem = document.createElement('div');
+                    fileItem.className = 'file-item' + (currentProject === projectName && currentFile === fileName ? ' active' : '');
+                    fileItem.innerHTML = `
+                        <input type="checkbox" class="file-checkbox" data-project="${projectName}" data-file="${fileName}">
+                        <span class="file-name">${fileName}</span>
+                        <div class="file-actions">
+                            <button class="file-action-btn rename">✏️</button>
+                            <button class="file-action-btn delete">🗑</button>
+                        </div>
+                    `;
+
+                    fileItem.addEventListener('click', (e) => {
+                        if (e.target.classList.contains('file-checkbox') ||
+                            e.target.classList.contains('file-action-btn')) return;
+                        // Fechar swipe se aberto
+                        if (fileItem.classList.contains('swiped')) {
+                            fileItem.classList.remove('swiped');
+                            return;
+                        }
+                        selectFile(projectName, fileName);
+                    });
+
+                    // Swipe to reveal actions
+                    let txStart = 0;
+                    fileItem.addEventListener('touchstart', (e) => {
+                        txStart = e.touches[0].clientX;
+                    }, { passive: true });
+
+                    fileItem.addEventListener('touchmove', (e) => {
+                        const diff = txStart - e.touches[0].clientX;
+                        if (diff > 40) fileItem.classList.add('swiped');
+                        else if (diff < -20) fileItem.classList.remove('swiped');
+                    }, { passive: true });
+
+                    // Rename button
+                    fileItem.querySelector('.file-action-btn.rename').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        fileItem.classList.remove('swiped');
+                        const newName = prompt('Novo nome do arquivo:', fileName);
+                        if (!newName || !newName.trim()) return;
+                        const trimmed = newName.trim();
+                        if (trimmed === fileName) return;
+                        if (projects[projectName][trimmed]) {
+                            showToast('Arquivo já existe', 'warning');
+                            return;
+                        }
+                        projects[projectName][trimmed] = { ...projects[projectName][fileName], name: trimmed };
+                        delete projects[projectName][fileName];
+                        if (currentFile === fileName) currentFile = trimmed;
+                        localStorage.setItem('projects', JSON.stringify(projects));
+                        renderProjects();
+                        updateBreadcrumbs();
+                        showToast('✅ Arquivo renomeado', 'success');
+                    });
+
+                    // Delete button
+                    fileItem.querySelector('.file-action-btn.delete').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        fileItem.classList.remove('swiped');
+                        delete projects[projectName][fileName];
+                        localStorage.setItem('projects', JSON.stringify(projects));
+                        if (currentFile === fileName && currentProject === projectName) {
+                            currentFile = null;
+                            editor.value = '';
+                            updateBreadcrumbs();
+                            downloadBtn.disabled = true;
+                        }
+                        renderProjects();
+                        showToast('🗑 Arquivo deletado', 'success');
+                    });
+
+                    const checkbox = fileItem.querySelector('.file-checkbox');
+                    checkbox.addEventListener('change', updateBatchState);
+
+                    filesContainer.appendChild(fileItem);
+                });
+
+                projectHeader.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('project-menu')) {
+                        e.stopPropagation();
+                        e.stopImmediatePropagation();
+                        showProjectMenu(e.target, e, projectName);
+                        return;
+                    }
+                    filesContainer.classList.toggle('expanded');
+                    projectHeader.querySelector('.project-toggle').classList.toggle('expanded');
+                });
+
+                projectHeader.addEventListener('dblclick', () => {
+                    currentProject = projectName;
+                    renderProjects();
+                });
+
+                projectGroup.appendChild(projectHeader);
+                projectGroup.appendChild(filesContainer);
+                projectsList.appendChild(projectGroup);
+            });
+        }
+
+        // ========== PROJECT MENU DROPDOWN ==========
+        function showProjectMenu(button, e, projectName) {
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+
+            document.querySelectorAll('.dropdown-menu').forEach(m => m.remove());
+
+            const dropdown = document.createElement('div');
+            dropdown.className = 'dropdown-menu visible';
+            dropdown.innerHTML = `
+                <button class="dropdown-item" data-action="new">➕ Novo arquivo</button>
+                <button class="dropdown-item" data-action="upload">📤 Upload</button>
+                <button class="dropdown-item" data-action="rename-project">✏️ Renomear projeto</button>
+                <button class="dropdown-item" data-action="download-project">⬇️ Baixar projeto</button>
+                <button class="dropdown-item" data-action="delete" style="color: var(--danger);">🗑 Deletar projeto</button>
+            `;
+
+            dropdown.querySelector('[data-action="new"]').addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                dropdown.remove();
+                currentProject = projectName;
+                const name = prompt('Nome do arquivo:');
+                if (name && name.trim()) {
+                    const trimmedName = name.trim();
+                    if (projects[projectName][trimmedName]) {
+                        showToast('Arquivo já existe', 'warning');
+                        return;
+                    }
+                    projects[projectName][trimmedName] = {
+                        name: trimmedName,
+                        content: '',
+                        size: 0,
+                        timestamp: new Date().toISOString()
+                    };
+                    localStorage.setItem('projects', JSON.stringify(projects));
+                    renderProjects();
+                    selectFile(projectName, trimmedName);
+                    trackProjectsChange();
+                    showToast('✅ Novo arquivo', 'success');
+                }
+            });
+
+            dropdown.querySelector('[data-action="upload"]').addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                dropdown.remove();
+                currentProject = projectName;
+                fileInput.click();
+            });
+
+            dropdown.querySelector('[data-action="rename-project"]').addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                dropdown.remove();
+                const newName = prompt('Novo nome do projeto:', projectName);
+                if (!newName || !newName.trim()) return;
+                const trimmed = newName.trim();
+                if (trimmed === projectName) return;
+                if (projects[trimmed]) {
+                    showToast('Já existe um projeto com esse nome', 'warning');
+                    return;
+                }
+                // Renomeia: copia para nova chave, remove antiga
+                projects[trimmed] = projects[projectName];
+                delete projects[projectName];
+                if (currentProject === projectName) currentProject = trimmed;
+                localStorage.setItem('projects', JSON.stringify(projects));
+                renderProjects();
+                updateBreadcrumbs();
+                showToast('✅ Projeto renomeado', 'success');
+            });
+
+            dropdown.querySelector('[data-action="download-project"]').addEventListener('click', async (ev) => {
+                ev.stopPropagation();
+                dropdown.remove();
+                const files = projects[projectName];
+                if (!files || Object.keys(files).length === 0) {
+                    showToast('Projeto sem arquivos', 'warning');
+                    return;
+                }
+                try {
+                    const zip = new JSZip();
+                    const folder = zip.folder(projectName);
+                    Object.entries(files).forEach(([fileName, fileData]) => {
+                        folder.file(`${fileName}.md`, fileData.content || '');
+                    });
+                    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${projectName}.zip`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    showToast('📦 Projeto baixado', 'success');
+                } catch (err) {
+                    console.error('Download projeto error:', err);
+                    showToast('Erro ao baixar: ' + err.message, 'error');
+                }
+            });
+
+            dropdown.querySelector('[data-action="delete"]').addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                dropdown.remove();
+                if (confirm('Deletar projeto e todos os arquivos?')) {
+                    delete projects[projectName];
+                    localStorage.setItem('projects', JSON.stringify(projects));
+                    if (currentProject === projectName) {
+                        currentProject = null;
+                        currentFile = null;
+                        editor.value = '';
+                        updateBreadcrumbs();
+                        downloadBtn.disabled = true;
+                    }
+                    renderProjects();
+                    showToast('🗑 Projeto deletado', 'success');
+                }
+            });
+
+            const rect = button.getBoundingClientRect();
+            dropdown.style.position = 'fixed';
+            dropdown.style.top = (rect.bottom + 4) + 'px';
+            dropdown.style.left = Math.max(4, rect.left - 180) + 'px';
+
+            document.body.appendChild(dropdown);
+
+            const closeDropdown = (ev) => {
+                if (!dropdown.contains(ev.target)) {
+                    dropdown.remove();
+                    document.removeEventListener('click', closeDropdown);
+                }
+            };
+            setTimeout(() => document.addEventListener('click', closeDropdown), 150);
+        }
+
+        // ========== FILE SELECTION ==========
+        function selectFile(projectName, fileName) {
+            document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+            currentProject = projectName;
+            currentFile = fileName;
+            const fileData = projects[projectName][fileName];
+
+            editor.value = fileData.content;
+            updatePreview();
+            updateBreadcrumbs();
+            updateCharCount();
+            downloadBtn.disabled = false;
+            batchDownloadArea.classList.remove('visible');
+            editorPane.classList.remove('hidden');
+
+            renderProjects();
+            switchView('edit');
+            sidebar.classList.add('hidden');
+        }
+
+        function updateBreadcrumbs() {
+            breadcrumbs.innerHTML = '';
+            if (currentProject && currentFile) {
+                const projectSpan = document.createElement('span');
+                projectSpan.className = 'breadcrumb';
+                projectSpan.textContent = currentProject;
+                breadcrumbs.appendChild(projectSpan);
+
+                const sep = document.createElement('span');
+                sep.textContent = ' / ';
+                breadcrumbs.appendChild(sep);
+
+                const fileSpan = document.createElement('span');
+                fileSpan.className = 'breadcrumb';
+                fileSpan.textContent = currentFile;
+                breadcrumbs.appendChild(fileSpan);
+            } else {
+                const empty = document.createElement('span');
+                empty.className = 'breadcrumb empty';
+                empty.textContent = 'Nenhum arquivo';
+                breadcrumbs.appendChild(empty);
+            }
+        }
+
+        // ========== EDITOR ==========
+        function updatePreview() {
+            const html = marked.parse(editor.value);
+            const sanitized = DOMPurify.sanitize(html);
+            preview.innerHTML = sanitized;
+        }
+
+        function updateCharCount() {
+            const chars = editor.value.length;
+            charCount.textContent = chars;
+            tokenCount.textContent = Math.ceil(chars / 4);
+        }
+
+        editor.addEventListener('input', () => {
+            if (currentProject && currentFile) {
+                projects[currentProject][currentFile].content = editor.value;
+                localStorage.setItem('projects', JSON.stringify(projects));
+                trackProjectsChange();
+                updatePreview();
+                updateCharCount();
+            }
+        });
+
+        // ========== TOGGLE VIEW ==========
+        function switchView(view) {
+            currentView = view;
+            const isEdit = view === 'edit';
+            footerEditBtn.classList.toggle('active', isEdit);
+            footerPreviewBtn.classList.toggle('active', !isEdit);
+            editorPane.classList.toggle('hidden', !isEdit);
+            previewPane.classList.toggle('hidden', isEdit);
+            if (!isEdit) updatePreview();
+        }
+
+        footerEditBtn.addEventListener('click', () => switchView('edit'));
+        footerPreviewBtn.addEventListener('click', () => switchView('preview'));
+
+        // ========== BATCH STATE ==========
+        function updateBatchState() {
+            const checkedFiles = document.querySelectorAll('.file-checkbox:checked');
+            if (checkedFiles.length > 1) {
+                editorPane.classList.add('hidden');
+                previewPane.classList.add('hidden');
+                batchDownloadArea.classList.add('visible');
+                
+                batchFilesList.innerHTML = '';
+                const filesByProject = {};
+                
+                checkedFiles.forEach(checkbox => {
+                    const projectName = checkbox.getAttribute('data-project');
+                    const fileName = checkbox.getAttribute('data-file');
+                    if (!filesByProject[projectName]) {
+                        filesByProject[projectName] = [];
+                    }
+                    filesByProject[projectName].push(fileName);
+                });
+                
+                Object.entries(filesByProject).forEach(([projectName, files]) => {
+                    files.forEach(fileName => {
+                        const item = document.createElement('div');
+                        item.className = 'batch-file-item';
+                        item.innerHTML = `<div class="batch-file-project">${projectName}</div><div class="batch-file-name">📄 ${fileName}</div>`;
+                        batchFilesList.appendChild(item);
+                    });
+                });
+            } else {
+                batchDownloadArea.classList.remove('visible');
+                if (currentFile) editorPane.classList.remove('hidden');
+            }
+            downloadBatchBtn.disabled = checkedFiles.length < 2;
+        }
+
+        // ========== DOWNLOAD ==========
+        downloadBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (!currentProject || !currentFile) return;
+            const fileData = projects[currentProject][currentFile];
+            const blob = new Blob([fileData.content], { type: 'text/markdown;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${currentFile}.md`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('📥 Baixado', 'success');
+        });
+
+        downloadBatchBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const checkedFiles = Array.from(document.querySelectorAll('.file-checkbox:checked'));
+            if (checkedFiles.length === 0) return;
+
+            const zip = new JSZip();
+            const projectFiles = {};
+
+            checkedFiles.forEach(checkbox => {
+                const projectName = checkbox.getAttribute('data-project');
+                const fileName = checkbox.getAttribute('data-file');
+                const fileData = projects[projectName][fileName];
+                if (!projectFiles[projectName]) {
+                    projectFiles[projectName] = [];
+                }
+                projectFiles[projectName].push({ name: fileName, content: fileData.content });
+            });
+
+            Object.entries(projectFiles).forEach(([projectName, files]) => {
+                const folder = zip.folder(projectName);
+                files.forEach(file => {
+                    folder.file(`${file.name}.md`, file.content);
+                });
+            });
+
+            try {
+                const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `projetos-${new Date().toISOString().split('T')[0]}.zip`;
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast('📦 Baixado', 'success');
+            } catch (err) {
+                console.error('Erro ao criar ZIP:', err);
+                showToast('Erro ao criar ZIP: ' + err.message, 'error');
+            }
+        });
+
+        // ========== COPY ==========
+        copyBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+
+            if (!currentFile) {
+                showToast('Selecione arquivo', 'warning');
+                return;
+            }
+
+            const text = editor.value;
+            if (!text) {
+                showToast('Arquivo vazio', 'warning');
+                return;
+            }
+
+            function fallbackCopy(str) {
+                const ta = document.createElement('textarea');
+                ta.value = str;
+                ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.select();
+                try {
+                    const ok = document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    if (ok) showToast('📋 Copiado', 'success');
+                    else showToast('Não foi possível copiar', 'error');
+                } catch (err) {
+                    document.body.removeChild(ta);
+                    console.error('execCommand error:', err);
+                    showToast('Erro: ' + err.message, 'error');
+                }
+            }
+
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text)
+                    .then(() => showToast('📋 Copiado', 'success'))
+                    .catch((err) => {
+                        console.error('Clipboard API error:', err);
+                        fallbackCopy(text);
+                    });
+            } else {
+                fallbackCopy(text);
+            }
+        });
+
+        // ========== SPLASH SCREEN ==========
+        const splashScreen = document.getElementById('splashScreen');
+        const splashDismiss = document.getElementById('splashDismiss');
+        const splashDontShow = document.getElementById('splashDontShow');
+
+        function initSplashScreen() {
+            const isDismissed = localStorage.getItem('splashDismissed') === 'true';
+            if (isDismissed) {
+                splashScreen.classList.add('hidden');
+            } else {
+                splashScreen.classList.remove('hidden');
+            }
+        }
+
+        splashDismiss.addEventListener('click', () => {
+            if (splashDontShow.checked) {
+                localStorage.setItem('splashDismissed', 'true');
+            }
+            splashScreen.classList.add('hidden');
+        });
+
+        // ========== PWA INSTALL BUTTON ==========
+        let deferredPrompt = null;
+        const installBtn = document.getElementById('installBtn');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            installBtn.classList.add('show');
+        });
+
+        installBtn.addEventListener('click', async () => {
+            if (!deferredPrompt) return;
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            if (outcome === 'accepted') {
+                showToast('✅ App instalado!', 'success');
+            }
+            deferredPrompt = null;
+            installBtn.classList.remove('show');
+        });
+
+        window.addEventListener('appinstalled', () => {
+            deferredPrompt = null;
+            installBtn.classList.remove('show');
+        });
+
+        // ========== CONFIG MODAL ==========
+        const configBtn = document.getElementById('configBtn');
+        const configModalOverlay = document.getElementById('configModalOverlay');
+        const configModal = document.getElementById('configModal');
+        const configModalClose = document.getElementById('configModalClose');
+        const configClientId = document.getElementById('configClientId');
+        const configStatus = document.getElementById('configStatus');
+        const configSaveBtn = document.getElementById('configSaveBtn');
+        const configResetBtn = document.getElementById('configResetBtn');
+
+        function loadConfigUI() {
+            const savedId = localStorage.getItem('driveClientId') || '';
+            configClientId.value = savedId;
+            updateConfigStatus();
+        }
+
+        function updateConfigStatus() {
+            const hasId = configClientId.value.trim() && !configClientId.value.startsWith('SEU_CLIENT_ID');
+            configStatus.className = 'config-status ' + (hasId ? 'configured' : 'not-configured');
+            configStatus.innerHTML = hasId ? '✅ Configurado' : '⚠️ Não configurado';
+        }
+
+        configBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            loadConfigUI();
+            configModalOverlay.classList.add('visible');
+        });
+
+        configModalClose.addEventListener('click', () => {
+            configModalOverlay.classList.remove('visible');
+        });
+
+        configModalOverlay.addEventListener('click', (e) => {
+            if (e.target === configModalOverlay) configModalOverlay.classList.remove('visible');
+        });
+
+        configClientId.addEventListener('input', updateConfigStatus);
+
+        configSaveBtn.addEventListener('click', () => {
+            const id = configClientId.value.trim();
+            if (!id) {
+                showToast('Client ID não pode estar vazio', 'warning');
+                return;
+            }
+            localStorage.setItem('driveClientId', id);
+            DRIVE_CLIENT_ID = id;
+            showToast('✅ Configuração salva', 'success');
+            configModalOverlay.classList.remove('visible');
+        });
+
+        configResetBtn.addEventListener('click', () => {
+            if (confirm('Restaurar configuração padrão?')) {
+                localStorage.removeItem('driveClientId');
+                DRIVE_CLIENT_ID = 'SEU_CLIENT_ID_AQUI.apps.googleusercontent.com';
+                configClientId.value = '';
+                updateConfigStatus();
+                showToast('Configuração restaurada', 'success');
+            }
+        });
+
+        // ========== GOOGLE DRIVE ==========
+        // Configuração: crie um projeto em console.cloud.google.com,
+        // ative Google Drive API, crie credenciais OAuth 2.0 (Web),
+        // adicione a origem em "Authorized JavaScript origins",
+        // e cole o Client ID em Configurações (⚙️).
+        let DRIVE_CLIENT_ID = localStorage.getItem('driveClientId') || 'SEU_CLIENT_ID_AQUI.apps.googleusercontent.com';
+        const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file';
+        const DRIVE_FILENAME = 'markdown-editor-backup.json';
+
+        let driveToken = null;
+        let driveUser = null;
+        let driveFileId = null;
+
+        const driveBtn = document.getElementById('driveBtn');
+        const driveDot = document.getElementById('driveDot');
+        const driveModalOverlay = document.getElementById('driveModalOverlay');
+        const driveModal = document.getElementById('driveModal');
+        const driveModalClose = document.getElementById('driveModalClose');
+        const driveStatus = document.getElementById('driveStatus');
+        const driveStatusText = document.getElementById('driveStatusText');
+        const driveActions = document.getElementById('driveActions');
+
+        // Abre/fecha modal
+        driveBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            updateDriveBtnTitle();
+            driveModalOverlay.classList.toggle('visible');
+            renderDriveModal();
+        });
+
+        function updateDriveBtnTitle() {
+            if (!driveToken) {
+                driveBtn.title = 'Google Drive (Não conectado)';
+            } else {
+                const lastSync = localStorage.getItem('lastDriveSync');
+                if (lastSync) {
+                    const syncDate = new Date(parseInt(lastSync));
+                    const now = new Date();
+                    const diffMs = now - syncDate;
+                    const diffMins = Math.floor(diffMs / 60000);
+                    
+                    let timeStr = '';
+                    if (diffMins < 1) timeStr = 'Sincronizado agora';
+                    else if (diffMins < 60) timeStr = `Sincronizado há ${diffMins}m`;
+                    else if (diffMins < 1440) timeStr = `Sincronizado há ${Math.floor(diffMins / 60)}h`;
+                    else timeStr = `Sincronizado há ${Math.floor(diffMins / 1440)}d`;
+                    
+                    driveBtn.title = timeStr;
+                } else {
+                    driveBtn.title = 'Google Drive (Nunca sincronizado)';
+                }
+            }
+        }
+
+        driveModalClose.addEventListener('click', () => {
+            driveModalOverlay.classList.remove('visible');
+        });
+
+        driveModalOverlay.addEventListener('click', (e) => {
+            if (e.target === driveModalOverlay) driveModalOverlay.classList.remove('visible');
+        });
+
+        // Renderiza modal conforme estado
+        function renderDriveModal() {
+            driveActions.innerHTML = '';
+
+            if (!driveToken) {
+                driveStatus.innerHTML = `
+                    <span class="drive-status-icon">☁️</span>
+                    <span class="drive-status-text">Conecte sua conta Google para salvar e restaurar projetos.</span>
+                `;
+                const btnLogin = makeDriveAction('primary', '🔑', 'Conectar com Google', 'Autorizar acesso ao Drive');
+                btnLogin.addEventListener('click', () => driveSignIn());
+                driveActions.appendChild(btnLogin);
+            } else {
+                driveStatus.innerHTML = `
+                    <span class="drive-status-icon">✅</span>
+                    <div class="drive-status-text">
+                        <span class="drive-status-name">${driveUser}</span>
+                        <br>Conectado ao Google Drive
+                    </div>
+                `;
+
+                const btnExport = makeDriveAction('', '💾', 'Salvar no Drive', 'Exporta todos os projetos como JSON');
+                btnExport.addEventListener('click', () => driveExport());
+                driveActions.appendChild(btnExport);
+
+                const btnImport = makeDriveAction('', '📥', 'Restaurar do Drive', 'Importa e mescla projetos salvos');
+                btnImport.addEventListener('click', () => driveImport());
+                driveActions.appendChild(btnImport);
+
+                const btnLogout = makeDriveAction('danger', '🔓', 'Desconectar', 'Remove acesso desta sessão');
+                btnLogout.addEventListener('click', () => driveSignOut());
+                driveActions.appendChild(btnLogout);
+
+                // Status de sincronização
+                const lastSync = localStorage.getItem('lastDriveSync');
+                const syncStatus = document.createElement('div');
+                syncStatus.className = 'drive-sync-status';
+                
+                if (lastSync) {
+                    const syncDate = new Date(parseInt(lastSync));
+                    const now = new Date();
+                    const diffMs = now - syncDate;
+                    const diffMins = Math.floor(diffMs / 60000);
+                    
+                    let timeStr = '';
+                    if (diffMins < 1) timeStr = 'agora';
+                    else if (diffMins < 60) timeStr = `há ${diffMins}m`;
+                    else if (diffMins < 1440) timeStr = `há ${Math.floor(diffMins / 60)}h`;
+                    else timeStr = `há ${Math.floor(diffMins / 1440)}d`;
+                    
+                    syncStatus.innerHTML = `🕐 Última sincronização: <span class="drive-sync-time">${timeStr}</span>`;
+                } else {
+                    syncStatus.innerHTML = '⚠️ Nunca sincronizado';
+                }
+                driveActions.appendChild(syncStatus);
+
+                // Botão sync manual
+                const btnSync = makeDriveAction('', '⚡', 'Sincronizar Agora', 'Força sincronização imediata');
+                btnSync.addEventListener('click', function() { driveSyncNow(this); });
+                driveActions.appendChild(btnSync);
+            }
+        }
+
+        function makeDriveAction(variant, icon, label, desc) {
+            const btn = document.createElement('button');
+            btn.className = 'btn-drive-action' + (variant ? ` ${variant}` : '');
+            btn.innerHTML = `
+                <span class="action-icon">${icon}</span>
+                <span class="action-label">
+                    ${label}
+                    <span class="action-desc">${desc}</span>
+                </span>
+            `;
+            return btn;
+        }
+
+        // Login via Google Identity Services
+        function driveSignIn() {
+            if (DRIVE_CLIENT_ID.startsWith('SEU_CLIENT_ID')) {
+                showToast('Configure o CLIENT_ID no código', 'error');
+                return;
+            }
+
+            const client = google.accounts.oauth2.initTokenClient({
+                client_id: DRIVE_CLIENT_ID,
+                scope: DRIVE_SCOPE,
+                callback: async (resp) => {
+                    if (resp.error) {
+                        console.error('Drive auth error:', resp);
+                        showToast('Erro ao conectar: ' + resp.error, 'error');
+                        return;
+                    }
+                    driveToken = resp.access_token;
+                    await fetchDriveUser();
+                    driveDot.classList.add('connected');
+                    startAutoSync();
+                    renderDriveModal();
+                    showToast('✅ Drive conectado', 'success');
+                }
+            });
+            client.requestAccessToken();
+        }
+
+        // Busca nome do usuário
+        async function fetchDriveUser() {
+            try {
+                const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                    headers: { Authorization: `Bearer ${driveToken}` }
+                });
+                const data = await res.json();
+                driveUser = data.name || data.email || 'Usuário';
+            } catch {
+                driveUser = 'Usuário Google';
+            }
+        }
+
+        // Logout
+        function driveSignOut() {
+            if (driveToken) {
+                google.accounts.oauth2.revoke(driveToken, () => {});
+            }
+            stopAutoSync();
+            driveToken = null;
+            driveUser = null;
+            driveFileId = null;
+            driveDot.classList.remove('connected');
+            updateSyncDot('offline');
+            renderDriveModal();
+            showToast('Desconectado do Drive', 'success');
+        }
+
+        // Busca arquivo de backup
+        async function findDriveFile() {
+            const res = await fetch(
+                `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name='${DRIVE_FILENAME}'&fields=files(id,name,modifiedTime)`,
+                { headers: { Authorization: `Bearer ${driveToken}` } }
+            );
+            const data = await res.json();
+            if (data.files && data.files.length > 0) {
+                driveFileId = data.files[0].id;
+                return data.files[0];
+            }
+            return null;
+        }
+
+        // Exporta projetos para Drive
+        async function driveExport() {
+            if (!driveToken) return;
+
+            const payload = JSON.stringify({
+                version: 1,
+                exportedAt: new Date().toISOString(),
+                projects
+            }, null, 2);
+
+            const blob = new Blob([payload], { type: 'application/json' });
+
+            try {
+                showToast('Salvando no Drive…', 'success');
+
+                const existing = await findDriveFile();
+
+                let res;
+                if (existing) {
+                    res = await fetch(
+                        `https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=media`,
+                        {
+                            method: 'PATCH',
+                            headers: {
+                                Authorization: `Bearer ${driveToken}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: blob
+                        }
+                    );
+                } else {
+                    const metadata = {
+                        name: DRIVE_FILENAME,
+                        parents: ['appDataFolder']
+                    };
+                    const form = new FormData();
+                    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+                    form.append('file', blob);
+
+                    res = await fetch(
+                        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+                        {
+                            method: 'POST',
+                            headers: { Authorization: `Bearer ${driveToken}` },
+                            body: form
+                        }
+                    );
+                }
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error?.message || res.statusText);
+                }
+
+                const result = await res.json();
+                driveFileId = result.id;
+                showToast('☁️ Salvo no Drive', 'success');
+                driveModalOverlay.classList.remove('visible');
+            } catch (err) {
+                console.error('Drive export error:', err);
+                showToast('Erro ao salvar: ' + err.message, 'error');
+            }
+        }
+
+        // Auto-sync em background
+        let autoSyncInterval = null;
+        let projectsLastModified = localStorage.getItem('projectsLastModified') || '0';
+
+        function startAutoSync() {
+            if (autoSyncInterval) clearInterval(autoSyncInterval);
+            
+            autoSyncInterval = setInterval(async () => {
+                if (!driveToken) return;
+
+                // Verifica se houve mudanças locais desde a última sync
+                const currentTime = JSON.stringify(projects).split('').reduce((a, b) => {
+                    return ((a << 5) - a) + b.charCodeAt(0) | 0;
+                }, 0).toString();
+
+                const lastSync = parseInt(localStorage.getItem('lastDriveSync') || '0');
+                const now = Date.now();
+                const timeSinceSync = now - lastSync;
+
+                // Auto-sync a cada 10 minutos OU se houve mudanças há mais de 5 min sem sync
+                if (timeSinceSync > 10 * 60 * 1000 || (currentTime !== projectsLastModified && timeSinceSync > 5 * 60 * 1000)) {
+                    try {
+                        const payload = JSON.stringify({
+                            version: 1,
+                            exportedAt: new Date().toISOString(),
+                            projects
+                        }, null, 2);
+
+                        const blob = new Blob([payload], { type: 'application/json' });
+                        const existing = await findDriveFile();
+
+                        let res;
+                        if (existing) {
+                            res = await fetch(
+                                `https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=media`,
+                                {
+                                    method: 'PATCH',
+                                    headers: {
+                                        Authorization: `Bearer ${driveToken}`,
+                                        'Content-Type': 'application/json'
+                                    },
+                                    body: blob
+                                }
+                            );
+                        } else {
+                            const metadata = {
+                                name: DRIVE_FILENAME,
+                                parents: ['appDataFolder']
+                            };
+                            const form = new FormData();
+                            form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+                            form.append('file', blob);
+
+                            res = await fetch(
+                                'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+                                {
+                                    method: 'POST',
+                                    headers: { Authorization: `Bearer ${driveToken}` },
+                                    body: form
+                                }
+                            );
+                        }
+
+                        if (res.ok) {
+                            localStorage.setItem('lastDriveSync', Date.now().toString());
+                            localStorage.setItem('projectsLastModified', currentTime);
+                            updateSyncDot('synced');
+                            // Silent success - sem toast
+                        } else {
+                            console.error('Auto-sync failed:', res.statusText);
+                            updateSyncDot('error');
+                        }
+                    } catch (err) {
+                        console.error('Auto-sync error:', err);
+                        updateSyncDot('error');
+                    }
+                }
+            }, 60 * 1000); // Check a cada minuto
+        }
+
+        function stopAutoSync() {
+            if (autoSyncInterval) {
+                clearInterval(autoSyncInterval);
+                autoSyncInterval = null;
+            }
+        }
+
+        // Atualizar projectsLastModified sempre que há mudança
+        function trackProjectsChange() {
+            const hash = JSON.stringify(projects).split('').reduce((a, b) => {
+                return ((a << 5) - a) + b.charCodeAt(0) | 0;
+            }, 0).toString();
+            localStorage.setItem('projectsLastModified', hash);
+        }
+
+        // Atualizar visual do dot de sync
+        function updateSyncDot(status) {
+            // 'offline' | 'synced' | 'syncing' | 'error'
+            driveDot.classList.remove('connected', 'syncing', 'error');
+            
+            if (status === 'offline') {
+                driveDot.className = 'drive-dot';
+            } else if (status === 'synced' || status === 'connected') {
+                driveDot.classList.add('connected');
+            } else if (status === 'syncing') {
+                driveDot.classList.add('syncing');
+            } else if (status === 'error') {
+                driveDot.classList.add('error');
+            }
+        }
+
+        // Importa projetos do Drive
+        async function driveImport() {
+            if (!driveToken) return;
+
+            try {
+                showToast('Restaurando do Drive…', 'success');
+                const existing = await findDriveFile();
+
+                if (!existing) {
+                    showToast('Nenhum backup encontrado', 'warning');
+                    return;
+                }
+
+                const res = await fetch(
+                    `https://www.googleapis.com/drive/v3/files/${driveFileId}?alt=media`,
+                    { headers: { Authorization: `Bearer ${driveToken}` } }
+                );
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error?.message || res.statusText);
+                }
+
+                const data = await res.json();
+
+                if (!data.projects) throw new Error('Formato de backup inválido');
+
+                // Mescla: Drive prevalece em conflito de arquivo
+                const merged = { ...data.projects, ...projects };
+                projects = merged;
+                localStorage.setItem('projects', JSON.stringify(projects));
+                renderProjects();
+
+                const count = Object.keys(data.projects).length;
+                showToast(`📥 ${count} projeto(s) restaurado(s)`, 'success');
+                driveModalOverlay.classList.remove('visible');
+            } catch (err) {
+                console.error('Drive import error:', err);
+                showToast('Erro ao restaurar: ' + err.message, 'error');
+            }
+        }
+
+        // Sync manual (força sincronização imediata)
+        async function driveSyncNow(syncBtn) {
+            if (!driveToken || !syncBtn) {
+                return;
+            }
+
+            const originalHTML = syncBtn.innerHTML;
+            syncBtn.innerHTML = '<span class="action-icon"><span class="drive-sync-spinner">🔄</span></span><span class="action-label">Sincronizando…</span>';
+            syncBtn.disabled = true;
+
+            try {
+                await driveExport();
+                localStorage.setItem('lastDriveSync', Date.now().toString());
+                syncBtn.innerHTML = originalHTML;
+                syncBtn.disabled = false;
+                renderDriveModal();
+                updateDriveBtnTitle();
+            } catch (err) {
+                syncBtn.innerHTML = originalHTML;
+                syncBtn.disabled = false;
+                console.error('Sync error:', err);
+            }
+        }
+
+        // ========== INIT ==========
+        initTheme();
+        initSplashScreen();
+
+        // Empty state: cria projeto e arquivo padrão se não há dados
+        if (Object.keys(projects).length === 0) {
+            const defaultProject = 'Meu Projeto';
+            const defaultFile = 'Sem título';
+            projects[defaultProject] = {
+                [defaultFile]: {
+                    name: defaultFile,
+                    content: '',
+                    size: 0,
+                    timestamp: new Date().toISOString()
+                }
+            };
+            localStorage.setItem('projects', JSON.stringify(projects));
+        }
+
+        renderProjects();
+        updateBreadcrumbs();
+        
+        // Restaurar auto-sync se estava conectado (apenas se Google API carregou)
+        if (driveToken && typeof google !== 'undefined' && google.accounts) {
+            startAutoSync();
+            updateSyncDot('connected');
+        }
+    </script>
+</body>
+</html>
