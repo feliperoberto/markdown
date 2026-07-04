@@ -316,6 +316,16 @@
             border-color: rgba(255, 255, 255, 0.13);
         }
 
+        .projects-list-empty {
+            padding: 1.5rem 0.5rem;
+            text-align: center;
+            font-size: 0.8rem;
+            font-style: italic;
+            color: var(--cream-soft);
+            opacity: 0.7;
+            line-height: 1.5;
+        }
+
         .project-header {
             display: flex;
             align-items: center;
@@ -2260,6 +2270,13 @@
         });
         function renderProjects() {
             projectsList.innerHTML = '';
+            if (Object.keys(projects).length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'projects-list-empty';
+                empty.textContent = 'Nenhum projeto ainda. Marque o primeiro.';
+                projectsList.appendChild(empty);
+                return;
+            }
             Object.entries(projects).forEach(([projectName, files]) => {
                 const projectGroup = document.createElement('div');
                 projectGroup.className = 'project-group';
@@ -2348,7 +2365,7 @@
                             downloadBtn.disabled = true;
                         }
                         renderProjects();
-                        showToast('🗑 Arquivo deletado', 'success');
+                        showToast('🗑 Arquivo excluído', 'success');
                     });
 
                     const checkbox = fileItem.querySelector('.file-checkbox');
@@ -2395,7 +2412,7 @@
                 <button class="dropdown-item" role="menuitem" data-action="upload">📤 Upload</button>
                 <button class="dropdown-item" role="menuitem" data-action="rename-project">✏️ Renomear projeto</button>
                 <button class="dropdown-item" role="menuitem" data-action="download-project">⬇️ Baixar projeto</button>
-                <button class="dropdown-item" role="menuitem" data-action="delete" style="color: var(--danger);">🗑 Deletar projeto</button>
+                <button class="dropdown-item" role="menuitem" data-action="delete" style="color: var(--danger);">🗑 Excluir projeto</button>
             `;
 
             dropdown.querySelector('[data-action="new"]').addEventListener('click', async (ev) => {
@@ -2492,9 +2509,9 @@
                 ev.stopPropagation();
                 dropdown.remove();
                 const confirmed = await showConfirmDialog({
-                    title: 'Deletar projeto',
-                    message: `Deletar o projeto "${projectName}" e todos os seus arquivos? Essa ação não pode ser desfeita.`,
-                    confirmLabel: 'Deletar',
+                    title: 'Excluir projeto',
+                    message: `Excluir o projeto "${projectName}" e todos os seus arquivos? Essa ação não pode ser desfeita.`,
+                    confirmLabel: 'Excluir',
                     danger: true
                 });
                 if (confirmed) {
@@ -2508,7 +2525,7 @@
                         downloadBtn.disabled = true;
                     }
                     renderProjects();
-                    showToast('🗑 Projeto deletado', 'success');
+                    showToast('🗑 Projeto excluído', 'success');
                 }
             });
 
@@ -2735,7 +2752,7 @@
             e.stopPropagation();
 
             if (!currentFile) {
-                showToast('Selecione arquivo', 'warning');
+                showToast('Selecione um arquivo', 'warning');
                 return;
             }
 
@@ -2760,7 +2777,7 @@
                 } catch (err) {
                     document.body.removeChild(ta);
                     console.error('execCommand error:', err);
-                    showToast('Erro: ' + err.message, 'error');
+                    showToast('Erro ao copiar: ' + err.message, 'error');
                 }
             }
 
@@ -3332,6 +3349,7 @@
                 syncBtn.innerHTML = originalHTML;
                 syncBtn.disabled = false;
                 console.error('Sync error:', err);
+                showToast('Falha ao sincronizar com o Drive: ' + err.message, 'error');
             }
         }
 
