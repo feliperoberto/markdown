@@ -7,6 +7,9 @@ import preact from '@preact/preset-vite'
 export default defineConfig({
   base: '/',
   plugins: [preact()],
+  server: {
+    open: '/app.html',
+  },
   build: {
     rollupOptions: {
       input: fileURLToPath(new URL('./app.html', import.meta.url)),
