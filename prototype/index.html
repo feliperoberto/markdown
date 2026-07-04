@@ -58,6 +58,10 @@
             --danger: #ff7a6b;
             --success: #7fcf72;
 
+            /* Paper-surface accents (code chips, links) */
+            --code-bg: #ece2cd;
+            --link: #3a6ea5;
+
             /* Fonts */
             --hand: "Caveat", cursive;
             --serif-display: "Fraunces", Georgia, serif;
@@ -68,6 +72,37 @@
             --editor-font-size: 13px;
 
             --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /*
+         * THEME — Dark palette
+         * ---------------------
+         * Overrides for [data-theme="dark"]. The `:root` block above stays
+         * the light/default palette (also selectable explicitly via
+         * [data-theme="light"], which matches no rule here and simply
+         * falls back to :root).
+         *
+         * The "paper vs. machine" contrast is preserved in dark mode:
+         * - `--ground-deep` (the machine/editor surface) goes near-black,
+         *   keeping the mono editor feeling cold and structural.
+         * - `--paper` becomes a warm, dim charcoal-brown (not pure grey/
+         *   black) so the preview pane still reads as paper — just paper
+         *   under lamplight instead of daylight — while remaining clearly
+         *   distinct from the machine surface.
+         */
+        [data-theme="dark"] {
+            --ground: #100c17;
+            --ground-2: #19121f;
+            --ground-deep: #08060c;
+            --paper: #2a2420;
+            --paper-edge: #3d352c;
+            --ink: #ece3d1;
+            --ink-soft: #a89d8a;
+            --cream: #ece7db;
+            --cream-soft: #8c8579;
+
+            --code-bg: #1c1712;
+            --link: #8ab4e8;
         }
 
         html, body {
@@ -754,7 +789,7 @@
         }
 
         .preview-content a {
-            color: #3a6ea5;
+            color: var(--link);
             text-decoration: underline;
             text-underline-offset: 2px;
         }
@@ -765,7 +800,7 @@
         .preview-content code {
             font-family: var(--mono);
             font-size: 0.85em;
-            background: #ece2cd;
+            background: var(--code-bg);
             padding: 1px 5px;
             border-radius: 3px;
             color: var(--ink);
@@ -840,7 +875,7 @@
         }
 
         .preview-content th {
-            background: #ece2cd;
+            background: var(--code-bg);
             font-family: var(--serif-display);
             font-weight: 600;
         }
@@ -1649,6 +1684,7 @@
                     <span class="drive-dot" id="driveDot" aria-hidden="true"></span>
                 </button>
                 <button class="btn-icon" id="fontSizeBtn" title="Tamanho do texto" aria-label="Alternar tamanho do texto do editor">Aa</button>
+                <button class="btn-icon" id="themeToggle" title="Alternar tema" aria-label="Alternar tema claro/escuro">🌙</button>
                 <button class="btn-icon" id="fullscreenBtn" title="Tela cheia" aria-label="Alternar tela cheia">⛶</button>
             </div>
         </header>
