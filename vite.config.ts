@@ -17,9 +17,11 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      '@/app': fileURLToPath(new URL('./src/app', import.meta.url)),
       '@/features': fileURLToPath(new URL('./src/features', import.meta.url)),
       '@/components': fileURLToPath(new URL('./src/components', import.meta.url)),
       '@/lib': fileURLToPath(new URL('./src/lib', import.meta.url)),
+      '@/styles': fileURLToPath(new URL('./src/styles', import.meta.url)),
     },
   },
 })

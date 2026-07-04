@@ -22,9 +22,11 @@
 
     "baseUrl": ".",
     "paths": {
+      "@/app/*": ["src/app/*"],
       "@/features/*": ["src/features/*"],
       "@/components/*": ["src/components/*"],
-      "@/lib/*": ["src/lib/*"]
+      "@/lib/*": ["src/lib/*"],
+      "@/styles/*": ["src/styles/*"]
     },
     "types": ["vite/client", "node"]
   },
