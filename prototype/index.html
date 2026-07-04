@@ -1601,44 +1601,44 @@
     <div id="app">
         <header>
             <div class="header-left">
-                <button class="btn-menu" id="menuBtn" title="Projetos">☰</button>
+                <button class="btn-menu" id="menuBtn" title="Projetos" aria-label="Abrir menu de projetos" aria-expanded="false" aria-controls="sidebar">☰</button>
                 <div class="header-brand">
-                    <span class="brand-chip"></span>
+                    <span class="brand-chip" aria-hidden="true"></span>
                     <span class="header-title">Marcar</span>
                 </div>
             </div>
             <div class="header-right">
-                <button class="btn-icon btn-drive" id="driveBtn" title="Google Drive">
-                    ☁️
-                    <span class="drive-dot" id="driveDot"></span>
+                <button class="btn-icon btn-drive" id="driveBtn" title="Google Drive" aria-label="Abrir Google Drive" aria-haspopup="dialog">
+                    <span aria-hidden="true">☁️</span>
+                    <span class="drive-dot" id="driveDot" aria-hidden="true"></span>
                 </button>
-                <button class="btn-icon" id="fontSizeBtn" title="Tamanho do texto">Aa</button>
-                <button class="btn-icon" id="fullscreenBtn" title="Tela cheia">⛶</button>
+                <button class="btn-icon" id="fontSizeBtn" title="Tamanho do texto" aria-label="Alternar tamanho do texto do editor">Aa</button>
+                <button class="btn-icon" id="fullscreenBtn" title="Tela cheia" aria-label="Alternar tela cheia">⛶</button>
             </div>
         </header>
 
         <div class="main-container">
             <div class="sidebar" id="sidebar">
                 <div class="sidebar-header">
-                    <span class="sidebar-title">Projetos</span>
+                    <span class="sidebar-title" id="sidebarTitle">Projetos</span>
                 </div>
                 <div class="sidebar-content">
-                    <div class="projects-list" id="projectsList"></div>
+                    <div class="projects-list" id="projectsList" role="region" aria-labelledby="sidebarTitle"></div>
                     <div class="sidebar-footer">
-                        <button class="sidebar-footer-btn" id="newProjectBtn" title="Novo projeto">
-                            <span class="sidebar-footer-icon">➕</span>
+                        <button class="sidebar-footer-btn" id="newProjectBtn" title="Novo projeto" aria-label="Criar novo projeto">
+                            <span class="sidebar-footer-icon" aria-hidden="true">➕</span>
                             <span class="sidebar-footer-label">Novo</span>
                         </button>
-                        <button class="sidebar-footer-btn" id="importZipBtn" title="Importar ZIP">
-                            <span class="sidebar-footer-icon">📥</span>
+                        <button class="sidebar-footer-btn" id="importZipBtn" title="Importar ZIP" aria-label="Importar projetos de um arquivo ZIP">
+                            <span class="sidebar-footer-icon" aria-hidden="true">📥</span>
                             <span class="sidebar-footer-label">Importar</span>
                         </button>
-                        <button class="sidebar-footer-btn" id="configBtn" title="Configurações">
-                            <span class="sidebar-footer-icon">⚙️</span>
+                        <button class="sidebar-footer-btn" id="configBtn" title="Configurações" aria-label="Abrir configurações" aria-haspopup="dialog">
+                            <span class="sidebar-footer-icon" aria-hidden="true">⚙️</span>
                             <span class="sidebar-footer-label">Config</span>
                         </button>
-                        <button class="sidebar-footer-btn" id="installBtn" title="Instalar app">
-                            <span class="sidebar-footer-icon">📲</span>
+                        <button class="sidebar-footer-btn" id="installBtn" title="Instalar app" aria-label="Instalar aplicativo">
+                            <span class="sidebar-footer-icon" aria-hidden="true">📲</span>
                             <span class="sidebar-footer-label">Instalar</span>
                         </button>
                     </div>
@@ -1652,7 +1652,7 @@
                     <div class="breadcrumbs" id="breadcrumbs">
                         <span class="breadcrumb empty">Nenhum arquivo aberto</span>
                     </div>
-                    <button class="btn-download" id="downloadBtn" disabled title="Baixar arquivo">⬇️</button>
+                    <button class="btn-download" id="downloadBtn" disabled title="Baixar arquivo" aria-label="Baixar arquivo atual">⬇️</button>
                 </div>
 
                 <main>
@@ -1687,7 +1687,7 @@
                                 <span class="footer-stat-value" id="tokenCount">0</span>
                             </div>
                         </div>
-                        <button class="btn-copy" id="copyBtn" title="Copiar tudo">📋</button>
+                        <button class="btn-copy" id="copyBtn" title="Copiar tudo" aria-label="Copiar todo o conteúdo do arquivo">📋</button>
                     </div>
                     <div class="footer-row">
                         <div class="footer-tab-group">
@@ -1701,11 +1701,11 @@
     </div>
 
     <!-- CONFIG MODAL -->
-    <div class="config-modal-overlay" id="configModalOverlay">
-        <div class="config-modal" id="configModal">
+    <div class="config-modal-overlay" id="configModalOverlay" aria-hidden="true">
+        <div class="config-modal" id="configModal" role="dialog" aria-modal="true" aria-labelledby="configModalTitle" tabindex="-1">
             <div class="config-modal-header">
-                <span class="config-modal-title">Configurações</span>
-                <button class="config-modal-close" id="configModalClose">✕</button>
+                <span class="config-modal-title" id="configModalTitle">Configurações</span>
+                <button class="config-modal-close" id="configModalClose" aria-label="Fechar configurações">✕</button>
             </div>
             <div class="config-section">
                 <div class="config-section-title">Google Drive</div>
@@ -1726,14 +1726,14 @@
     </div>
 
     <!-- GOOGLE DRIVE MODAL -->
-    <div class="drive-modal-overlay" id="driveModalOverlay">
-        <div class="drive-modal" id="driveModal">
+    <div class="drive-modal-overlay" id="driveModalOverlay" aria-hidden="true">
+        <div class="drive-modal" id="driveModal" role="dialog" aria-modal="true" aria-labelledby="driveModalTitle" tabindex="-1">
             <div class="drive-modal-header">
-                <span class="drive-modal-title">Google Drive</span>
-                <button class="drive-modal-close" id="driveModalClose">✕</button>
+                <span class="drive-modal-title" id="driveModalTitle">Google Drive</span>
+                <button class="drive-modal-close" id="driveModalClose" aria-label="Fechar Google Drive">✕</button>
             </div>
             <div class="drive-status" id="driveStatus">
-                <span class="drive-status-icon">☁️</span>
+                <span class="drive-status-icon" aria-hidden="true">☁️</span>
                 <span class="drive-status-text" id="driveStatusText">Não conectado</span>
             </div>
             <div class="drive-actions" id="driveActions"></div>
@@ -1775,6 +1775,80 @@
         const tokenCount = document.getElementById('tokenCount');
         const copyBtn = document.getElementById('copyBtn');
         const html = document.documentElement;
+
+        // ============================================================
+        // ACCESSIBILITY HELPERS — focus trap & modal open/close
+        // Reusable vanilla-JS patterns. Any future custom dialog/menu
+        // (e.g. issue #16) should reuse trapFocus()/openModal()/closeModal()
+        // instead of re-implementing focus management.
+        // ============================================================
+        let _lastFocusedElement = null;
+
+        function getFocusableElements(container) {
+            return Array.from(container.querySelectorAll(
+                'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            )).filter(el => el.offsetParent !== null);
+        }
+
+        // Cycles Tab/Shift+Tab within `containerEl`. Returns a cleanup function.
+        function trapFocus(containerEl) {
+            function handleKeydown(e) {
+                if (e.key !== 'Tab') return;
+                const focusable = getFocusableElements(containerEl);
+                if (focusable.length === 0) return;
+                const first = focusable[0];
+                const last = focusable[focusable.length - 1];
+                if (e.shiftKey && document.activeElement === first) {
+                    e.preventDefault();
+                    last.focus();
+                } else if (!e.shiftKey && document.activeElement === last) {
+                    e.preventDefault();
+                    first.focus();
+                }
+            }
+            containerEl.addEventListener('keydown', handleKeydown);
+            return () => containerEl.removeEventListener('keydown', handleKeydown);
+        }
+
+        // Opens a modal: stores the triggering element, moves focus inside,
+        // traps Tab navigation and closes on Escape.
+        function openModal(overlayEl, modalEl, triggerEl) {
+            _lastFocusedElement = triggerEl || document.activeElement;
+            overlayEl.classList.add('visible');
+            overlayEl.setAttribute('aria-hidden', 'false');
+
+            const focusable = getFocusableElements(modalEl);
+            (focusable[0] || modalEl).focus();
+
+            const removeTrap = trapFocus(modalEl);
+
+            function handleEscape(e) {
+                if (e.key === 'Escape') {
+                    e.stopPropagation();
+                    closeModal(overlayEl, modalEl);
+                }
+            }
+            document.addEventListener('keydown', handleEscape);
+
+            overlayEl._a11yCleanup = () => {
+                removeTrap();
+                document.removeEventListener('keydown', handleEscape);
+            };
+        }
+
+        // Closes a modal opened with openModal() and returns focus to the trigger.
+        function closeModal(overlayEl, modalEl) {
+            overlayEl.classList.remove('visible');
+            overlayEl.setAttribute('aria-hidden', 'true');
+            if (overlayEl._a11yCleanup) {
+                overlayEl._a11yCleanup();
+                overlayEl._a11yCleanup = null;
+            }
+            if (_lastFocusedElement && typeof _lastFocusedElement.focus === 'function') {
+                _lastFocusedElement.focus();
+            }
+            _lastFocusedElement = null;
+        }
 
         // ========== TOAST ==========
         // Declarado primeiro para estar disponível em todos os listeners abaixo
@@ -1869,12 +1943,14 @@
 
         // ========== MENU & CLICK OUTSIDE ==========
         menuBtn.addEventListener('click', () => {
-            sidebar.classList.toggle('hidden');
+            const isHidden = sidebar.classList.toggle('hidden');
+            menuBtn.setAttribute('aria-expanded', String(!isHidden));
         });
 
         document.addEventListener('click', (e) => {
             if (!sidebar.contains(e.target) && !menuBtn.contains(e.target)) {
                 sidebar.classList.add('hidden');
+                menuBtn.setAttribute('aria-expanded', 'false');
             }
         });
 
@@ -2001,9 +2077,9 @@
                 const projectHeader = document.createElement('div');
                 projectHeader.className = 'project-header' + (currentProject === projectName ? ' active' : '');
                 projectHeader.innerHTML = `
-                    <span class="project-toggle expanded">▶</span>
+                    <span class="project-toggle expanded" aria-hidden="true">▶</span>
                     <span class="project-name">${projectName}</span>
-                    <button class="project-menu">⋮</button>
+                    <button class="project-menu" aria-label="Mais opções do projeto ${projectName}" aria-haspopup="menu">⋮</button>
                 `;
 
                 const filesContainer = document.createElement('div');
@@ -2013,11 +2089,11 @@
                     const fileItem = document.createElement('div');
                     fileItem.className = 'file-item' + (currentProject === projectName && currentFile === fileName ? ' active' : '');
                     fileItem.innerHTML = `
-                        <input type="checkbox" class="file-checkbox" data-project="${projectName}" data-file="${fileName}">
+                        <input type="checkbox" class="file-checkbox" data-project="${projectName}" data-file="${fileName}" aria-label="Selecionar ${fileName} para download em lote">
                         <span class="file-name">${fileName}</span>
                         <div class="file-actions">
-                            <button class="file-action-btn rename">✏️</button>
-                            <button class="file-action-btn delete">🗑</button>
+                            <button class="file-action-btn rename" aria-label="Renomear arquivo ${fileName}">✏️</button>
+                            <button class="file-action-btn delete" aria-label="Excluir arquivo ${fileName}">🗑</button>
                         </div>
                     `;
 
@@ -2118,12 +2194,14 @@
 
             const dropdown = document.createElement('div');
             dropdown.className = 'dropdown-menu visible';
+            dropdown.setAttribute('role', 'menu');
+            dropdown.setAttribute('aria-label', `Ações do projeto ${projectName}`);
             dropdown.innerHTML = `
-                <button class="dropdown-item" data-action="new">➕ Novo arquivo</button>
-                <button class="dropdown-item" data-action="upload">📤 Upload</button>
-                <button class="dropdown-item" data-action="rename-project">✏️ Renomear projeto</button>
-                <button class="dropdown-item" data-action="download-project">⬇️ Baixar projeto</button>
-                <button class="dropdown-item" data-action="delete" style="color: var(--danger);">🗑 Deletar projeto</button>
+                <button class="dropdown-item" role="menuitem" data-action="new">➕ Novo arquivo</button>
+                <button class="dropdown-item" role="menuitem" data-action="upload">📤 Upload</button>
+                <button class="dropdown-item" role="menuitem" data-action="rename-project">✏️ Renomear projeto</button>
+                <button class="dropdown-item" role="menuitem" data-action="download-project">⬇️ Baixar projeto</button>
+                <button class="dropdown-item" role="menuitem" data-action="delete" style="color: var(--danger);">🗑 Deletar projeto</button>
             `;
 
             dropdown.querySelector('[data-action="new"]').addEventListener('click', (ev) => {
@@ -2232,13 +2310,44 @@
 
             document.body.appendChild(dropdown);
 
+            const menuItems = Array.from(dropdown.querySelectorAll('[role="menuitem"]'));
+            if (menuItems.length) menuItems[0].focus();
+
+            function teardown() {
+                dropdown.remove();
+                document.removeEventListener('click', closeDropdown);
+                dropdown.removeEventListener('keydown', handleMenuKeydown);
+                button.focus();
+            }
+
             const closeDropdown = (ev) => {
                 if (!dropdown.contains(ev.target)) {
                     dropdown.remove();
                     document.removeEventListener('click', closeDropdown);
+                    dropdown.removeEventListener('keydown', handleMenuKeydown);
                 }
             };
             setTimeout(() => document.addEventListener('click', closeDropdown), 150);
+
+            // Arrow-key navigation + Escape-to-close, returning focus to the trigger.
+            function handleMenuKeydown(ev) {
+                const currentIndex = menuItems.indexOf(document.activeElement);
+                if (ev.key === 'ArrowDown') {
+                    ev.preventDefault();
+                    menuItems[(currentIndex + 1) % menuItems.length].focus();
+                } else if (ev.key === 'ArrowUp') {
+                    ev.preventDefault();
+                    menuItems[(currentIndex - 1 + menuItems.length) % menuItems.length].focus();
+                } else if (ev.key === 'Escape') {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    teardown();
+                } else if (ev.key === 'Tab') {
+                    // Dropdown has no natural "outside" focus target besides the trigger; close on Tab.
+                    teardown();
+                }
+            }
+            dropdown.addEventListener('keydown', handleMenuKeydown);
         }
 
         // ========== FILE SELECTION ==========
@@ -2530,15 +2639,15 @@
         configBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             loadConfigUI();
-            configModalOverlay.classList.add('visible');
+            openModal(configModalOverlay, configModal, configBtn);
         });
 
         configModalClose.addEventListener('click', () => {
-            configModalOverlay.classList.remove('visible');
+            closeModal(configModalOverlay, configModal);
         });
 
         configModalOverlay.addEventListener('click', (e) => {
-            if (e.target === configModalOverlay) configModalOverlay.classList.remove('visible');
+            if (e.target === configModalOverlay) closeModal(configModalOverlay, configModal);
         });
 
         configClientId.addEventListener('input', updateConfigStatus);
@@ -2552,7 +2661,7 @@
             localStorage.setItem('driveClientId', id);
             DRIVE_CLIENT_ID = id;
             showToast('✅ Configuração salva', 'success');
-            configModalOverlay.classList.remove('visible');
+            closeModal(configModalOverlay, configModal);
         });
 
         configResetBtn.addEventListener('click', () => {
@@ -2591,8 +2700,12 @@
         driveBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             updateDriveBtnTitle();
-            driveModalOverlay.classList.toggle('visible');
             renderDriveModal();
+            if (driveModalOverlay.classList.contains('visible')) {
+                closeModal(driveModalOverlay, driveModal);
+            } else {
+                openModal(driveModalOverlay, driveModal, driveBtn);
+            }
         });
 
         function updateDriveBtnTitle() {
@@ -2620,11 +2733,11 @@
         }
 
         driveModalClose.addEventListener('click', () => {
-            driveModalOverlay.classList.remove('visible');
+            closeModal(driveModalOverlay, driveModal);
         });
 
         driveModalOverlay.addEventListener('click', (e) => {
-            if (e.target === driveModalOverlay) driveModalOverlay.classList.remove('visible');
+            if (e.target === driveModalOverlay) closeModal(driveModalOverlay, driveModal);
         });
 
         // Renderiza modal conforme estado
@@ -2829,7 +2942,7 @@
                 const result = await res.json();
                 driveFileId = result.id;
                 showToast('☁️ Salvo no Drive', 'success');
-                driveModalOverlay.classList.remove('visible');
+                closeModal(driveModalOverlay, driveModal);
             } catch (err) {
                 console.error('Drive export error:', err);
                 showToast('Erro ao salvar: ' + err.message, 'error');
@@ -2982,7 +3095,7 @@
 
                 const count = Object.keys(data.projects).length;
                 showToast(`📥 ${count} projeto(s) restaurado(s)`, 'success');
-                driveModalOverlay.classList.remove('visible');
+                closeModal(driveModalOverlay, driveModal);
             } catch (err) {
                 console.error('Drive import error:', err);
                 showToast('Erro ao restaurar: ' + err.message, 'error');
