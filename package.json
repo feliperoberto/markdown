@@ -13,6 +13,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "dompurify": "^3.4.11",
+    "jszip": "^3.10.1",
+    "marked": "^15.0.12",
     "preact": "^10.29.3"
   },
   "devDependencies": {
