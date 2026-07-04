@@ -1,0 +1,102 @@
+import type { JSX } from 'preact'
+import { useRef, useState } from 'preact/hooks'
+import type { ProjectFile } from './types'
+import { showPromptDialog } from './dialogs'
+
+export interface FileRowProps {
+  projectName: string
+  file: ProjectFile
+  isActive: boolean
+  isSelected: boolean
+  fileNames: string[]
+  onSelectFile: (projectName: string, fileName: string) => void
+  onToggleSelected: (projectName: string, fileName: string, selected: boolean) => void
+  onRenameFile: (projectName: string, oldFileName: string, newFileName: string) => void
+  onDeleteFile: (projectName: string, fileName: string) => void
+}
+
+// Renders one file row in the sidebar tree, including swipe-to-reveal
+// actions (touch) and the multi-select checkbox used for batch download.
+export function FileRow({
+  projectName,
+  file,
+  isActive,
+  isSelected,
+  fileNames,
+  onSelectFile,
+  onToggleSelected,
+  onRenameFile,
+  onDeleteFile,
+}: FileRowProps): JSX.Element {
+  const [isSwiped, setIsSwiped] = useState(false)
+  const touchStartX = useRef(0)
+
+  function handleTouchStart(e: TouchEvent) {
+    touchStartX.current = e.touches[0]?.clientX ?? 0
+  }
+
+  function handleTouchMove(e: TouchEvent) {
+    const currentX = e.touches[0]?.clientX ?? 0
+    const diff = touchStartX.current - currentX
+    if (diff > 40) setIsSwiped(true)
+    else if (diff < -20) setIsSwiped(false)
+  }
+
+  function handleRowClick() {
+    if (isSwiped) {
+      setIsSwiped(false)
+      return
+    }
+    onSelectFile(projectName, file.name)
+  }
+
+  async function handleRename(e: MouseEvent) {
+    e.stopPropagation()
+    setIsSwiped(false)
+    const trimmed = await showPromptDialog({
+      title: 'Renomear arquivo',
+      label: 'Novo nome do arquivo',
+      defaultValue: file.name,
+      validate: (value) => {
+        if (!value) return 'Digite um nome para o arquivo.'
+        if (value !== file.name && fileNames.includes(value)) return 'Já existe um arquivo com esse nome.'
+        return null
+      },
+    })
+    if (!trimmed || trimmed === file.name) return
+    onRenameFile(projectName, file.name, trimmed)
+  }
+
+  function handleDelete(e: MouseEvent) {
+    e.stopPropagation()
+    setIsSwiped(false)
+    onDeleteFile(projectName, file.name)
+  }
+
+  return (
+    <div
+      className={`file-item${isActive ? ' active' : ''}${isSwiped ? ' swiped' : ''}`}
+      onClick={handleRowClick}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+    >
+      <input
+        type="checkbox"
+        className="file-checkbox"
+        checked={isSelected}
+        aria-label={`Selecionar ${file.name} para download em lote`}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => onToggleSelected(projectName, file.name, (e.target as HTMLInputElement).checked)}
+      />
+      <span className="file-name">{file.name}</span>
+      <div className="file-actions">
+        <button type="button" className="file-action-btn rename" aria-label={`Renomear arquivo ${file.name}`} onClick={handleRename}>
+          Renomear
+        </button>
+        <button type="button" className="file-action-btn delete" aria-label={`Excluir arquivo ${file.name}`} onClick={handleDelete}>
+          Excluir
+        </button>
+      </div>
+    </div>
+  )
+}
