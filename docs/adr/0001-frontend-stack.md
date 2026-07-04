@@ -53,8 +53,9 @@ Use **Vite + Preact + TypeScript** as the frontend stack.
   exactly what most LLM coding agents already know well — relevant here
   since this codebase is largely agent-maintained.
 
-TypeScript is used throughout for type safety across the storage adapter,
-markdown pipeline, and feature modules.
+TypeScript is used throughout for type safety across the markdown pipeline
+and feature modules, with the same discipline expected for future modules
+like storage/sync.
 
 For the resulting folder taxonomy and import rules, see
 [`docs/architecture.md`](../architecture.md) — this ADR does not duplicate

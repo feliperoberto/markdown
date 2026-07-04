@@ -8,13 +8,9 @@
 
 ## Stack decision
 
-- **Preact** instead of React: ~10KB runtime keeps the bundle small for a
-  tool that should load fast, and it has first-class support for PWA tooling
-  (`vite-plugin-pwa`, planned in a later task) without meaningful trade-offs
-  for this app's needs.
-- **Vite** instead of a metaframework (e.g. Next.js): the app has no
-  server-side rendering requirement, so a plain client-side build with fast
-  dev server and small config footprint is the better fit.
+See [`docs/adr/0001-frontend-stack.md`](./adr/0001-frontend-stack.md) for the
+full rationale (Preact vs React, Vite vs Next.js, alternatives considered) —
+that ADR is the single source of truth for this decision.
 
 ## Current scaffold
 
