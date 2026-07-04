@@ -1818,7 +1818,10 @@
         // (e.g. issue #16) should reuse trapFocus()/openModal()/closeModal()
         // instead of re-implementing focus management.
         // ============================================================
-        let _lastFocusedElement = null;
+        // Stack of currently-open overlays, topmost last. Used so that a single
+        // Escape keypress only closes the topmost modal, even if more than one
+        // is open at once (e.g. Config + Drive).
+        const _openModalStack = [];
 
         function getFocusableElements(container) {
             return Array.from(container.querySelectorAll(
@@ -1849,9 +1852,10 @@
         // Opens a modal: stores the triggering element, moves focus inside,
         // traps Tab navigation and closes on Escape.
         function openModal(overlayEl, modalEl, triggerEl) {
-            _lastFocusedElement = triggerEl || document.activeElement;
+            overlayEl._lastFocusedElement = triggerEl || document.activeElement;
             overlayEl.classList.add('visible');
             overlayEl.setAttribute('aria-hidden', 'false');
+            _openModalStack.push(overlayEl);
 
             const focusable = getFocusableElements(modalEl);
             (focusable[0] || modalEl).focus();
@@ -1859,10 +1863,11 @@
             const removeTrap = trapFocus(modalEl);
 
             function handleEscape(e) {
-                if (e.key === 'Escape') {
-                    e.stopPropagation();
-                    closeModal(overlayEl, modalEl);
-                }
+                if (e.key !== 'Escape') return;
+                // Only the topmost open modal responds to Escape.
+                if (_openModalStack[_openModalStack.length - 1] !== overlayEl) return;
+                e.stopPropagation();
+                closeModal(overlayEl, modalEl);
             }
             document.addEventListener('keydown', handleEscape);
 
@@ -1876,14 +1881,16 @@
         function closeModal(overlayEl, modalEl) {
             overlayEl.classList.remove('visible');
             overlayEl.setAttribute('aria-hidden', 'true');
+            const stackIndex = _openModalStack.indexOf(overlayEl);
+            if (stackIndex !== -1) _openModalStack.splice(stackIndex, 1);
             if (overlayEl._a11yCleanup) {
                 overlayEl._a11yCleanup();
                 overlayEl._a11yCleanup = null;
             }
-            if (_lastFocusedElement && typeof _lastFocusedElement.focus === 'function') {
-                _lastFocusedElement.focus();
+            if (overlayEl._lastFocusedElement && typeof overlayEl._lastFocusedElement.focus === 'function') {
+                overlayEl._lastFocusedElement.focus();
             }
-            _lastFocusedElement = null;
+            overlayEl._lastFocusedElement = null;
         }
 
         // ========== TOAST ==========
@@ -2104,6 +2111,15 @@
                 showToast('Erro ao importar: ' + err.message, 'error');
             }
         });
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         function renderProjects() {
             projectsList.innerHTML = '';
             Object.entries(projects).forEach(([projectName, files]) => {
@@ -2114,8 +2130,8 @@
                 projectHeader.className = 'project-header' + (currentProject === projectName ? ' active' : '');
                 projectHeader.innerHTML = `
                     <span class="project-toggle expanded" aria-hidden="true">▶</span>
-                    <span class="project-name">${projectName}</span>
-                    <button class="project-menu" aria-label="Mais opções do projeto ${projectName}" aria-haspopup="menu">⋮</button>
+                    <span class="project-name">${escapeHtml(projectName)}</span>
+                    <button class="project-menu" aria-label="Mais opções do projeto ${escapeHtml(projectName)}" aria-haspopup="menu">⋮</button>
                 `;
 
                 const filesContainer = document.createElement('div');
@@ -2125,11 +2141,11 @@
                     const fileItem = document.createElement('div');
                     fileItem.className = 'file-item' + (currentProject === projectName && currentFile === fileName ? ' active' : '');
                     fileItem.innerHTML = `
-                        <input type="checkbox" class="file-checkbox" data-project="${projectName}" data-file="${fileName}" aria-label="Selecionar ${fileName} para download em lote">
-                        <span class="file-name">${fileName}</span>
+                        <input type="checkbox" class="file-checkbox" data-project="${escapeHtml(projectName)}" data-file="${escapeHtml(fileName)}" aria-label="Selecionar ${escapeHtml(fileName)} para download em lote">
+                        <span class="file-name">${escapeHtml(fileName)}</span>
                         <div class="file-actions">
-                            <button class="file-action-btn rename" aria-label="Renomear arquivo ${fileName}">✏️</button>
-                            <button class="file-action-btn delete" aria-label="Excluir arquivo ${fileName}">🗑</button>
+                            <button class="file-action-btn rename" aria-label="Renomear arquivo ${escapeHtml(fileName)}">✏️</button>
+                            <button class="file-action-btn delete" aria-label="Excluir arquivo ${escapeHtml(fileName)}">🗑</button>
                         </div>
                     `;
 
@@ -2226,7 +2242,10 @@
             e.stopPropagation();
             e.stopImmediatePropagation();
 
-            document.querySelectorAll('.dropdown-menu').forEach(m => m.remove());
+            document.querySelectorAll('.dropdown-menu').forEach(m => {
+                if (m._teardown) m._teardown();
+                else m.remove();
+            });
 
             const dropdown = document.createElement('div');
             dropdown.className = 'dropdown-menu visible';
@@ -2242,7 +2261,7 @@
 
             dropdown.querySelector('[data-action="new"]').addEventListener('click', (ev) => {
                 ev.stopPropagation();
-                dropdown.remove();
+                teardown();
                 currentProject = projectName;
                 const name = prompt('Nome do arquivo:');
                 if (name && name.trim()) {
@@ -2267,14 +2286,14 @@
 
             dropdown.querySelector('[data-action="upload"]').addEventListener('click', (ev) => {
                 ev.stopPropagation();
-                dropdown.remove();
+                teardown();
                 currentProject = projectName;
                 fileInput.click();
             });
 
             dropdown.querySelector('[data-action="rename-project"]').addEventListener('click', (ev) => {
                 ev.stopPropagation();
-                dropdown.remove();
+                teardown();
                 const newName = prompt('Novo nome do projeto:', projectName);
                 if (!newName || !newName.trim()) return;
                 const trimmed = newName.trim();
@@ -2295,7 +2314,7 @@
 
             dropdown.querySelector('[data-action="download-project"]').addEventListener('click', async (ev) => {
                 ev.stopPropagation();
-                dropdown.remove();
+                teardown();
                 const files = projects[projectName];
                 if (!files || Object.keys(files).length === 0) {
                     showToast('Projeto sem arquivos', 'warning');
@@ -2323,7 +2342,7 @@
 
             dropdown.querySelector('[data-action="delete"]').addEventListener('click', (ev) => {
                 ev.stopPropagation();
-                dropdown.remove();
+                teardown();
                 if (confirm('Deletar projeto e todos os arquivos?')) {
                     delete projects[projectName];
                     localStorage.setItem('projects', JSON.stringify(projects));
@@ -2349,19 +2368,25 @@
             const menuItems = Array.from(dropdown.querySelectorAll('[role="menuitem"]'));
             if (menuItems.length) menuItems[0].focus();
 
-            function teardown() {
+            // restoreFocus defaults to true (keyboard-driven closes always return
+            // focus to the trigger). Outside clicks pass false when the click
+            // landed on another focusable element, since the browser already
+            // moved focus there and forcing it back to `button` would steal it.
+            function teardown(restoreFocus = true) {
                 dropdown.remove();
                 document.removeEventListener('click', closeDropdown);
                 dropdown.removeEventListener('keydown', handleMenuKeydown);
-                button.focus();
+                if (restoreFocus) button.focus();
+            }
+            dropdown._teardown = teardown;
+
+            function isFocusableTarget(el) {
+                return !!el.closest('a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]');
             }
 
             const closeDropdown = (ev) => {
-                if (!dropdown.contains(ev.target)) {
-                    dropdown.remove();
-                    document.removeEventListener('click', closeDropdown);
-                    dropdown.removeEventListener('keydown', handleMenuKeydown);
-                }
+                if (dropdown.contains(ev.target)) return;
+                teardown(!isFocusableTarget(ev.target));
             };
             setTimeout(() => document.addEventListener('click', closeDropdown), 150);
 
@@ -2380,6 +2405,7 @@
                     teardown();
                 } else if (ev.key === 'Tab') {
                     // Dropdown has no natural "outside" focus target besides the trigger; close on Tab.
+                    ev.preventDefault();
                     teardown();
                 }
             }
