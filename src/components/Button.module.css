@@ -1,0 +1,88 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.75rem 1rem;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  font-family: var(--body);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--cream);
+  background-color: transparent;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.button:hover,
+.button:active {
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+.button:active {
+  border-color: var(--accent);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.default {
+  background-color: var(--ground-2);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.primary {
+  background-color: var(--accent);
+  border-color: var(--accent);
+  color: var(--ground);
+}
+
+.danger {
+  background-color: var(--ground-2);
+  border-color: var(--c-coral);
+  color: var(--c-coral);
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background-color: transparent;
+  color: var(--cream);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.iconButton:hover,
+.iconButton:active {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.iconButton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.iconButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.iconButtonCompact {
+  width: 30px;
+  height: 30px;
+}
