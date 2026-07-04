@@ -2535,7 +2535,7 @@
                     files.forEach(fileName => {
                         const item = document.createElement('div');
                         item.className = 'batch-file-item';
-                        item.innerHTML = `<div class="batch-file-project">${projectName}</div><div class="batch-file-name">📄 ${fileName}</div>`;
+                        item.innerHTML = `<div class="batch-file-project">${escapeHtml(projectName)}</div><div class="batch-file-name">📄 ${escapeHtml(fileName)}</div>`;
                         batchFilesList.appendChild(item);
                     });
                 });
