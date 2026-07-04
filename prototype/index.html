@@ -1869,237 +1869,16 @@
         const html = document.documentElement;
 
         // ============================================================
-        // ACCESSIBILITY HELPERS — focus trap & modal open/close
-        // Reusable vanilla-JS patterns. Any future custom dialog/menu
-        // (e.g. issue #16) should reuse trapFocus()/openModal()/closeModal()
-        // instead of re-implementing focus management.
+        // ACCESSIBILITY HELPERS & CUSTOM DIALOGS
+        // trapFocus/openModal/closeModal and showPromptDialog/showConfirmDialog
+        // (accessible replacements for prompt()/confirm(), issue #16) now live
+        // as shared ES modules under ./components/ and are attached to
+        // `window` by the <script type="module"> block near the end of
+        // <body> so this (non-module) script can keep calling them as
+        // plain globals, unchanged. See components/dialog-utils.js,
+        // components/dialog-state.js, components/PromptDialog.js and
+        // components/ConfirmDialog.js.
         // ============================================================
-        // Stack of currently-open overlays, topmost last. Used so that a single
-        // Escape keypress only closes the topmost modal, even if more than one
-        // is open at once (e.g. Config + Drive).
-        const _openModalStack = [];
-
-        function getFocusableElements(container) {
-            return Array.from(container.querySelectorAll(
-                'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
-            )).filter(el => el.offsetParent !== null);
-        }
-
-        // Cycles Tab/Shift+Tab within `containerEl`. Returns a cleanup function.
-        function trapFocus(containerEl) {
-            function handleKeydown(e) {
-                if (e.key !== 'Tab') return;
-                const focusable = getFocusableElements(containerEl);
-                if (focusable.length === 0) return;
-                const first = focusable[0];
-                const last = focusable[focusable.length - 1];
-                if (e.shiftKey && document.activeElement === first) {
-                    e.preventDefault();
-                    last.focus();
-                } else if (!e.shiftKey && document.activeElement === last) {
-                    e.preventDefault();
-                    first.focus();
-                }
-            }
-            containerEl.addEventListener('keydown', handleKeydown);
-            return () => containerEl.removeEventListener('keydown', handleKeydown);
-        }
-
-        // Opens a modal: stores the triggering element, moves focus inside,
-        // traps Tab navigation and closes on Escape.
-        function openModal(overlayEl, modalEl, triggerEl, onEscape) {
-            overlayEl._lastFocusedElement = triggerEl || document.activeElement;
-            overlayEl.classList.add('visible');
-            overlayEl.setAttribute('aria-hidden', 'false');
-            _openModalStack.push(overlayEl);
-
-            const focusable = getFocusableElements(modalEl);
-            (focusable[0] || modalEl).focus();
-
-            const removeTrap = trapFocus(modalEl);
-
-            function handleEscape(e) {
-                if (e.key !== 'Escape') return;
-                // Only the topmost open modal responds to Escape.
-                if (_openModalStack[_openModalStack.length - 1] !== overlayEl) return;
-                e.stopPropagation();
-                // Callers that layer extra state on top of closeModal (e.g. the
-                // Promise-based custom dialogs) pass onEscape so Escape settles
-                // that state too, instead of only closing the modal visually.
-                (onEscape || (() => closeModal(overlayEl, modalEl)))();
-            }
-            document.addEventListener('keydown', handleEscape);
-
-            overlayEl._a11yCleanup = () => {
-                removeTrap();
-                document.removeEventListener('keydown', handleEscape);
-            };
-        }
-
-        // Closes a modal opened with openModal() and returns focus to the trigger.
-        function closeModal(overlayEl, modalEl) {
-            overlayEl.classList.remove('visible');
-            overlayEl.setAttribute('aria-hidden', 'true');
-            const stackIndex = _openModalStack.indexOf(overlayEl);
-            if (stackIndex !== -1) _openModalStack.splice(stackIndex, 1);
-            if (overlayEl._a11yCleanup) {
-                overlayEl._a11yCleanup();
-                overlayEl._a11yCleanup = null;
-            }
-            if (overlayEl._lastFocusedElement && typeof overlayEl._lastFocusedElement.focus === 'function') {
-                overlayEl._lastFocusedElement.focus();
-            }
-            overlayEl._lastFocusedElement = null;
-        }
-
-        // ============================================================
-        // CUSTOM DIALOGS — accessible replacements for prompt()/confirm()
-        // Reuses openModal()/closeModal()/trapFocus() from #15. (issue #16)
-        // ============================================================
-        const dialogModalOverlay = document.getElementById('dialogModalOverlay');
-        const dialogModal = document.getElementById('dialogModal');
-        const dialogModalTitle = document.getElementById('dialogModalTitle');
-        const dialogModalClose = document.getElementById('dialogModalClose');
-        const dialogMessage = document.getElementById('dialogMessage');
-        const dialogInputGroup = document.getElementById('dialogInputGroup');
-        const dialogInputLabel = document.getElementById('dialogInputLabel');
-        const dialogInput = document.getElementById('dialogInput');
-        const dialogError = document.getElementById('dialogError');
-        const dialogConfirmBtn = document.getElementById('dialogConfirmBtn');
-        const dialogCancelBtn = document.getElementById('dialogCancelBtn');
-
-        // The dialogs share one DOM instance, so only one can be open at a time.
-        // `_activeDialogResolve` is that dialog's Promise resolver; `_activeDialogCancelValue`
-        // is what to resolve with when it's dismissed via close/cancel/overlay-click/Escape
-        // (null for showPromptDialog, false for showConfirmDialog).
-        let _activeDialogResolve = null;
-        let _activeDialogCancelValue = null;
-
-        function _resetDialogUI() {
-            dialogMessage.hidden = true;
-            dialogMessage.textContent = '';
-            dialogInputGroup.hidden = true;
-            dialogInput.value = '';
-            dialogInput.classList.remove('invalid');
-            dialogInput.oninput = null;
-            dialogError.textContent = '';
-            dialogConfirmBtn.classList.remove('danger');
-            dialogConfirmBtn.disabled = false;
-            dialogCancelBtn.textContent = 'Cancelar';
-        }
-
-        // Settles whichever dialog is currently open with `result`, closes it, and
-        // resets its UI. Also used as a reentrancy guard: if a new dialog is opened
-        // before a prior one settled, its Promise is resolved with its cancel value
-        // instead of being silently orphaned.
-        function _settleDialog(result) {
-            const resolve = _activeDialogResolve;
-            _activeDialogResolve = null;
-            closeModal(dialogModalOverlay, dialogModal);
-            _resetDialogUI();
-            if (resolve) resolve(result);
-        }
-
-        function _cancelDialog() {
-            _settleDialog(_activeDialogCancelValue);
-        }
-
-        dialogModalClose.addEventListener('click', _cancelDialog);
-        dialogCancelBtn.addEventListener('click', _cancelDialog);
-        dialogModalOverlay.addEventListener('click', (e) => {
-            if (e.target === dialogModalOverlay) _cancelDialog();
-        });
-
-        // showPromptDialog({ title, label, defaultValue, placeholder, confirmLabel, validate })
-        // -> Promise<string|null>. Resolves the trimmed value, or null on cancel/empty.
-        // `validate(value, isSubmit)` returns an error string (or falsy when valid) and is
-        // called on every keystroke for real-time inline feedback, and again on submit.
-        function showPromptDialog({
-            title,
-            label,
-            defaultValue = '',
-            placeholder = '',
-            confirmLabel = 'Confirmar',
-            validate = null
-        } = {}) {
-            // Guard against reentrancy: the dialogs share one DOM instance, so
-            // opening a new one while another is pending must settle the prior
-            // one first instead of orphaning its Promise.
-            if (_activeDialogResolve) _cancelDialog();
-
-            return new Promise((resolve) => {
-                _resetDialogUI();
-                dialogModalTitle.textContent = title || '';
-                dialogInputGroup.hidden = false;
-                dialogInputLabel.textContent = label || '';
-                dialogInput.placeholder = placeholder;
-                dialogInput.value = defaultValue;
-                dialogConfirmBtn.textContent = confirmLabel;
-
-                function runValidation(isSubmit) {
-                    const value = dialogInput.value.trim();
-                    const message = validate ? validate(value, isSubmit) : '';
-                    dialogError.textContent = message || '';
-                    dialogInput.classList.toggle('invalid', Boolean(message) && (isSubmit || value.length > 0));
-                    return message;
-                }
-
-                dialogInput.oninput = () => runValidation(false);
-
-                function submit() {
-                    const message = runValidation(true);
-                    if (message) {
-                        dialogInput.focus();
-                        return;
-                    }
-                    const value = dialogInput.value.trim();
-                    _settleDialog(value || null);
-                }
-
-                dialogConfirmBtn.onclick = submit;
-                dialogInput.onkeydown = (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        submit();
-                    }
-                };
-
-                _activeDialogResolve = resolve;
-                _activeDialogCancelValue = null;
-                openModal(dialogModalOverlay, dialogModal, document.activeElement, _cancelDialog);
-                dialogInput.focus();
-                dialogInput.select();
-            });
-        }
-
-        // showConfirmDialog({ title, message, confirmLabel, cancelLabel, danger })
-        // -> Promise<boolean>. Resolves true only when the confirm button is pressed.
-        function showConfirmDialog({
-            title,
-            message,
-            confirmLabel = 'Confirmar',
-            cancelLabel = 'Cancelar',
-            danger = false
-        } = {}) {
-            // Guard against reentrancy: see showPromptDialog for why.
-            if (_activeDialogResolve) _cancelDialog();
-
-            return new Promise((resolve) => {
-                _resetDialogUI();
-                dialogModalTitle.textContent = title || '';
-                dialogMessage.hidden = false;
-                dialogMessage.textContent = message || '';
-                dialogConfirmBtn.textContent = confirmLabel;
-                dialogCancelBtn.textContent = cancelLabel;
-                if (danger) dialogConfirmBtn.classList.add('danger');
-
-                dialogConfirmBtn.onclick = () => _settleDialog(true);
-
-                _activeDialogResolve = resolve;
-                _activeDialogCancelValue = false;
-                openModal(dialogModalOverlay, dialogModal, document.activeElement, _cancelDialog);
-            });
-        }
 
         // ========== TOAST ==========
         // Declarado primeiro para estar disponível em todos os listeners abaixo
@@ -3455,6 +3234,26 @@
             startAutoSync();
             updateSyncDot('connected');
         }
+    </script>
+
+    <!--
+        Shared dialog/a11y helpers, extracted as real ES modules (issue #16
+        follow-up: the inline versions weren't a genuinely "shared component").
+        The rest of the page is a classic (non-module) script, so this module
+        block attaches the functions to `window` explicitly rather than
+        converting the whole ~1600-line script to a module and risking
+        subtle global-scope breakage elsewhere.
+    -->
+    <script type="module">
+        import { trapFocus, openModal, closeModal } from './components/dialog-utils.js';
+        import { showPromptDialog } from './components/PromptDialog.js';
+        import { showConfirmDialog } from './components/ConfirmDialog.js';
+
+        window.trapFocus = trapFocus;
+        window.openModal = openModal;
+        window.closeModal = closeModal;
+        window.showPromptDialog = showPromptDialog;
+        window.showConfirmDialog = showConfirmDialog;
     </script>
 </body>
 </html>
