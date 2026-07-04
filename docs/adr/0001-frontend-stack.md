@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed — pending product-owner sign-off (issue #12).
+Accepted — signed off by product-owner (issue #12).
 
 ## Context
 
@@ -71,3 +71,21 @@ that content.
 - The small runtime and simple client-only build keep the project easy for
   both humans and coding agents to reason about and extend, matching the
   "easy to add features" and "lightweight installable PWA" goals.
+
+## Product-owner sign-off
+
+Reviewed against the two product goals only — "easy to add features" and
+"lightweight installable PWA" — without relitigating the technical
+tradeoffs already argued above (Vite/Preact vs. Next.js/React/no-framework).
+
+- **Easy to add features**: Preact's React-compatible hooks/JSX model, a
+  static client-only build with no server layer to coordinate, and an API
+  surface familiar to both human and LLM-agent contributors all keep the
+  cost of adding new features low.
+- **Lightweight installable PWA**: no SSR/hydration overhead, a ~10KB
+  runtime, and first-class `vite-plugin-pwa` support directly serve the
+  installable, lightweight PWA requirement.
+
+No concerns raised. **Signed off** — this decision continues to serve both
+product goals as scope grows (tasks #9–#11 already build on it without
+friction).
