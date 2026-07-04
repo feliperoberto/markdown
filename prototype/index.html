@@ -1858,7 +1858,7 @@
 
         // Opens a modal: stores the triggering element, moves focus inside,
         // traps Tab navigation and closes on Escape.
-        function openModal(overlayEl, modalEl, triggerEl) {
+        function openModal(overlayEl, modalEl, triggerEl, onEscape) {
             _lastFocusedElement = triggerEl || document.activeElement;
             overlayEl.classList.add('visible');
             overlayEl.setAttribute('aria-hidden', 'false');
@@ -1871,7 +1871,10 @@
             function handleEscape(e) {
                 if (e.key === 'Escape') {
                     e.stopPropagation();
-                    closeModal(overlayEl, modalEl);
+                    // Callers that layer extra state on top of closeModal (e.g. the
+                    // Promise-based custom dialogs) pass onEscape so Escape settles
+                    // that state too, instead of only closing the modal visually.
+                    (onEscape || (() => closeModal(overlayEl, modalEl)))();
                 }
             }
             document.addEventListener('keydown', handleEscape);
@@ -1912,9 +1915,12 @@
         const dialogConfirmBtn = document.getElementById('dialogConfirmBtn');
         const dialogCancelBtn = document.getElementById('dialogCancelBtn');
 
-        // Holds the cleanup/settle logic for whichever dialog is currently open,
-        // so overlay-click/close/escape can resolve the pending Promise.
-        let _activeDialogSettle = null;
+        // The dialogs share one DOM instance, so only one can be open at a time.
+        // `_activeDialogResolve` is that dialog's Promise resolver; `_activeDialogCancelValue`
+        // is what to resolve with when it's dismissed via close/cancel/overlay-click/Escape
+        // (null for showPromptDialog, false for showConfirmDialog).
+        let _activeDialogResolve = null;
+        let _activeDialogCancelValue = null;
 
         function _resetDialogUI() {
             dialogMessage.hidden = true;
@@ -1926,20 +1932,29 @@
             dialogError.textContent = '';
             dialogConfirmBtn.classList.remove('danger');
             dialogConfirmBtn.disabled = false;
+            dialogCancelBtn.textContent = 'Cancelar';
         }
 
-        function _closeDialog(result) {
-            const settle = _activeDialogSettle;
-            _activeDialogSettle = null;
+        // Settles whichever dialog is currently open with `result`, closes it, and
+        // resets its UI. Also used as a reentrancy guard: if a new dialog is opened
+        // before a prior one settled, its Promise is resolved with its cancel value
+        // instead of being silently orphaned.
+        function _settleDialog(result) {
+            const resolve = _activeDialogResolve;
+            _activeDialogResolve = null;
             closeModal(dialogModalOverlay, dialogModal);
             _resetDialogUI();
-            if (settle) settle(result);
+            if (resolve) resolve(result);
         }
 
-        dialogModalClose.addEventListener('click', () => _closeDialog(null));
-        dialogCancelBtn.addEventListener('click', () => _closeDialog(null));
+        function _cancelDialog() {
+            _settleDialog(_activeDialogCancelValue);
+        }
+
+        dialogModalClose.addEventListener('click', _cancelDialog);
+        dialogCancelBtn.addEventListener('click', _cancelDialog);
         dialogModalOverlay.addEventListener('click', (e) => {
-            if (e.target === dialogModalOverlay) _closeDialog(null);
+            if (e.target === dialogModalOverlay) _cancelDialog();
         });
 
         // showPromptDialog({ title, label, defaultValue, placeholder, confirmLabel, validate })
@@ -1954,6 +1969,11 @@
             confirmLabel = 'Confirmar',
             validate = null
         } = {}) {
+            // Guard against reentrancy: the dialogs share one DOM instance, so
+            // opening a new one while another is pending must settle the prior
+            // one first instead of orphaning its Promise.
+            if (_activeDialogResolve) _cancelDialog();
+
             return new Promise((resolve) => {
                 _resetDialogUI();
                 dialogModalTitle.textContent = title || '';
@@ -1980,10 +2000,7 @@
                         return;
                     }
                     const value = dialogInput.value.trim();
-                    _activeDialogSettle = null;
-                    closeModal(dialogModalOverlay, dialogModal);
-                    _resetDialogUI();
-                    resolve(value || null);
+                    _settleDialog(value || null);
                 }
 
                 dialogConfirmBtn.onclick = submit;
@@ -1994,8 +2011,9 @@
                     }
                 };
 
-                _activeDialogSettle = () => resolve(null);
-                openModal(dialogModalOverlay, dialogModal, document.activeElement);
+                _activeDialogResolve = resolve;
+                _activeDialogCancelValue = null;
+                openModal(dialogModalOverlay, dialogModal, document.activeElement, _cancelDialog);
                 dialogInput.focus();
                 dialogInput.select();
             });
@@ -2010,6 +2028,9 @@
             cancelLabel = 'Cancelar',
             danger = false
         } = {}) {
+            // Guard against reentrancy: see showPromptDialog for why.
+            if (_activeDialogResolve) _cancelDialog();
+
             return new Promise((resolve) => {
                 _resetDialogUI();
                 dialogModalTitle.textContent = title || '';
@@ -2019,19 +2040,11 @@
                 dialogCancelBtn.textContent = cancelLabel;
                 if (danger) dialogConfirmBtn.classList.add('danger');
 
-                dialogConfirmBtn.onclick = () => {
-                    _activeDialogSettle = null;
-                    closeModal(dialogModalOverlay, dialogModal);
-                    _resetDialogUI();
-                    dialogCancelBtn.textContent = 'Cancelar';
-                    resolve(true);
-                };
+                dialogConfirmBtn.onclick = () => _settleDialog(true);
 
-                _activeDialogSettle = () => {
-                    dialogCancelBtn.textContent = 'Cancelar';
-                    resolve(false);
-                };
-                openModal(dialogModalOverlay, dialogModal, document.activeElement);
+                _activeDialogResolve = resolve;
+                _activeDialogCancelValue = false;
+                openModal(dialogModalOverlay, dialogModal, document.activeElement, _cancelDialog);
             });
         }
 
