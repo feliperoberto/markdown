@@ -1476,6 +1476,32 @@
             border-color: var(--accent);
         }
 
+        /* Custom prompt/confirm dialog (reuses .config-modal-* shell) — issue #16 */
+        .dialog-message {
+            font-family: var(--body);
+            font-size: 0.85rem;
+            color: var(--cream-soft);
+            line-height: 1.5;
+        }
+
+        .dialog-error {
+            font-family: var(--body);
+            font-size: 0.78rem;
+            color: var(--c-coral);
+            min-height: 1.1em;
+        }
+
+        .config-input.invalid {
+            border-color: var(--c-coral);
+            box-shadow: 0 0 0 3px rgba(255, 122, 107, 0.15);
+        }
+
+        .btn-config-action.danger {
+            background-color: var(--c-coral);
+            color: var(--ground);
+            border-color: var(--c-coral);
+        }
+
         .config-help-text {
             font-family: var(--body);
             font-size: 0.78rem;
@@ -1776,6 +1802,26 @@
         </div>
     </div>
 
+    <!-- DIALOG MODAL (accessible replacement for prompt()/confirm() — issue #16) -->
+    <div class="config-modal-overlay" id="dialogModalOverlay" aria-hidden="true">
+        <div class="config-modal" id="dialogModal" role="dialog" aria-modal="true" aria-labelledby="dialogModalTitle" tabindex="-1">
+            <div class="config-modal-header">
+                <span class="config-modal-title" id="dialogModalTitle"></span>
+                <button class="config-modal-close" id="dialogModalClose" aria-label="Fechar">✕</button>
+            </div>
+            <p class="dialog-message" id="dialogMessage" hidden></p>
+            <div class="config-input-group" id="dialogInputGroup" hidden>
+                <label class="config-label" for="dialogInput" id="dialogInputLabel"></label>
+                <input type="text" id="dialogInput" class="config-input" autocomplete="off">
+                <p class="dialog-error" id="dialogError" role="alert" aria-live="polite"></p>
+            </div>
+            <div class="config-actions">
+                <button class="btn-config-action primary" id="dialogConfirmBtn"></button>
+                <button class="btn-config-action" id="dialogCancelBtn">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // PWA Service Worker
         if ('serviceWorker' in navigator) {
@@ -1851,7 +1897,7 @@
 
         // Opens a modal: stores the triggering element, moves focus inside,
         // traps Tab navigation and closes on Escape.
-        function openModal(overlayEl, modalEl, triggerEl) {
+        function openModal(overlayEl, modalEl, triggerEl, onEscape) {
             overlayEl._lastFocusedElement = triggerEl || document.activeElement;
             overlayEl.classList.add('visible');
             overlayEl.setAttribute('aria-hidden', 'false');
@@ -1867,7 +1913,10 @@
                 // Only the topmost open modal responds to Escape.
                 if (_openModalStack[_openModalStack.length - 1] !== overlayEl) return;
                 e.stopPropagation();
-                closeModal(overlayEl, modalEl);
+                // Callers that layer extra state on top of closeModal (e.g. the
+                // Promise-based custom dialogs) pass onEscape so Escape settles
+                // that state too, instead of only closing the modal visually.
+                (onEscape || (() => closeModal(overlayEl, modalEl)))();
             }
             document.addEventListener('keydown', handleEscape);
 
@@ -1891,6 +1940,155 @@
                 overlayEl._lastFocusedElement.focus();
             }
             overlayEl._lastFocusedElement = null;
+        }
+
+        // ============================================================
+        // CUSTOM DIALOGS — accessible replacements for prompt()/confirm()
+        // Reuses openModal()/closeModal()/trapFocus() from #15. (issue #16)
+        // ============================================================
+        const dialogModalOverlay = document.getElementById('dialogModalOverlay');
+        const dialogModal = document.getElementById('dialogModal');
+        const dialogModalTitle = document.getElementById('dialogModalTitle');
+        const dialogModalClose = document.getElementById('dialogModalClose');
+        const dialogMessage = document.getElementById('dialogMessage');
+        const dialogInputGroup = document.getElementById('dialogInputGroup');
+        const dialogInputLabel = document.getElementById('dialogInputLabel');
+        const dialogInput = document.getElementById('dialogInput');
+        const dialogError = document.getElementById('dialogError');
+        const dialogConfirmBtn = document.getElementById('dialogConfirmBtn');
+        const dialogCancelBtn = document.getElementById('dialogCancelBtn');
+
+        // The dialogs share one DOM instance, so only one can be open at a time.
+        // `_activeDialogResolve` is that dialog's Promise resolver; `_activeDialogCancelValue`
+        // is what to resolve with when it's dismissed via close/cancel/overlay-click/Escape
+        // (null for showPromptDialog, false for showConfirmDialog).
+        let _activeDialogResolve = null;
+        let _activeDialogCancelValue = null;
+
+        function _resetDialogUI() {
+            dialogMessage.hidden = true;
+            dialogMessage.textContent = '';
+            dialogInputGroup.hidden = true;
+            dialogInput.value = '';
+            dialogInput.classList.remove('invalid');
+            dialogInput.oninput = null;
+            dialogError.textContent = '';
+            dialogConfirmBtn.classList.remove('danger');
+            dialogConfirmBtn.disabled = false;
+            dialogCancelBtn.textContent = 'Cancelar';
+        }
+
+        // Settles whichever dialog is currently open with `result`, closes it, and
+        // resets its UI. Also used as a reentrancy guard: if a new dialog is opened
+        // before a prior one settled, its Promise is resolved with its cancel value
+        // instead of being silently orphaned.
+        function _settleDialog(result) {
+            const resolve = _activeDialogResolve;
+            _activeDialogResolve = null;
+            closeModal(dialogModalOverlay, dialogModal);
+            _resetDialogUI();
+            if (resolve) resolve(result);
+        }
+
+        function _cancelDialog() {
+            _settleDialog(_activeDialogCancelValue);
+        }
+
+        dialogModalClose.addEventListener('click', _cancelDialog);
+        dialogCancelBtn.addEventListener('click', _cancelDialog);
+        dialogModalOverlay.addEventListener('click', (e) => {
+            if (e.target === dialogModalOverlay) _cancelDialog();
+        });
+
+        // showPromptDialog({ title, label, defaultValue, placeholder, confirmLabel, validate })
+        // -> Promise<string|null>. Resolves the trimmed value, or null on cancel/empty.
+        // `validate(value, isSubmit)` returns an error string (or falsy when valid) and is
+        // called on every keystroke for real-time inline feedback, and again on submit.
+        function showPromptDialog({
+            title,
+            label,
+            defaultValue = '',
+            placeholder = '',
+            confirmLabel = 'Confirmar',
+            validate = null
+        } = {}) {
+            // Guard against reentrancy: the dialogs share one DOM instance, so
+            // opening a new one while another is pending must settle the prior
+            // one first instead of orphaning its Promise.
+            if (_activeDialogResolve) _cancelDialog();
+
+            return new Promise((resolve) => {
+                _resetDialogUI();
+                dialogModalTitle.textContent = title || '';
+                dialogInputGroup.hidden = false;
+                dialogInputLabel.textContent = label || '';
+                dialogInput.placeholder = placeholder;
+                dialogInput.value = defaultValue;
+                dialogConfirmBtn.textContent = confirmLabel;
+
+                function runValidation(isSubmit) {
+                    const value = dialogInput.value.trim();
+                    const message = validate ? validate(value, isSubmit) : '';
+                    dialogError.textContent = message || '';
+                    dialogInput.classList.toggle('invalid', Boolean(message) && (isSubmit || value.length > 0));
+                    return message;
+                }
+
+                dialogInput.oninput = () => runValidation(false);
+
+                function submit() {
+                    const message = runValidation(true);
+                    if (message) {
+                        dialogInput.focus();
+                        return;
+                    }
+                    const value = dialogInput.value.trim();
+                    _settleDialog(value || null);
+                }
+
+                dialogConfirmBtn.onclick = submit;
+                dialogInput.onkeydown = (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        submit();
+                    }
+                };
+
+                _activeDialogResolve = resolve;
+                _activeDialogCancelValue = null;
+                openModal(dialogModalOverlay, dialogModal, document.activeElement, _cancelDialog);
+                dialogInput.focus();
+                dialogInput.select();
+            });
+        }
+
+        // showConfirmDialog({ title, message, confirmLabel, cancelLabel, danger })
+        // -> Promise<boolean>. Resolves true only when the confirm button is pressed.
+        function showConfirmDialog({
+            title,
+            message,
+            confirmLabel = 'Confirmar',
+            cancelLabel = 'Cancelar',
+            danger = false
+        } = {}) {
+            // Guard against reentrancy: see showPromptDialog for why.
+            if (_activeDialogResolve) _cancelDialog();
+
+            return new Promise((resolve) => {
+                _resetDialogUI();
+                dialogModalTitle.textContent = title || '';
+                dialogMessage.hidden = false;
+                dialogMessage.textContent = message || '';
+                dialogConfirmBtn.textContent = confirmLabel;
+                dialogCancelBtn.textContent = cancelLabel;
+                if (danger) dialogConfirmBtn.classList.add('danger');
+
+                dialogConfirmBtn.onclick = () => _settleDialog(true);
+
+                _activeDialogResolve = resolve;
+                _activeDialogCancelValue = false;
+                openModal(dialogModalOverlay, dialogModal, document.activeElement, _cancelDialog);
+            });
         }
 
         // ========== TOAST ==========
@@ -1998,19 +2196,24 @@
         });
 
         // ========== NEW PROJECT ==========
-        newProjectBtn.addEventListener('click', (e) => {
+        newProjectBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            const name = prompt('Nome do novo projeto:');
-            if (name && name.trim()) {
-                const trimmedName = name.trim();
-                if (projects[trimmedName]) {
-                    showToast('Projeto já existe', 'warning');
-                    return;
+            const name = await showPromptDialog({
+                title: 'Novo projeto',
+                label: 'Nome do novo projeto',
+                placeholder: 'Ex.: Meu Projeto',
+                confirmLabel: 'Criar',
+                validate: (value) => {
+                    if (!value) return 'Digite um nome para o projeto.';
+                    if (projects[value]) return 'Já existe um projeto com esse nome.';
+                    return '';
                 }
-                projects[trimmedName] = {};
+            });
+            if (name) {
+                projects[name] = {};
                 localStorage.setItem('projects', JSON.stringify(projects));
                 renderProjects();
-                currentProject = trimmedName;
+                currentProject = name;
                 showToast('✅ Projeto criado', 'success');
             }
         });
@@ -2173,17 +2376,21 @@
                     }, { passive: true });
 
                     // Rename button
-                    fileItem.querySelector('.file-action-btn.rename').addEventListener('click', (e) => {
+                    fileItem.querySelector('.file-action-btn.rename').addEventListener('click', async (e) => {
                         e.stopPropagation();
                         fileItem.classList.remove('swiped');
-                        const newName = prompt('Novo nome do arquivo:', fileName);
-                        if (!newName || !newName.trim()) return;
-                        const trimmed = newName.trim();
-                        if (trimmed === fileName) return;
-                        if (projects[projectName][trimmed]) {
-                            showToast('Arquivo já existe', 'warning');
-                            return;
-                        }
+                        const trimmed = await showPromptDialog({
+                            title: 'Renomear arquivo',
+                            label: 'Novo nome do arquivo',
+                            defaultValue: fileName,
+                            confirmLabel: 'Renomear',
+                            validate: (value) => {
+                                if (!value) return 'Digite um nome para o arquivo.';
+                                if (value !== fileName && projects[projectName][value]) return 'Já existe um arquivo com esse nome.';
+                                return '';
+                            }
+                        });
+                        if (!trimmed || trimmed === fileName) return;
                         projects[projectName][trimmed] = { ...projects[projectName][fileName], name: trimmed };
                         delete projects[projectName][fileName];
                         if (currentFile === fileName) currentFile = trimmed;
@@ -2259,26 +2466,31 @@
                 <button class="dropdown-item" role="menuitem" data-action="delete" style="color: var(--danger);">🗑 Deletar projeto</button>
             `;
 
-            dropdown.querySelector('[data-action="new"]').addEventListener('click', (ev) => {
+            dropdown.querySelector('[data-action="new"]').addEventListener('click', async (ev) => {
                 ev.stopPropagation();
                 teardown();
                 currentProject = projectName;
-                const name = prompt('Nome do arquivo:');
-                if (name && name.trim()) {
-                    const trimmedName = name.trim();
-                    if (projects[projectName][trimmedName]) {
-                        showToast('Arquivo já existe', 'warning');
-                        return;
+                const name = await showPromptDialog({
+                    title: 'Novo arquivo',
+                    label: 'Nome do arquivo',
+                    placeholder: 'Ex.: notas',
+                    confirmLabel: 'Criar',
+                    validate: (value) => {
+                        if (!value) return 'Digite um nome para o arquivo.';
+                        if (projects[projectName][value]) return 'Já existe um arquivo com esse nome.';
+                        return '';
                     }
-                    projects[projectName][trimmedName] = {
-                        name: trimmedName,
+                });
+                if (name) {
+                    projects[projectName][name] = {
+                        name: name,
                         content: '',
                         size: 0,
                         timestamp: new Date().toISOString()
                     };
                     localStorage.setItem('projects', JSON.stringify(projects));
                     renderProjects();
-                    selectFile(projectName, trimmedName);
+                    selectFile(projectName, name);
                     trackProjectsChange();
                     showToast('✅ Novo arquivo', 'success');
                 }
@@ -2291,17 +2503,21 @@
                 fileInput.click();
             });
 
-            dropdown.querySelector('[data-action="rename-project"]').addEventListener('click', (ev) => {
+            dropdown.querySelector('[data-action="rename-project"]').addEventListener('click', async (ev) => {
                 ev.stopPropagation();
                 teardown();
-                const newName = prompt('Novo nome do projeto:', projectName);
-                if (!newName || !newName.trim()) return;
-                const trimmed = newName.trim();
-                if (trimmed === projectName) return;
-                if (projects[trimmed]) {
-                    showToast('Já existe um projeto com esse nome', 'warning');
-                    return;
-                }
+                const trimmed = await showPromptDialog({
+                    title: 'Renomear projeto',
+                    label: 'Novo nome do projeto',
+                    defaultValue: projectName,
+                    confirmLabel: 'Renomear',
+                    validate: (value) => {
+                        if (!value) return 'Digite um nome para o projeto.';
+                        if (value !== projectName && projects[value]) return 'Já existe um projeto com esse nome.';
+                        return '';
+                    }
+                });
+                if (!trimmed || trimmed === projectName) return;
                 // Renomeia: copia para nova chave, remove antiga
                 projects[trimmed] = projects[projectName];
                 delete projects[projectName];
@@ -2340,10 +2556,16 @@
                 }
             });
 
-            dropdown.querySelector('[data-action="delete"]').addEventListener('click', (ev) => {
+            dropdown.querySelector('[data-action="delete"]').addEventListener('click', async (ev) => {
                 ev.stopPropagation();
                 teardown();
-                if (confirm('Deletar projeto e todos os arquivos?')) {
+                const confirmed = await showConfirmDialog({
+                    title: 'Deletar projeto',
+                    message: `Deletar o projeto "${projectName}" e todos os seus arquivos? Essa ação não pode ser desfeita.`,
+                    confirmLabel: 'Deletar',
+                    danger: true
+                });
+                if (confirmed) {
                     delete projects[projectName];
                     localStorage.setItem('projects', JSON.stringify(projects));
                     if (currentProject === projectName) {
