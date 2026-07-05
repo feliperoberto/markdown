@@ -56,3 +56,37 @@ useful, *why*. Prefixing with a short type (`feat:`, `fix:`, `docs:`,
 `chore:`) is welcomed and mirrors most of the project's existing history, but
 it is **not enforced** by tooling — don't let commit-message formatting slow
 down small changes.
+
+## Branch protection (manual step for repo owner)
+
+This project is developed as a solo-developer-plus-AI-agents workflow, so
+branch protection is optimized for automated safety nets (CI) rather than
+multi-human review overhead.
+
+Once `.github/workflows/ci.yml` (added in issue #35) has run at least once
+on `main` — so its check names are known to GitHub — the repo owner
+(Felipe) should manually configure the following branch protection rule
+on `main` in GitHub Settings → Branches → Branch protection rules:
+
+- **Require status checks to pass before merging**: enabled
+  - Required checks: `test`, `e2e` (job names from `.github/workflows/ci.yml`)
+  - Require branches to be up to date before merging: enabled
+- **Require pull request before merging**: enabled
+  - **Required approving reviews**: 0 (solo-plus-agents workflow; CI is the
+    real gate here, not human approval count)
+- **Allow specified actors to bypass required pull requests**: the repo
+  owner should be allowed to bypass if needed (e.g. urgent hotfix, or
+  merging their own solo work without waiting on a second reviewer that
+  doesn't exist)
+- Do **not** enable "Require signed commits" or other multi-human-review
+  features that don't fit a solo-plus-agents team size.
+
+This cannot be configured by an agent: changing repository security
+settings is a repo-owner decision made directly in GitHub Settings, not
+something delegated through a PR.
+
+## Ready to merge
+
+See `.github/pull_request_template.md` for the checklist every PR should
+satisfy before merging: CI green (lint/typecheck/test/build/e2e), manual
+testing done, screenshots for UI changes, and the related issue linked.
