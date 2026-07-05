@@ -115,6 +115,10 @@ export function DriveSyncPanel({ getSnapshot, onImported }: DriveSyncPanelProps)
   }
 
   async function handleRestore() {
+    if (!isOnline) {
+      showToast(driveSyncCopy.offlineSyncSkippedToast, 'warning')
+      return
+    }
     setBusy(true)
     try {
       const projects = await providerRef.current.importFromDrive()
@@ -144,7 +148,9 @@ export function DriveSyncPanel({ getSnapshot, onImported }: DriveSyncPanelProps)
           onClick={() => setOpen(true)}
         />
         {!isOnline && (
-          <span class={styles.offlineBadge} role="status" title={driveSyncCopy.offlineBadgeTitle} />
+          <span class={styles.offlineBadge} role="status" title={driveSyncCopy.offlineBadgeTitle}>
+            <span class={styles.visuallyHidden}>{driveSyncCopy.offlineBadgeLabel}</span>
+          </span>
         )}
       </span>
       <Modal open={open} onClose={() => setOpen(false)} titleId={TITLE_ID} title="Google Drive">

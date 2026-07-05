@@ -25,7 +25,7 @@ export default defineConfig({
         // and any other built assets) so the core editing flow — open app,
         // edit, save to localStorage — works fully offline with no network
         // calls at all.
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2,json}'],
         navigateFallback: '/app.html',
         // No backend API to cache. Google's OAuth/Drive endpoints must
         // always hit the network and fail visibly when offline rather than

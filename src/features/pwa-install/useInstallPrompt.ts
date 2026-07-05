@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks'
+import { useToast } from '@/components'
 import { isIosDevice, isRunningStandalone, supportsBeforeInstallPrompt } from './platform'
 
 /** Minimal typing for the non-standard `BeforeInstallPromptEvent`. */
@@ -24,6 +25,7 @@ export interface UseInstallPromptResult {
  * iOS-capability signal the old prototype never had (see #26).
  */
 export function useInstallPrompt(): UseInstallPromptResult {
+  const showToast = useToast()
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [isStandalone, setIsStandalone] = useState(() => isRunningStandalone())
 
@@ -50,7 +52,11 @@ export function useInstallPrompt(): UseInstallPromptResult {
   async function promptInstall() {
     if (!deferredPrompt) return
     await deferredPrompt.prompt()
-    await deferredPrompt.userChoice
+    const { outcome } = await deferredPrompt.userChoice
+    if (outcome === 'accepted') {
+      // Matches prototype/index.html:2681-2689's "✅ App instalado!" toast.
+      showToast('✅ App instalado!', 'success')
+    }
     setDeferredPrompt(null)
   }
 

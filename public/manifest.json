@@ -1,8 +1,8 @@
 {
   "name": "Marcar para Existir",
   "short_name": "Marcar",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "/app.html",
+  "scope": "/app.html",
   "display": "standalone",
   "theme_color": "#211a2b",
   "background_color": "#211a2b",
