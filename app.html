@@ -5,6 +5,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#211a2b" />
     <!--
+      Content-Security-Policy (issue #28). Set via <meta> because this is a
+      static GitHub Pages site with no server available to emit a real HTTP
+      header.
+
+      - script-src: 'self' plus accounts.google.com, the only external
+        script origin (Google Identity Services, loaded dynamically by
+        src/features/drive-sync/google-identity.ts).
+      - connect-src: 'self' plus www.googleapis.com, used for all Drive API
+        calls and the OAuth userinfo endpoint (see
+        src/features/drive-sync/google-drive-provider.ts). No other Google
+        origin (e.g. oauth2.googleapis.com) is contacted by this app.
+      - style-src/font-src: 'self' only — the app does not load Google
+        Fonts or any other external stylesheet/font (see vite.config.ts).
+      - No inline <script>/<style> tags exist in this file, and none are
+        injected dynamically, so 'unsafe-inline' is intentionally omitted.
+        (User markdown is rendered via DOMPurify-sanitized HTML; any
+        `style="..."` attribute it might let through will simply be
+        ignored by the browser under this policy rather than tightened
+        with a nonce/hash, since it's untrusted content, not app code.)
+      - object-src/frame-ancestors: locked down defensively.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' https://accounts.google.com; connect-src 'self' https://www.googleapis.com; style-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none';"
+    />
+    <!--
       iOS/iPadOS Safari has no `beforeinstallprompt` and relies on these
       meta tags (ported from prototype/index.html:6-8) for standalone/
       home-screen behavior.
