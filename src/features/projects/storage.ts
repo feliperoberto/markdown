@@ -1,5 +1,5 @@
 import { localStorageAdapter, type StorageAdapter } from '@/lib/storage-adapter'
-import { CURRENT_SCHEMA_VERSION, migrateStoredProjects, type StorageEnvelope } from '@/lib/storage-migrations'
+import { CURRENT_SCHEMA_VERSION, isEnvelope, migrateStoredProjects, type StorageEnvelope } from '@/lib/storage-migrations'
 import type { ProjectsState } from './types'
 
 const PROJECTS_STORAGE_KEY = 'projects'
@@ -29,7 +29,8 @@ export function loadProjects(adapter: StorageAdapter = localStorageAdapter): Pro
   // Persist the migrated shape immediately so subsequent loads (and any
   // other code reading the `projects` key directly, e.g. Drive sync)
   // never see the legacy, un-versioned shape again.
-  if (envelope.schemaVersion !== getRawSchemaVersion(parsed)) {
+  const wasAlreadyCurrent = isEnvelope(parsed) && parsed.schemaVersion === CURRENT_SCHEMA_VERSION
+  if (!wasAlreadyCurrent) {
     writeEnvelope(envelope, adapter)
   }
 
@@ -44,18 +45,6 @@ function writeEnvelope(envelope: StorageEnvelope, adapter: StorageAdapter): void
   adapter.set(PROJECTS_STORAGE_KEY, JSON.stringify(envelope))
 }
 
-function getRawSchemaVersion(parsed: unknown): number {
-  if (
-    typeof parsed === 'object' &&
-    parsed !== null &&
-    !Array.isArray(parsed) &&
-    typeof (parsed as { schemaVersion?: unknown }).schemaVersion === 'number'
-  ) {
-    return (parsed as { schemaVersion: number }).schemaVersion
-  }
-  return -1
-}
-
 /**
  * Independent safety net for destructive operations (bulk delete, ZIP
  * import overwrite, restore-from-backup): snapshots the *current*
@@ -65,10 +54,20 @@ function getRawSchemaVersion(parsed: unknown): number {
  *
  * Call this with the in-memory state that is *about to be replaced*,
  * right before the destructive `saveProjects` call — not after.
+ *
+ * Best-effort: a full backup rotation can push localStorage over its quota
+ * (it's already the operation most likely to do so, since it writes extra
+ * full copies of the `projects` blob). Failing to back up must never block
+ * the real, user-requested mutation that's about to happen — so any
+ * storage error here is logged and swallowed rather than thrown.
  */
 export function backupProjects(current: ProjectsState, adapter: StorageAdapter = localStorageAdapter): void {
-  rotateBackups(adapter)
-  adapter.set(`${BACKUP_KEY_PREFIX}1`, JSON.stringify({ schemaVersion: CURRENT_SCHEMA_VERSION, projects: current }))
+  try {
+    rotateBackups(adapter)
+    adapter.set(`${BACKUP_KEY_PREFIX}1`, JSON.stringify({ schemaVersion: CURRENT_SCHEMA_VERSION, projects: current }))
+  } catch (error) {
+    console.error('Failed to write projects backup; continuing without it.', error)
+  }
 }
 
 function rotateBackups(adapter: StorageAdapter): void {

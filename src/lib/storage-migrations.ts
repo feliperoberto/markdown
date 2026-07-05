@@ -36,7 +36,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function isEnvelope(value: unknown): value is StorageEnvelope {
+export function isEnvelope(value: unknown): value is StorageEnvelope {
   return isPlainObject(value) && typeof value.schemaVersion === 'number' && isPlainObject(value.projects)
 }
 
