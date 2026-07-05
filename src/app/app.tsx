@@ -24,6 +24,7 @@ export function App(): JSX.Element {
     deleteProject,
     updateFileContent,
     importProjects,
+    restoreProjects,
   } = useProjects()
 
   const [batchSelection, setBatchSelection] = useState<
@@ -60,7 +61,7 @@ export function App(): JSX.Element {
         />
         <DriveSyncPanel
           getSnapshot={() => ({ projects })}
-          onImported={(imported) => importProjects(imported as typeof projects)}
+          onImported={(imported) => restoreProjects(imported as typeof projects)}
         />
       </header>
       <div className="app-body">

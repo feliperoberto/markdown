@@ -9,3 +9,6 @@ export type { ToastProps, ToastProviderProps, ToastVariant, ShowToast } from './
 
 export { Checkbox } from './Checkbox'
 export type { CheckboxProps } from './Checkbox'
+
+export { SafeName } from './SafeName'
+export type { SafeNameProps } from './SafeName'

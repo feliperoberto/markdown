@@ -120,8 +120,9 @@ export class GoogleDriveSyncProvider implements SyncProvider {
 
   disconnect(): void {
     if (this.accessToken) {
+      const tokenToRevoke = this.accessToken
       loadGoogleIdentity()
-        .then((google) => google.accounts.oauth2.revoke(this.accessToken as string, () => {}))
+        .then((google) => google.accounts.oauth2.revoke(tokenToRevoke, () => {}))
         .catch(() => {})
     }
     this.stopAutoSync()

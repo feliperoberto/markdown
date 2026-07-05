@@ -47,24 +47,36 @@ export function DriveSyncPanel({ getSnapshot, onImported }: DriveSyncPanelProps)
   const providerRef = useRef(provider)
   providerRef.current = provider
 
-  const configured = isClientIdConfigured(clientId)
+  // Always dereferenced fresh on every auto-sync tick (see Fix 1): keeps
+  // the latest `getSnapshot` in a ref so a stale, connect-time closure is
+  // never frozen inside the provider's setInterval loop.
+  const getSnapshotRef = useRef(getSnapshot)
+  getSnapshotRef.current = getSnapshot
+
+  // Derived from the PERSISTED client ID (what `connect()` actually
+  // reads), not the live/unsaved input — see Fix 5.
+  const [storedClientId, setStoredClientIdState] = useState(() => getStoredClientId())
+  const configured = isClientIdConfigured(storedClientId)
 
   function handleSaveClientId(event: Event) {
     event.preventDefault()
-    setStoredClientId(clientId.trim())
+    const trimmed = clientId.trim()
+    setStoredClientId(trimmed)
+    setStoredClientIdState(trimmed)
     showToast('Client ID salvo', 'success')
   }
 
   function handleClearClientId() {
     clearStoredClientId()
     setClientIdInput(getStoredClientId())
+    setStoredClientIdState(getStoredClientId())
   }
 
   async function handleConnect() {
     setBusy(true)
     try {
       await providerRef.current.connect()
-      providerRef.current.startAutoSync(getSnapshot)
+      providerRef.current.startAutoSync(() => getSnapshotRef.current())
     } catch {
       // onNotify already surfaced the error as a toast.
     } finally {

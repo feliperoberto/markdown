@@ -17,6 +17,7 @@ export interface UseProjectsResult {
   deleteFile: (projectName: string, fileName: string) => void
   updateFileContent: (projectName: string, fileName: string, content: string) => void
   importProjects: (incoming: ProjectsState) => void
+  restoreProjects: (incoming: ProjectsState) => void
 }
 
 // Owns the projects/files state for the app and persists every mutation
@@ -107,6 +108,15 @@ export function useProjects(): UseProjectsResult {
     [projects, persist]
   )
 
+  // Full-state replace for "restore from backup" (e.g. Drive restore) —
+  // distinct from `importProjects`'s additive ZIP-import merge semantics.
+  const restoreProjects = useCallback(
+    (incoming: ProjectsState) => {
+      persist(model.replaceProjects(incoming))
+    },
+    [persist]
+  )
+
   return {
     projects,
     currentProject,
@@ -121,5 +131,6 @@ export function useProjects(): UseProjectsResult {
     deleteFile,
     updateFileContent,
     importProjects,
+    restoreProjects,
   }
 }

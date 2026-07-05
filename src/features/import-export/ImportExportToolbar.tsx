@@ -47,16 +47,40 @@ export function ImportExportToolbar({
   const showToast = useToast()
 
   async function handleFileSelected(event: JSX.TargetedEvent<HTMLInputElement>) {
-    const file = (event.target as HTMLInputElement).files?.[0]
+    const files = Array.from((event.target as HTMLInputElement).files ?? [])
     ;(event.target as HTMLInputElement).value = ''
-    if (!file) return
+    if (files.length === 0) return
 
-    try {
-      const entry = await importFile(file)
-      onImport({ [entry.name]: { [entry.name]: entry } })
-      showToast(`Arquivo "${entry.name}" importado`, 'success')
-    } catch (error) {
-      showToast(`Erro ao importar arquivo: ${(error as Error).message}`, 'error')
+    if (!currentProjectName) {
+      showToast('Selecione um projeto', 'warning')
+      return
+    }
+
+    const importedNames: string[] = []
+    const errors: string[] = []
+    const filesPatch: ProjectFiles = {}
+
+    for (const file of files) {
+      try {
+        const entry = await importFile(file)
+        filesPatch[entry.name] = entry
+        importedNames.push(entry.name)
+      } catch (error) {
+        errors.push((error as Error).message)
+      }
+    }
+
+    if (importedNames.length > 0) {
+      onImport({ [currentProjectName]: filesPatch })
+      const message =
+        importedNames.length === 1
+          ? `Arquivo "${importedNames[0]}" importado`
+          : `${importedNames.length} arquivo(s) importado(s)`
+      showToast(message, 'success')
+    }
+
+    if (errors.length > 0) {
+      showToast(`Erro ao importar arquivo: ${errors.join(', ')}`, 'error')
     }
   }
 
@@ -109,6 +133,7 @@ export function ImportExportToolbar({
         ref={fileInputRef}
         type="file"
         accept=".md,text/markdown"
+        multiple
         hidden
         onChange={handleFileSelected}
       />
