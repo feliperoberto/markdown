@@ -17,7 +17,7 @@ test.describe('export/import golden path', () => {
     await page.getByLabel('Nome do novo projeto').fill(projectName)
     await page.getByRole('button', { name: 'Salvar' }).click()
 
-    await page.getByRole('button', { name: `Mais opções do projeto ${projectName}` }).click()
+    await page.getByRole('button', { name: `Mais opções do projeto ${projectName}`, exact: true }).click()
     await page.getByRole('button', { name: 'Novo arquivo' }).click()
     await page.getByLabel('Nome do arquivo').fill(fileName)
     await page.getByRole('button', { name: 'Salvar' }).click()
@@ -35,7 +35,7 @@ test.describe('export/import golden path', () => {
     // Delete the project so a subsequent re-appearance can only be
     // explained by the ZIP import, not leftover in-memory/localStorage
     // state.
-    await page.getByRole('button', { name: `Mais opções do projeto ${projectName}` }).click()
+    await page.getByRole('button', { name: `Mais opções do projeto ${projectName}`, exact: true }).click()
     await page.getByRole('button', { name: 'Excluir projeto' }).click()
     await page.getByRole('button', { name: 'Confirmar' }).click()
     await expect(page.getByText(projectName)).toHaveCount(0)

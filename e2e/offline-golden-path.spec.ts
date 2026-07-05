@@ -12,7 +12,10 @@ import { test, expect } from './fixtures'
 // only asserts the offline badge/notice), so no OAuth popup is ever
 // triggered in the first place.
 test.describe('offline golden path', () => {
-  test('editing keeps working offline and Drive sync surfaces the offline state', async ({ page, context }) => {
+  test('editing keeps working offline and Drive sync surfaces the offline state', async ({
+    page,
+    context,
+  }) => {
     await page.goto('/app.html')
 
     const projectName = `Offline Project ${Date.now()}`
@@ -22,7 +25,7 @@ test.describe('offline golden path', () => {
     await page.getByLabel('Nome do novo projeto').fill(projectName)
     await page.getByRole('button', { name: 'Salvar' }).click()
 
-    await page.getByRole('button', { name: `Mais opções do projeto ${projectName}` }).click()
+    await page.getByRole('button', { name: `Mais opções do projeto ${projectName}`, exact: true }).click()
     await page.getByRole('button', { name: 'Novo arquivo' }).click()
     await page.getByLabel('Nome do arquivo').fill(fileName)
     await page.getByRole('button', { name: 'Salvar' }).click()
