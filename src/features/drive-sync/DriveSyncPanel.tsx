@@ -127,7 +127,12 @@ export function DriveSyncPanel({ getSnapshot, onImported }: DriveSyncPanelProps)
     }
   }
 
-  const connected = status === 'connected' || status === 'syncing'
+  // 'connected-offline' means "authenticated but currently offline" — keep
+  // treating it as connected (Sync/Restore buttons stay visible) rather
+  // than falling back to the never-connected 'offline' state (finding #1).
+  // The offline badge/notice below is driven independently by
+  // `useOnlineStatus()`, so it still shows regardless of this value.
+  const connected = status === 'connected' || status === 'syncing' || status === 'connected-offline'
 
   return (
     <>
