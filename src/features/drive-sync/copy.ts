@@ -40,4 +40,13 @@ export const driveSyncCopy = {
 
   notConnectedStatus: 'Conecte sua conta Google para salvar e restaurar projetos.',
   neverSyncedStatus: '⚠️ Nunca sincronizado',
+
+  /**
+   * Shown instead of a raw network/fetch error when a sync attempt is
+   * skipped because the browser is offline (issue #24). The broader
+   * offline-UX indicator (connection banner, etc.) is issue #25's scope —
+   * this is only the sync-failure-path message.
+   */
+  offlineWillRetrySync:
+    'Sem conexão — seus dados continuam salvos localmente e a sincronização será retomada automaticamente ao reconectar.',
 } as const
