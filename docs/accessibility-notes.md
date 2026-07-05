@@ -2,24 +2,24 @@
 
 ## 1. Accessible names for icon-only controls (`aria-label`, PT-BR)
 
-| Element(s) | `aria-label` |
-|---|---|
-| `#menuBtn` (☰) | "Abrir menu de projetos" |
-| `#driveBtn` (☁️) | "Abrir Google Drive" |
-| `#fontSizeBtn` (Aa) | "Alternar tamanho do texto do editor" |
-| `#fullscreenBtn` (⛶) | "Alternar tela cheia" |
-| `#newProjectBtn` (➕) | "Criar novo projeto" |
-| `#importZipBtn` (📥) | "Importar projetos de um arquivo ZIP" |
-| `#configBtn` (⚙️) | "Abrir configurações" |
-| `#installBtn` (📲) | "Instalar aplicativo" |
-| `#downloadBtn` (⬇️) | "Baixar arquivo atual" |
-| `#copyBtn` (📋) | "Copiar todo o conteúdo do arquivo" |
-| `#configModalClose` (✕) | "Fechar configurações" |
-| `#driveModalClose` (✕) | "Fechar Google Drive" |
-| `.project-menu` (⋮, per project) | "Mais opções do projeto {nome}" |
-| `.file-action-btn.rename` (✏️, per file) | "Renomear arquivo {nome}" |
-| `.file-action-btn.delete` (🗑, per file) | "Excluir arquivo {nome}" |
-| `.file-checkbox` (per file) | "Selecionar {nome} para download em lote" |
+| Element(s)                               | `aria-label`                              |
+| ---------------------------------------- | ----------------------------------------- |
+| `#menuBtn` (☰)                          | "Abrir menu de projetos"                  |
+| `#driveBtn` (☁️)                         | "Abrir Google Drive"                      |
+| `#fontSizeBtn` (Aa)                      | "Alternar tamanho do texto do editor"     |
+| `#fullscreenBtn` (⛶)                     | "Alternar tela cheia"                     |
+| `#newProjectBtn` (➕)                    | "Criar novo projeto"                      |
+| `#importZipBtn` (📥)                     | "Importar projetos de um arquivo ZIP"     |
+| `#configBtn` (⚙️)                        | "Abrir configurações"                     |
+| `#installBtn` (📲)                       | "Instalar aplicativo"                     |
+| `#downloadBtn` (⬇️)                      | "Baixar arquivo atual"                    |
+| `#copyBtn` (📋)                          | "Copiar todo o conteúdo do arquivo"       |
+| `#configModalClose` (✕)                  | "Fechar configurações"                    |
+| `#driveModalClose` (✕)                   | "Fechar Google Drive"                     |
+| `.project-menu` (⋮, per project)         | "Mais opções do projeto {nome}"           |
+| `.file-action-btn.rename` (✏️, per file) | "Renomear arquivo {nome}"                 |
+| `.file-action-btn.delete` (🗑, per file)  | "Excluir arquivo {nome}"                  |
+| `.file-checkbox` (per file)              | "Selecionar {nome} para download em lote" |
 
 Decorative glyphs that duplicate an adjacent visible text label (e.g. sidebar
 footer icons next to "Novo"/"Importar"/"Config"/"Instalar", the drive status
@@ -29,6 +29,7 @@ given a redundant label.
 ## 2. Modal behavior (Config modal & Drive modal)
 
 Both `#configModal` and `#driveModal` now:
+
 - Carry `role="dialog"`, `aria-modal="true"`, `aria-labelledby` pointing at
   their visible title, and the overlay carries `aria-hidden` toggled with
   visibility.
@@ -43,6 +44,7 @@ Both `#configModal` and `#driveModal` now:
 
 `showProjectMenu()` now renders `role="menu"` on the dropdown container and
 `role="menuitem"` on each action button:
+
 - Opening the menu focuses the first menu item.
 - `ArrowDown` / `ArrowUp` cycle focus between menu items (wrapping).
 - `Escape` and `Tab` close the menu and return focus to the `⋮` button that
@@ -53,20 +55,21 @@ Both `#configModal` and `#driveModal` now:
 
 Tab order through the sidebar file tree (when open) follows DOM order,
 top to bottom:
-1. Project header (click target for expand/collapse — currently a `div`
-   with a click handler, not yet a native `<button>`; noted as follow-up
-   debt, see below) → `⋮` project menu button.
-2. Per file row: checkbox → file name (click target, same non-native-button
-   caveat) → rename (✏️) → delete (🗑) action buttons.
+
+1. Project header (`role="button"`, `tabindex="0"`, expand/collapse via
+   click or `Enter`/`Space`) → `⋮` project menu button.
+2. Per file row: checkbox → file row (`role="button"`, `tabindex="0"`,
+   selects the file via click or `Enter`/`Space`) → rename (✏️) → delete
+   (🗑) action buttons.
 3. Sidebar footer: Novo → Importar → Config → Instalar (when visible).
 
-**Known follow-up (out of scope for this pass):** `.project-header` and
-`.file-item` are `<div>`s with `click`/`dblclick` handlers rather than
-native `<button>`s, so they are not currently part of the Tab order and
-have no keyboard activation (Enter/Space). Converting them to accessible
-buttons (or adding `tabindex="0"` + key handlers) is recommended as a
-follow-up, since it changes hit-testing/CSS behavior (swipe-to-reveal,
-click-to-toggle) beyond the scope of this ARIA/labeling pass.
+**Resolved (issue #34):** `.project-header` and `.file-item` were
+previously `<div>`s with only `click`/`dblclick` handlers, so they were not
+part of the Tab order and had no keyboard activation. They are now
+`role="button"` with `tabindex="0"` and an `onKeyDown` handler that
+activates on `Enter`/`Space`, matching native button semantics, while
+keeping the existing hit-testing/CSS behavior (swipe-to-reveal,
+click-to-toggle) intact.
 
 ## 5. Reusable focus-trap helpers (for issue #16)
 

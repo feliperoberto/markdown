@@ -24,7 +24,8 @@ export function Button({
   type = 'button',
   ariaHasPopup,
 }: ButtonProps) {
-  const variantClass = variant === 'primary' ? styles.primary : variant === 'danger' ? styles.danger : styles.default
+  const variantClass =
+    variant === 'primary' ? styles.primary : variant === 'danger' ? styles.danger : styles.default
 
   return (
     <button

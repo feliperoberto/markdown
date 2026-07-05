@@ -29,7 +29,9 @@ export function isIosDevice(navigatorRef: Navigator = navigator): boolean {
 /** True when the app is already running installed/standalone (either platform). */
 export function isRunningStandalone(windowRef: Window = window): boolean {
   const nav = windowRef.navigator as Navigator & { standalone?: boolean }
-  return windowRef.matchMedia?.('(display-mode: standalone)').matches === true || nav.standalone === true
+  return (
+    windowRef.matchMedia?.('(display-mode: standalone)').matches === true || nav.standalone === true
+  )
 }
 
 /** True when `beforeinstallprompt` is a supported event on this browser (Chromium-family). */

@@ -32,7 +32,8 @@ export function IosInstallCard({ open, onClose }: IosInstallCardProps): JSX.Elem
       <p>O Safari no iOS não permite instalar apps automaticamente. Para instalar:</p>
       <ol>
         <li>
-          Toque no ícone de <strong>Compartilhar</strong> <span aria-hidden="true">⬆️</span> na barra do Safari.
+          Toque no ícone de <strong>Compartilhar</strong> <span aria-hidden="true">⬆️</span> na
+          barra do Safari.
         </li>
         <li>
           Selecione <strong>Adicionar à Tela de Início</strong>.

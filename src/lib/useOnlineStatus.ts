@@ -11,7 +11,9 @@ import { useEffect, useState } from 'preact/hooks'
  * the case where the interface is up but the request still fails.
  */
 export function useOnlineStatus(): boolean {
-  const [isOnline, setIsOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine))
+  const [isOnline, setIsOnline] = useState(() =>
+    typeof navigator === 'undefined' ? true : navigator.onLine,
+  )
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true)

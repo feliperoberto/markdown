@@ -51,6 +51,13 @@ export function FileRow({
     onSelectFile(projectName, file.name)
   }
 
+  function handleRowKeyDown(e: KeyboardEvent) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      handleRowClick()
+    }
+  }
+
   async function handleRename(e: MouseEvent) {
     e.stopPropagation()
     setIsSwiped(false)
@@ -60,7 +67,8 @@ export function FileRow({
       defaultValue: file.name,
       validate: (value) => {
         if (!value) return 'Digite um nome para o arquivo.'
-        if (value !== file.name && fileNames.includes(value)) return 'Já existe um arquivo com esse nome.'
+        if (value !== file.name && fileNames.includes(value))
+          return 'Já existe um arquivo com esse nome.'
         return null
       },
     })
@@ -77,11 +85,15 @@ export function FileRow({
   return (
     <div
       className={`file-item${isActive ? ' active' : ''}${isSwiped ? ' swiped' : ''}`}
+      role="button"
+      tabIndex={0}
+      aria-current={isActive ? 'true' : undefined}
       onClick={handleRowClick}
+      onKeyDown={handleRowKeyDown}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
     >
-      <span onClick={(e) => e.stopPropagation()}>
+      <span role="presentation" onClick={(e) => e.stopPropagation()}>
         <Checkbox
           checked={isSelected}
           label={`Selecionar ${file.name} para download em lote`}

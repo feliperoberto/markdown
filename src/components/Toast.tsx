@@ -49,7 +49,9 @@ export function ToastProvider({ children }: ToastProviderProps) {
   const lastShownRef = useRef<{ message: string; timestamp: number } | null>(null)
 
   const dismiss = useCallback((id: number) => {
-    setToasts((current) => current.map((toast) => (toast.id === id ? { ...toast, visible: false } : toast)))
+    setToasts((current) =>
+      current.map((toast) => (toast.id === id ? { ...toast, visible: false } : toast)),
+    )
     setTimeout(() => {
       setToasts((current) => current.filter((toast) => toast.id !== id))
     }, EXIT_ANIMATION_MS)
@@ -59,7 +61,11 @@ export function ToastProvider({ children }: ToastProviderProps) {
     (message, variant = 'success') => {
       const now = Date.now()
       const lastShown = lastShownRef.current
-      if (lastShown && lastShown.message === message && now - lastShown.timestamp < DEDUPE_WINDOW_MS) {
+      if (
+        lastShown &&
+        lastShown.message === message &&
+        now - lastShown.timestamp < DEDUPE_WINDOW_MS
+      ) {
         return
       }
       lastShownRef.current = { message, timestamp: now }
@@ -68,7 +74,9 @@ export function ToastProvider({ children }: ToastProviderProps) {
       setToasts((current) => [...current, { id, message, variant, visible: false }])
       // Flip to visible on next frame so the enter transition runs.
       requestAnimationFrame(() => {
-        setToasts((current) => current.map((toast) => (toast.id === id ? { ...toast, visible: true } : toast)))
+        setToasts((current) =>
+          current.map((toast) => (toast.id === id ? { ...toast, visible: true } : toast)),
+        )
       })
       setTimeout(() => dismiss(id), DURATION_BY_VARIANT[variant])
     },
@@ -80,7 +88,12 @@ export function ToastProvider({ children }: ToastProviderProps) {
       {children}
       <div class={styles.host}>
         {toasts.map((toast) => (
-          <ToastItem key={toast.id} message={toast.message} variant={toast.variant} visible={toast.visible} />
+          <ToastItem
+            key={toast.id}
+            message={toast.message}
+            variant={toast.variant}
+            visible={toast.visible}
+          />
         ))}
       </div>
     </ToastContext.Provider>

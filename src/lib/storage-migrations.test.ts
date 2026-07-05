@@ -32,7 +32,12 @@ describe('migrateStoredProjects', () => {
   it('lifts a legacy (un-versioned) raw ProjectsState blob to the current schema version', () => {
     const legacy: ProjectsState = {
       'My Project': {
-        'notes.md': { name: 'notes.md', content: '# hi', size: 4, timestamp: '2024-01-01T00:00:00.000Z' },
+        'notes.md': {
+          name: 'notes.md',
+          content: '# hi',
+          size: 4,
+          timestamp: '2024-01-01T00:00:00.000Z',
+        },
       },
     }
 

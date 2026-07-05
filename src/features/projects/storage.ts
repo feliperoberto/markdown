@@ -1,5 +1,10 @@
 import { localStorageAdapter, type StorageAdapter } from '@/lib/storage-adapter'
-import { CURRENT_SCHEMA_VERSION, isEnvelope, migrateStoredProjects, type StorageEnvelope } from '@/lib/storage-migrations'
+import {
+  CURRENT_SCHEMA_VERSION,
+  isEnvelope,
+  migrateStoredProjects,
+  type StorageEnvelope,
+} from '@/lib/storage-migrations'
 import type { ProjectsState } from './types'
 
 const PROJECTS_STORAGE_KEY = 'projects'
@@ -37,7 +42,10 @@ export function loadProjects(adapter: StorageAdapter = localStorageAdapter): Pro
   return envelope.projects
 }
 
-export function saveProjects(projects: ProjectsState, adapter: StorageAdapter = localStorageAdapter): void {
+export function saveProjects(
+  projects: ProjectsState,
+  adapter: StorageAdapter = localStorageAdapter,
+): void {
   writeEnvelope({ schemaVersion: CURRENT_SCHEMA_VERSION, projects }, adapter)
 }
 
@@ -61,10 +69,16 @@ function writeEnvelope(envelope: StorageEnvelope, adapter: StorageAdapter): void
  * the real, user-requested mutation that's about to happen — so any
  * storage error here is logged and swallowed rather than thrown.
  */
-export function backupProjects(current: ProjectsState, adapter: StorageAdapter = localStorageAdapter): void {
+export function backupProjects(
+  current: ProjectsState,
+  adapter: StorageAdapter = localStorageAdapter,
+): void {
   try {
     rotateBackups(adapter)
-    adapter.set(`${BACKUP_KEY_PREFIX}1`, JSON.stringify({ schemaVersion: CURRENT_SCHEMA_VERSION, projects: current }))
+    adapter.set(
+      `${BACKUP_KEY_PREFIX}1`,
+      JSON.stringify({ schemaVersion: CURRENT_SCHEMA_VERSION, projects: current }),
+    )
   } catch (error) {
     console.error('Failed to write projects backup; continuing without it.', error)
   }
