@@ -1,4 +1,5 @@
 import type { JSX } from 'preact/jsx-runtime'
+import { Button, IconButton } from '@/components'
 import type { EditorView } from '@/features/editor/types'
 
 export interface EditorFooterProps {
@@ -33,28 +34,16 @@ export function EditorFooter({ chars, tokens, view, onSwitchView, onCopy }: Edit
             </span>
           </div>
         </div>
-        <button class="btn-copy" id="copyBtn" title="Copiar tudo" aria-label="Copiar todo o conteúdo do arquivo" onClick={onCopy}>
-          📋
-        </button>
+        <IconButton icon="📋" label="Copiar todo o conteúdo do arquivo" title="Copiar tudo" onClick={onCopy} />
       </div>
       <div class="footer-row">
         <div class="footer-tab-group">
-          <button
-            class={`footer-btn${isEdit ? ' active' : ''}`}
-            id="footerEditBtn"
-            data-view="edit"
-            onClick={() => onSwitchView('edit')}
-          >
+          <Button variant={isEdit ? 'primary' : 'default'} onClick={() => onSwitchView('edit')}>
             Marcar
-          </button>
-          <button
-            class={`footer-btn${isEdit ? '' : ' active'}`}
-            id="footerPreviewBtn"
-            data-view="preview"
-            onClick={() => onSwitchView('preview')}
-          >
+          </Button>
+          <Button variant={isEdit ? 'default' : 'primary'} onClick={() => onSwitchView('preview')}>
             Resultado
-          </button>
+          </Button>
         </div>
       </div>
     </footer>

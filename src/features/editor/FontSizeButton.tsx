@@ -1,4 +1,5 @@
 import type { JSX } from 'preact/jsx-runtime'
+import { IconButton } from '@/components'
 
 export interface FontSizeButtonProps {
   onCycle: () => void
@@ -7,17 +8,14 @@ export interface FontSizeButtonProps {
 /** Header "Aa" button that cycles the editor font size (issue #18). */
 export function FontSizeButton({ onCycle }: FontSizeButtonProps): JSX.Element {
   return (
-    <button
-      class="btn-icon"
-      id="fontSizeBtn"
+    <IconButton
+      icon="Aa"
+      label="Alternar tamanho do texto do editor"
       title="Tamanho do texto"
-      aria-label="Alternar tamanho do texto do editor"
       onClick={(event) => {
         event.stopPropagation()
         onCycle()
       }}
-    >
-      Aa
-    </button>
+    />
   )
 }
