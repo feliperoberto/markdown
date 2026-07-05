@@ -5,8 +5,9 @@
  * appDataFolder export/import calls, and the naive hash + 60s polling
  * auto-sync loop are preserved exactly as they behaved before — this is a
  * structural extraction only, not a rewrite of the sync algorithm.
- * Token-expiry/refresh hardening is intentionally out of scope here (see
- * issue #21 discussion) and will be addressed as a separate follow-up.
+ * Token-expiry/refresh hardening (issue #30) tracks acquisition time +
+ * `expires_in`, and proactively re-requests a token via silent re-auth when
+ * near expiry, rather than letting a Drive API call fail opaquely mid-session.
  *
  * Security property preserved: the Drive access token (`this.accessToken`)
  * lives only as an in-memory instance field. It is never written to
@@ -20,7 +21,7 @@ import {
   isPlaceholderClientId,
   setStoredClientId,
 } from './config'
-import { loadGoogleIdentity, type GoogleTokenClient } from './google-identity'
+import { loadGoogleIdentity, type GoogleTokenClient, type GoogleTokenResponse } from './google-identity'
 import { driveSyncCopy } from './copy'
 
 /**
@@ -51,8 +52,20 @@ function isOffline(): boolean {
   return typeof navigator !== 'undefined' && navigator.onLine === false
 }
 
-const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file'
+/**
+ * Scope audit (issue #30): every Drive API call this provider makes
+ * (`findDriveFile`, `uploadSnapshot`, `importFromDrive`) targets
+ * `spaces=appDataFolder` / `parents: ['appDataFolder']` exclusively — there
+ * is no code path that reads or writes files outside the app-private
+ * appDataFolder. `drive.file` (which would grant access to arbitrary
+ * user-selected files across their whole Drive) is not needed and has been
+ * removed; `drive.appdata` alone is sufficient and strictly narrower.
+ */
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata'
 const DRIVE_FILENAME = 'markdown-editor-backup.json'
+
+/** Proactively refresh the token once this close to its stated expiry. */
+const TOKEN_REFRESH_MARGIN_MS = 5 * 60 * 1000
 
 const LAST_SYNC_STORAGE_KEY = 'lastDriveSync'
 const PROJECTS_LAST_MODIFIED_STORAGE_KEY = 'projectsLastModified'
@@ -98,6 +111,10 @@ export class GoogleDriveSyncProvider implements SyncProvider {
   private driveFileId: string | null = null
   private driveUser: string | null = null
   private autoSyncIntervalId: ReturnType<typeof setInterval> | null = null
+  /** Epoch ms when `this.accessToken` is expected to expire, per `expires_in`. */
+  private tokenExpiresAt: number | null = null
+  /** Client ID used to acquire the current token — reused for silent re-auth. */
+  private tokenClientId: string | null = null
 
   constructor(private readonly options: GoogleDriveSyncProviderOptions = {}) {}
 
@@ -129,9 +146,22 @@ export class GoogleDriveSyncProvider implements SyncProvider {
       throw new Error('Drive Client ID is not configured')
     }
 
+    this.tokenClientId = clientId
+    await this.acquireAccessToken(clientId)
+    await this.fetchDriveUser()
+    this.options.onStatusChange?.('connected')
+    this.options.onNotify?.('✅ Drive conectado', 'success')
+  }
+
+  /**
+   * Requests (or silently re-requests, if the user already has an active
+   * Google session) an access token via GIS, and records its expiry so
+   * `ensureFreshAccessToken` can proactively refresh it later.
+   */
+  private async acquireAccessToken(clientId: string): Promise<void> {
     const google = await loadGoogleIdentity()
 
-    const response = await new Promise<{ access_token?: string; error?: string }>((resolve) => {
+    const response = await new Promise<GoogleTokenResponse>((resolve) => {
       const client: GoogleTokenClient = google.accounts.oauth2.initTokenClient({
         client_id: clientId,
         scope: DRIVE_SCOPE,
@@ -147,9 +177,35 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     }
 
     this.accessToken = response.access_token
-    await this.fetchDriveUser()
-    this.options.onStatusChange?.('connected')
-    this.options.onNotify?.('✅ Drive conectado', 'success')
+    this.tokenExpiresAt = typeof response.expires_in === 'number'
+      ? Date.now() + response.expires_in * 1000
+      : null
+  }
+
+  /**
+   * Called before any Drive API request. If the current token is missing,
+   * expired, or within `TOKEN_REFRESH_MARGIN_MS` of expiring, transparently
+   * re-requests a fresh one (GIS resolves this silently when the user still
+   * has an active Google session, so no visible re-auth prompt is shown in
+   * the common case) instead of letting the upcoming fetch fail with an
+   * opaque 401 mid-session.
+   */
+  private async ensureFreshAccessToken(): Promise<void> {
+    if (!this.accessToken || !this.tokenClientId) return
+
+    const isNearExpiry =
+      this.tokenExpiresAt !== null && Date.now() >= this.tokenExpiresAt - TOKEN_REFRESH_MARGIN_MS
+
+    if (!isNearExpiry) return
+
+    try {
+      await this.acquireAccessToken(this.tokenClientId)
+    } catch (err) {
+      // Leave the (soon-to-expire) token in place — the caller's Drive
+      // request may still succeed, and if not, its own error handling will
+      // surface a clear "sync failed" message rather than us throwing here.
+      console.error('Drive silent token refresh failed:', err)
+    }
   }
 
   disconnect(): void {
@@ -161,6 +217,8 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     }
     this.stopAutoSync()
     this.accessToken = null
+    this.tokenExpiresAt = null
+    this.tokenClientId = null
     this.driveUser = null
     this.driveFileId = null
     this.options.onStatusChange?.('offline')
@@ -260,6 +318,7 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     }
 
     try {
+      await this.ensureFreshAccessToken()
       this.options.onNotify?.('Salvando no Drive…', 'success')
       await this.uploadSnapshot(snapshot)
       this.options.onNotify?.('☁️ Salvo no Drive', 'success')
@@ -279,6 +338,7 @@ export class GoogleDriveSyncProvider implements SyncProvider {
   async importFromDrive(): Promise<Record<string, unknown>> {
     if (!this.accessToken) throw new Error('Not connected to Drive')
 
+    await this.ensureFreshAccessToken()
     this.options.onNotify?.('Restaurando do Drive…', 'success')
     const existing = await this.findDriveFile()
 
@@ -378,6 +438,7 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     }
 
     try {
+      await this.ensureFreshAccessToken()
       await this.uploadSnapshot(snapshot)
       localStorage.setItem(LAST_SYNC_STORAGE_KEY, Date.now().toString())
       localStorage.setItem(PROJECTS_LAST_MODIFIED_STORAGE_KEY, currentHash)

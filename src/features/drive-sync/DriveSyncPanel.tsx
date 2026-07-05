@@ -176,6 +176,7 @@ export function DriveSyncPanel({ getSnapshot, onImported }: DriveSyncPanelProps)
         </form>
 
         <p>{user ? `Conectado como ${user}` : driveSyncCopy.notConnectedStatus}</p>
+        {!connected && <p class={styles.disclosureNote}>{driveSyncCopy.dataDisclosure}</p>}
 
         <div>
           {connected ? (

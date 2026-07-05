@@ -26,6 +26,16 @@
 }
 
 /**
+ * Data-disclosure copy shown before the user connects (issue #30) —
+ * styled like a quiet, informative footnote rather than a warning, since
+ * this is routine disclosure, not an error state.
+ */
+.disclosureNote {
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+/**
  * Visually-hidden but screen-reader-accessible text (finding #7). `title`
  * attributes alone aren't reliably announced by all screen readers, so the
  * offline badge also carries this hidden label as its accessible name.
