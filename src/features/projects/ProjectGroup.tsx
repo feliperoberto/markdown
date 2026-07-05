@@ -3,6 +3,7 @@ import { useState } from 'preact/hooks'
 import { FileRow } from './FileRow'
 import { showConfirmDialog, showPromptDialog } from './dialogs'
 import type { ProjectFiles } from './types'
+import { Button, IconButton } from '@/components'
 
 export interface ProjectGroupProps {
   projectName: string
@@ -98,35 +99,33 @@ export function ProjectGroup({
           ▶
         </span>
         <span className="project-name">{projectName}</span>
-        <button
-          type="button"
-          className="project-menu"
-          aria-label={`Mais opções do projeto ${projectName}`}
-          aria-haspopup="menu"
-          aria-expanded={isMenuOpen}
+        <IconButton
+          variant="compact"
+          icon="⋮"
+          label={`Mais opções do projeto ${projectName}`}
+          ariaHasPopup="menu"
+          ariaExpanded={isMenuOpen}
           onClick={toggleMenu}
-        >
-          ⋮
-        </button>
+        />
       </div>
 
       {isMenuOpen && (
         <div className="dropdown-menu visible" role="menu" aria-label={`Ações do projeto ${projectName}`}>
-          <button type="button" className="dropdown-item" role="menuitem" onClick={handleNewFile}>
-            Novo arquivo
-          </button>
-          <button type="button" className="dropdown-item" role="menuitem" onClick={handleRenameProject}>
-            Renomear projeto
-          </button>
-          <button
-            type="button"
-            className="dropdown-item"
-            role="menuitem"
-            style={{ color: 'var(--danger)' }}
-            onClick={handleDeleteProject}
-          >
-            Excluir projeto
-          </button>
+          <span role="menuitem">
+            <Button variant="default" onClick={handleNewFile}>
+              Novo arquivo
+            </Button>
+          </span>
+          <span role="menuitem">
+            <Button variant="default" onClick={handleRenameProject}>
+              Renomear projeto
+            </Button>
+          </span>
+          <span role="menuitem">
+            <Button variant="danger" onClick={handleDeleteProject}>
+              Excluir projeto
+            </Button>
+          </span>
         </div>
       )}
 
