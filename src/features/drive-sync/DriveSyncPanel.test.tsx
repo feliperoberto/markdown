@@ -11,8 +11,11 @@ vi.mock('./google-identity', () => ({
   loadGoogleIdentity: vi.fn().mockResolvedValue({
     accounts: {
       oauth2: {
-        initTokenClient: (config: { callback: (response: { access_token: string; expires_in: number }) => void }) => ({
-          requestAccessToken: () => config.callback({ access_token: 'fake-token', expires_in: 3600 }),
+        initTokenClient: (config: {
+          callback: (response: { access_token: string; expires_in: number }) => void
+        }) => ({
+          requestAccessToken: () =>
+            config.callback({ access_token: 'fake-token', expires_in: 3600 }),
         }),
         revoke: (_token: string, done: () => void) => done(),
       },

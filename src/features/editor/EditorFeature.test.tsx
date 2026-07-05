@@ -18,7 +18,9 @@ describe('EditorFeature', () => {
   it('renders sanitized preview HTML derived from what the user types in the editor', () => {
     render(<Harness />)
 
-    const textarea = screen.getByPlaceholderText(/Comece a escrever em Markdown/) as HTMLTextAreaElement
+    const textarea = screen.getByPlaceholderText(
+      /Comece a escrever em Markdown/,
+    ) as HTMLTextAreaElement
     fireEvent.input(textarea, { target: { value: '# Hello world' } })
 
     expect(textarea.value).toBe('# Hello world')
