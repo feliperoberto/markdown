@@ -36,7 +36,17 @@ export class DriveSyncOfflineError extends Error {
   }
 }
 
-/** True when the runtime reports no network connectivity at all. */
+/**
+ * True when the runtime reports no network connectivity at all.
+ *
+ * Note: this is a second, independent connectivity signal from
+ * `useOnlineStatus()` (used elsewhere in the UI, e.g. `DriveSyncPanel`'s
+ * offline badge). Both ultimately read `navigator.onLine`, but they are not
+ * unified into one shared primitive, so they could in theory drift (e.g.
+ * different re-render timing around 'online'/'offline' events). Left as-is
+ * for now — unifying connectivity detection into one shared hook/module is
+ * a separate follow-up, not a quick fix.
+ */
 function isOffline(): boolean {
   return typeof navigator !== 'undefined' && navigator.onLine === false
 }
@@ -54,7 +64,12 @@ const AUTO_SYNC_MAX_STALE_MS = 10 * 60 * 1000
 /** If local data changed, still wait at least this long before re-syncing. */
 const AUTO_SYNC_MIN_INTERVAL_AFTER_CHANGE_MS = 5 * 60 * 1000
 
-export type DriveSyncDotStatus = 'offline' | 'connected' | 'syncing' | 'error'
+export type DriveSyncDotStatus =
+  | 'offline'
+  | 'connected'
+  | 'connected-offline'
+  | 'syncing'
+  | 'error'
 
 export interface GoogleDriveSyncProviderOptions {
   /** Called whenever the connection/sync visual state changes (for a status dot, etc). */
@@ -235,7 +250,11 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     // data is untouched — projects are already saved to localStorage
     // independently of Drive sync.
     if (isOffline()) {
-      this.options.onStatusChange?.('offline')
+      // Distinct from the never-connected 'offline' status: the access
+      // token is still valid, only the network is down (see finding #1) —
+      // the panel should keep showing this as "connected", not revert to
+      // "Conectar".
+      this.options.onStatusChange?.('connected-offline')
       this.options.onNotify?.(driveSyncCopy.offlineWillRetrySync, 'warning')
       throw new DriveSyncOfflineError()
     }
@@ -352,7 +371,9 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     // (issue #24). The interval keeps running, so the next tick after
     // connectivity returns will pick this back up automatically.
     if (isOffline()) {
-      this.options.onStatusChange?.('offline')
+      // Same distinction as exportToDrive above (finding #1): still
+      // authenticated, just no network right now.
+      this.options.onStatusChange?.('connected-offline')
       return
     }
 

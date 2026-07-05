@@ -115,6 +115,10 @@ export function DriveSyncPanel({ getSnapshot, onImported }: DriveSyncPanelProps)
   }
 
   async function handleRestore() {
+    if (!isOnline) {
+      showToast(driveSyncCopy.offlineSyncSkippedToast, 'warning')
+      return
+    }
     setBusy(true)
     try {
       const projects = await providerRef.current.importFromDrive()
@@ -127,7 +131,12 @@ export function DriveSyncPanel({ getSnapshot, onImported }: DriveSyncPanelProps)
     }
   }
 
-  const connected = status === 'connected' || status === 'syncing'
+  // 'connected-offline' means "authenticated but currently offline" — keep
+  // treating it as connected (Sync/Restore buttons stay visible) rather
+  // than falling back to the never-connected 'offline' state (finding #1).
+  // The offline badge/notice below is driven independently by
+  // `useOnlineStatus()`, so it still shows regardless of this value.
+  const connected = status === 'connected' || status === 'syncing' || status === 'connected-offline'
 
   return (
     <>
@@ -139,7 +148,9 @@ export function DriveSyncPanel({ getSnapshot, onImported }: DriveSyncPanelProps)
           onClick={() => setOpen(true)}
         />
         {!isOnline && (
-          <span class={styles.offlineBadge} role="status" title={driveSyncCopy.offlineBadgeTitle} />
+          <span class={styles.offlineBadge} role="status" title={driveSyncCopy.offlineBadgeTitle}>
+            <span class={styles.visuallyHidden}>{driveSyncCopy.offlineBadgeLabel}</span>
+          </span>
         )}
       </span>
       <Modal open={open} onClose={() => setOpen(false)} titleId={TITLE_ID} title="Google Drive">

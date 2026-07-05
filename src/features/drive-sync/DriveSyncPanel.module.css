@@ -24,3 +24,20 @@
   color: var(--ink-soft);
   font-size: 0.85rem;
 }
+
+/**
+ * Visually-hidden but screen-reader-accessible text (finding #7). `title`
+ * attributes alone aren't reliably announced by all screen readers, so the
+ * offline badge also carries this hidden label as its accessible name.
+ */
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

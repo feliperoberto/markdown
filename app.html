@@ -7,9 +7,7 @@
     <!--
       iOS/iPadOS Safari has no `beforeinstallprompt` and relies on these
       meta tags (ported from prototype/index.html:6-8) for standalone/
-      home-screen behavior. Kept here so `useInstallPrompt`/`PwaInstallPrompt`
-      (#26) work even before the full manifest migration (#23) lands;
-      safe to de-duplicate with #23's changes at review time.
+      home-screen behavior.
     -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -18,10 +16,6 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Marcar" />
-    <meta name="theme-color" content="#211a2b" />
   </head>
   <body>
     <div id="app"></div>
