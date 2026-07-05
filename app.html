@@ -3,6 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#211a2b" />
+    <!--
+      iOS/iPadOS Safari has no `beforeinstallprompt` and relies on these
+      meta tags (ported from prototype/index.html:6-8) for standalone/
+      home-screen behavior. Kept here so `useInstallPrompt`/`PwaInstallPrompt`
+      (#26) work even before the full manifest migration (#23) lands;
+      safe to de-duplicate with #23's changes at review time.
+    -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Marcar" />
     <title>Markdown</title>
   </head>
   <body>

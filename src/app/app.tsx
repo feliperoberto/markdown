@@ -5,11 +5,12 @@ import { ProjectsSidebar, useProjects } from '@/features/projects'
 import { ImportExportToolbar } from '@/features/import-export'
 import type { BatchSelectionEntry } from '@/features/import-export'
 import { DriveSyncPanel } from '@/features/drive-sync'
+import { PwaInstallPrompt } from '@/features/pwa-install'
 
 // Shell wiring together the extracted projects/files sidebar (#19), the
-// editor/preview pane (#18), the import/export toolbar (#20), and the
-// Google Drive sync panel (#21) — all composed with the shared component
-// library (#22).
+// editor/preview pane (#18), the import/export toolbar (#20), the
+// Google Drive sync panel (#21), and the PWA install experience (#26) —
+// all composed with the shared component library (#22).
 export function App(): JSX.Element {
   const {
     projects,
@@ -63,6 +64,7 @@ export function App(): JSX.Element {
           getSnapshot={() => ({ projects })}
           onImported={(imported) => restoreProjects(imported as typeof projects)}
         />
+        <PwaInstallPrompt />
       </header>
       <div className="app-body">
         <ProjectsSidebar
