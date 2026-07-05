@@ -106,3 +106,13 @@ export function mergeProjects(base: ProjectsState, incoming: ProjectsState): Pro
   }
   return next
 }
+
+/**
+ * Full-state replace, used for "restore from backup" flows (e.g. Drive
+ * restore) where the incoming snapshot should reconcile local state, not
+ * just layer additively on top of it (unlike `mergeProjects`, which is
+ * for ZIP import and must remain additive).
+ */
+export function replaceProjects(incoming: ProjectsState): ProjectsState {
+  return incoming
+}

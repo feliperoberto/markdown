@@ -3,6 +3,7 @@ import { useState } from 'preact/hooks'
 import { ProjectGroup } from './ProjectGroup'
 import { showPromptDialog } from './dialogs'
 import type { ProjectsState } from './types'
+import { Button } from '@/components'
 
 export interface ProjectsSidebarProps {
   projects: ProjectsState
@@ -73,9 +74,9 @@ export function ProjectsSidebar({
 
   return (
     <nav className="projects-sidebar" aria-label="Projetos e arquivos">
-      <button type="button" id="newProjectBtn" onClick={handleNewProject}>
+      <Button variant="primary" onClick={handleNewProject}>
         Novo projeto
-      </button>
+      </Button>
 
       <div className="projects-list" id="projectsList">
         {projectNames.length === 0 ? (

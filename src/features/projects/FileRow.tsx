@@ -2,6 +2,7 @@ import type { JSX } from 'preact'
 import { useRef, useState } from 'preact/hooks'
 import type { ProjectFile } from './types'
 import { showPromptDialog } from './dialogs'
+import { Checkbox, IconButton } from '@/components'
 
 export interface FileRowProps {
   projectName: string
@@ -80,22 +81,27 @@ export function FileRow({
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
     >
-      <input
-        type="checkbox"
-        className="file-checkbox"
-        checked={isSelected}
-        aria-label={`Selecionar ${file.name} para download em lote`}
-        onClick={(e) => e.stopPropagation()}
-        onChange={(e) => onToggleSelected(projectName, file.name, (e.target as HTMLInputElement).checked)}
-      />
+      <span onClick={(e) => e.stopPropagation()}>
+        <Checkbox
+          checked={isSelected}
+          label={`Selecionar ${file.name} para download em lote`}
+          onChange={(checked) => onToggleSelected(projectName, file.name, checked)}
+        />
+      </span>
       <span className="file-name">{file.name}</span>
       <div className="file-actions">
-        <button type="button" className="file-action-btn rename" aria-label={`Renomear arquivo ${file.name}`} onClick={handleRename}>
-          Renomear
-        </button>
-        <button type="button" className="file-action-btn delete" aria-label={`Excluir arquivo ${file.name}`} onClick={handleDelete}>
-          Excluir
-        </button>
+        <IconButton
+          variant="compact"
+          icon="✎"
+          label={`Renomear arquivo ${file.name}`}
+          onClick={handleRename}
+        />
+        <IconButton
+          variant="compact"
+          icon="🗑"
+          label={`Excluir arquivo ${file.name}`}
+          onClick={handleDelete}
+        />
       </div>
     </div>
   )

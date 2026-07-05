@@ -24,6 +24,7 @@
     "paths": {
       "@/app/*": ["src/app/*"],
       "@/features/*": ["src/features/*"],
+      "@/components": ["src/components/index.ts"],
       "@/components/*": ["src/components/*"],
       "@/lib/*": ["src/lib/*"],
       "@/styles/*": ["src/styles/*"]
