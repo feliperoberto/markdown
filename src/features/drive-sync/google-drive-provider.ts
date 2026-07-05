@@ -21,6 +21,25 @@ import {
   setStoredClientId,
 } from './config'
 import { loadGoogleIdentity, type GoogleTokenClient } from './google-identity'
+import { driveSyncCopy } from './copy'
+
+/**
+ * Thrown (instead of letting a raw fetch/TypeError bubble up) when a sync
+ * attempt is skipped because the browser is offline (issue #24). Kept as a
+ * distinct class so callers can special-case it without string-matching on
+ * error messages.
+ */
+export class DriveSyncOfflineError extends Error {
+  constructor() {
+    super(driveSyncCopy.offlineWillRetrySync)
+    this.name = 'DriveSyncOfflineError'
+  }
+}
+
+/** True when the runtime reports no network connectivity at all. */
+function isOffline(): boolean {
+  return typeof navigator !== 'undefined' && navigator.onLine === false
+}
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file'
 const DRIVE_FILENAME = 'markdown-editor-backup.json'
@@ -211,6 +230,16 @@ export class GoogleDriveSyncProvider implements SyncProvider {
   async exportToDrive(snapshot: ProjectsSnapshot): Promise<void> {
     if (!this.accessToken) return
 
+    // Offline: skip the network attempt entirely and surface a graceful
+    // "will retry" state instead of a raw fetch/TypeError (issue #24). Local
+    // data is untouched — projects are already saved to localStorage
+    // independently of Drive sync.
+    if (isOffline()) {
+      this.options.onStatusChange?.('offline')
+      this.options.onNotify?.(driveSyncCopy.offlineWillRetrySync, 'warning')
+      throw new DriveSyncOfflineError()
+    }
+
     try {
       this.options.onNotify?.('Salvando no Drive…', 'success')
       await this.uploadSnapshot(snapshot)
@@ -267,6 +296,12 @@ export class GoogleDriveSyncProvider implements SyncProvider {
       await this.exportToDrive(snapshot)
       localStorage.setItem(LAST_SYNC_STORAGE_KEY, Date.now().toString())
     } catch (err) {
+      if (err instanceof DriveSyncOfflineError) {
+        // Already surfaced as a graceful "offline, will retry" toast by
+        // exportToDrive — avoid piling a second, more alarming error toast
+        // on top of it.
+        throw err
+      }
       console.error('Sync error:', err)
       this.options.onNotify?.('Falha ao sincronizar com o Drive: ' + (err as Error).message, 'error')
       throw err
@@ -311,6 +346,15 @@ export class GoogleDriveSyncProvider implements SyncProvider {
       currentHash !== lastModifiedHash && timeSinceSync > AUTO_SYNC_MIN_INTERVAL_AFTER_CHANGE_MS
 
     if (!isStale && !hasChangedRecently) return
+
+    // Offline: skip this tick's network attempt entirely rather than
+    // letting a fetch/TypeError land in the console as an 'error' status
+    // (issue #24). The interval keeps running, so the next tick after
+    // connectivity returns will pick this back up automatically.
+    if (isOffline()) {
+      this.options.onStatusChange?.('offline')
+      return
+    }
 
     try {
       await this.uploadSnapshot(snapshot)
