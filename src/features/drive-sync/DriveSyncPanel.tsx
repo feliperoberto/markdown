@@ -1,6 +1,7 @@
 import type { JSX } from 'preact'
 import { useMemo, useRef, useState } from 'preact/hooks'
 import { Button, IconButton, Modal, useToast } from '@/components'
+import { useOnlineStatus } from '@/lib/useOnlineStatus'
 import { GoogleDriveSyncProvider } from './google-drive-provider'
 import type { DriveSyncDotStatus } from './google-drive-provider'
 import { driveSyncCopy } from './copy'
@@ -11,6 +12,7 @@ import {
   setStoredClientId,
 } from './config'
 import type { ProjectsSnapshot } from './types'
+import styles from './DriveSyncPanel.module.css'
 
 export interface DriveSyncPanelProps {
   /** Current projects snapshot to push whenever "Sincronizar agora" runs. */
@@ -34,6 +36,7 @@ export function DriveSyncPanel({ getSnapshot, onImported }: DriveSyncPanelProps)
   const [user, setUser] = useState<string | null>(null)
   const [clientId, setClientIdInput] = useState(() => getStoredClientId())
   const [busy, setBusy] = useState(false)
+  const isOnline = useOnlineStatus()
 
   const provider = useMemo(
     () =>
@@ -73,6 +76,10 @@ export function DriveSyncPanel({ getSnapshot, onImported }: DriveSyncPanelProps)
   }
 
   async function handleConnect() {
+    if (!isOnline) {
+      showToast(driveSyncCopy.offlineSyncSkippedToast, 'warning')
+      return
+    }
     setBusy(true)
     try {
       await providerRef.current.connect()
@@ -90,6 +97,13 @@ export function DriveSyncPanel({ getSnapshot, onImported }: DriveSyncPanelProps)
   }
 
   async function handleSyncNow() {
+    if (!isOnline) {
+      // Fail fast with the reassuring offline copy instead of letting the
+      // request hit the network and surface a raw "Failed to fetch"
+      // through the provider's generic error-handling path.
+      showToast(driveSyncCopy.offlineSyncSkippedToast, 'warning')
+      return
+    }
     setBusy(true)
     try {
       await providerRef.current.sync(getSnapshot())
@@ -117,13 +131,19 @@ export function DriveSyncPanel({ getSnapshot, onImported }: DriveSyncPanelProps)
 
   return (
     <>
-      <IconButton
-        icon="☁"
-        label="Sincronização com Google Drive"
-        ariaHasPopup="dialog"
-        onClick={() => setOpen(true)}
-      />
+      <span class={styles.iconWrapper}>
+        <IconButton
+          icon="☁"
+          label="Sincronização com Google Drive"
+          ariaHasPopup="dialog"
+          onClick={() => setOpen(true)}
+        />
+        {!isOnline && (
+          <span class={styles.offlineBadge} role="status" title={driveSyncCopy.offlineBadgeTitle} />
+        )}
+      </span>
       <Modal open={open} onClose={() => setOpen(false)} titleId={TITLE_ID} title="Google Drive">
+        {!isOnline && <p class={styles.offlineNotice}>{driveSyncCopy.offlineStatus}</p>}
         <form onSubmit={handleSaveClientId}>
           <label htmlFor="drive-client-id">{driveSyncCopy.clientIdLabel}</label>
           <input

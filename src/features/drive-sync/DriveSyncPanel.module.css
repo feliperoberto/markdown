@@ -1,0 +1,26 @@
+.iconWrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+/**
+ * Small, subtle offline badge anchored to the corner of the Drive-sync
+ * icon button (issue #25). Deliberately quiet: a muted amber dot, not a
+ * loud red alert — offline is an expected, non-broken state here.
+ */
+.offlineBadge {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: var(--c-amber);
+  border: 2px solid var(--ground);
+  pointer-events: none;
+}
+
+.offlineNotice {
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
