@@ -49,4 +49,14 @@ export const driveSyncCopy = {
    */
   offlineWillRetrySync:
     'Sem conexão — seus dados continuam salvos localmente e a sincronização será retomada automaticamente ao reconectar.',
+
+  /**
+   * Offline indicator (issue #25). Kept deliberately calm/reassuring —
+   * the goal is "local editing still works", never an alarming error.
+   */
+  offlineBadgeLabel: 'Offline',
+  offlineBadgeTitle: 'Você está offline — a edição local continua funcionando normalmente.',
+  offlineStatus:
+    'Você está offline. A edição local continua funcionando — a sincronização com o Drive será retomada automaticamente quando a conexão voltar.',
+  offlineSyncSkippedToast: 'Sem conexão — a sincronização será retomada quando você ficar online novamente.',
 } as const
