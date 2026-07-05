@@ -23,7 +23,6 @@
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.10.5",
-    "@testing-library/preact": "3.2.4",
     "@types/node": "^24.13.2",
     "@vitest/coverage-v8": "3.2.6",
     "jsdom": "29.1.1",

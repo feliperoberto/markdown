@@ -35,8 +35,8 @@ describe('exportBatch', () => {
     const blob = await exportBatch([])
     const zip = await JSZip.loadAsync(blob)
 
-    const entries = Object.keys(zip.files).filter((name) => !zip.files[name]?.dir)
-    expect(entries).toEqual([])
+    const fileEntries = Object.keys(zip.files).filter((name) => !zip.files[name]?.dir)
+    expect(fileEntries).toEqual([])
   })
 })
 
