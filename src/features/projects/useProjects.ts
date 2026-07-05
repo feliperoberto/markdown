@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'preact/hooks'
 import * as model from './model'
-import { loadProjects, saveProjects } from './storage'
+import { backupProjects, loadProjects, saveProjects } from './storage'
 import type { ProjectsState } from './types'
 
 export interface UseProjectsResult {
@@ -62,6 +62,7 @@ export function useProjects(): UseProjectsResult {
 
   const deleteProject = useCallback(
     (name: string) => {
+      backupProjects(projects)
       persist(model.deleteProject(projects, name))
       setCurrentProject((current) => (current === name ? null : current))
       setCurrentFile((file) => (currentProject === name ? null : file))
@@ -86,6 +87,7 @@ export function useProjects(): UseProjectsResult {
 
   const deleteFile = useCallback(
     (projectName: string, fileName: string) => {
+      backupProjects(projects)
       persist(model.deleteFile(projects, projectName, fileName))
       if (currentProject === projectName && currentFile === fileName) {
         setCurrentFile(null)
@@ -103,6 +105,9 @@ export function useProjects(): UseProjectsResult {
 
   const importProjects = useCallback(
     (incoming: ProjectsState) => {
+      // ZIP import can silently overwrite existing files with same-named
+      // incoming ones (see `model.mergeProjects`), so back up first.
+      backupProjects(projects)
       persist(model.mergeProjects(projects, incoming))
     },
     [projects, persist]
@@ -112,9 +117,10 @@ export function useProjects(): UseProjectsResult {
   // distinct from `importProjects`'s additive ZIP-import merge semantics.
   const restoreProjects = useCallback(
     (incoming: ProjectsState) => {
+      backupProjects(projects)
       persist(model.replaceProjects(incoming))
     },
-    [persist]
+    [projects, persist]
   )
 
   return {
