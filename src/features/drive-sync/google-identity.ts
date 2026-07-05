@@ -9,6 +9,14 @@ const GIS_SCRIPT_SRC = 'https://accounts.google.com/gsi/client'
 export interface GoogleTokenResponse {
   access_token?: string
   error?: string
+  /**
+   * Lifetime of `access_token`, in seconds, as returned by Google's token
+   * endpoint (typically 3600 = 1 hour). Used to detect near-expiry and
+   * proactively re-request a token via silent re-auth (see
+   * `google-drive-provider.ts`) instead of letting a Drive API call fail
+   * mid-session with an opaque 401.
+   */
+  expires_in?: number
 }
 
 export interface GoogleTokenClient {
