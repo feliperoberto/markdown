@@ -115,6 +115,14 @@ export class GoogleDriveSyncProvider implements SyncProvider {
   private tokenExpiresAt: number | null = null
   /** Client ID used to acquire the current token — reused for silent re-auth. */
   private tokenClientId: string | null = null
+  /**
+   * Bumped on every `connect()`/`disconnect()`. An in-flight
+   * `acquireAccessToken` call captures the epoch at its start and only
+   * applies its result if the epoch is still current — otherwise the user
+   * disconnected (or reconnected) while the request was in flight, and a
+   * stale token response must not resurrect a connection the user ended.
+   */
+  private connectionEpoch = 0
 
   constructor(private readonly options: GoogleDriveSyncProviderOptions = {}) {}
 
@@ -146,8 +154,8 @@ export class GoogleDriveSyncProvider implements SyncProvider {
       throw new Error('Drive Client ID is not configured')
     }
 
-    this.tokenClientId = clientId
-    await this.acquireAccessToken(clientId)
+    const epoch = ++this.connectionEpoch
+    await this.acquireAccessToken(clientId, { epoch })
     await this.fetchDriveUser()
     this.options.onStatusChange?.('connected')
     this.options.onNotify?.('✅ Drive conectado', 'success')
@@ -157,8 +165,21 @@ export class GoogleDriveSyncProvider implements SyncProvider {
    * Requests (or silently re-requests, if the user already has an active
    * Google session) an access token via GIS, and records its expiry so
    * `ensureFreshAccessToken` can proactively refresh it later.
+   *
+   * `epoch` pins this call to the connection generation active when it
+   * started (see `connectionEpoch`); if `disconnect()`/another `connect()`
+   * ran before this resolves, the result is discarded instead of silently
+   * resurrecting a connection the user already ended. `notifyOnError`
+   * controls whether an auth failure surfaces a user-facing toast — true
+   * for an explicit `connect()` click, false for a background silent
+   * refresh, where a scary "Erro ao conectar" toast during routine
+   * auto-sync would be misleading (the caller's own error handling covers
+   * that case instead).
    */
-  private async acquireAccessToken(clientId: string): Promise<void> {
+  private async acquireAccessToken(
+    clientId: string,
+    { epoch, notifyOnError = true }: { epoch: number; notifyOnError?: boolean }
+  ): Promise<void> {
     const google = await loadGoogleIdentity()
 
     const response = await new Promise<GoogleTokenResponse>((resolve) => {
@@ -172,11 +193,21 @@ export class GoogleDriveSyncProvider implements SyncProvider {
 
     if (response.error || !response.access_token) {
       console.error('Drive auth error:', response)
-      this.options.onNotify?.('Erro ao conectar: ' + response.error, 'error')
+      if (notifyOnError) {
+        this.options.onNotify?.('Erro ao conectar: ' + response.error, 'error')
+      }
       throw new Error(response.error || 'Drive auth failed')
     }
 
+    if (epoch !== this.connectionEpoch) {
+      // Stale: the user disconnected (or reconnected) while this request
+      // was in flight. Discard the result rather than reviving a
+      // connection that was explicitly ended.
+      return
+    }
+
     this.accessToken = response.access_token
+    this.tokenClientId = clientId
     this.tokenExpiresAt = typeof response.expires_in === 'number'
       ? Date.now() + response.expires_in * 1000
       : null
@@ -198,8 +229,18 @@ export class GoogleDriveSyncProvider implements SyncProvider {
 
     if (!isNearExpiry) return
 
+    const epoch = this.connectionEpoch
     try {
-      await this.acquireAccessToken(this.tokenClientId)
+      // Bounded so a background refresh (no user gesture backing the GIS
+      // request — see startAutoSync's tick) can't hang the caller
+      // indefinitely if the browser silently blocks/never resolves an
+      // interactive consent popup here.
+      await Promise.race([
+        this.acquireAccessToken(this.tokenClientId, { epoch, notifyOnError: false }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Drive silent token refresh timed out')), 15_000)
+        ),
+      ])
     } catch (err) {
       // Leave the (soon-to-expire) token in place — the caller's Drive
       // request may still succeed, and if not, its own error handling will
@@ -209,6 +250,7 @@ export class GoogleDriveSyncProvider implements SyncProvider {
   }
 
   disconnect(): void {
+    this.connectionEpoch++
     if (this.accessToken) {
       const tokenToRevoke = this.accessToken
       loadGoogleIdentity()
