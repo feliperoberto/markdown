@@ -51,7 +51,9 @@ export function ProjectsSidebar({
       next[projectName] = current
 
       onSelectionChange?.(
-        Object.entries(next).flatMap(([proj, files]) => Array.from(files).map((file) => ({ projectName: proj, fileName: file })))
+        Object.entries(next).flatMap(([proj, files]) =>
+          Array.from(files).map((file) => ({ projectName: proj, fileName: file })),
+        ),
       )
       return next
     })

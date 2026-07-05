@@ -30,15 +30,15 @@ Dessa tagline derivam quatro princípios:
 
 ## 2. Glossário de termos canônicos
 
-| Conceito | Termo canônico | Evitar |
-|---|---|---|
-| Unidade de texto markdown do usuário | **arquivo** | "documento", "nota", "item" |
-| Agrupamento de arquivos | **projeto** | "pasta", "workspace", "coleção" |
-| Remover um arquivo/projeto permanentemente | **excluir** | "deletar", "remover", "apagar" |
-| Trocar o nome de um arquivo/projeto | **renomear** | "editar nome", "mudar nome" |
-| Ação de escrever/formatar em Markdown | **marcar** (na voz de marca) / **escrever** (copy funcional) | "digitar", "codificar" |
-| Botão que efetiva uma ação em diálogo | **Confirmar** (genérico) ou o verbo específico da ação ("Criar", "Renomear", "Excluir") | "OK", "Sim", "Enviar" |
-| Botão que cancela um diálogo | **Cancelar** | "Voltar", "Fechar" (reservado para fechar modais sem ação pendente) |
+| Conceito                                   | Termo canônico                                                                          | Evitar                                                              |
+| ------------------------------------------ | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Unidade de texto markdown do usuário       | **arquivo**                                                                             | "documento", "nota", "item"                                         |
+| Agrupamento de arquivos                    | **projeto**                                                                             | "pasta", "workspace", "coleção"                                     |
+| Remover um arquivo/projeto permanentemente | **excluir**                                                                             | "deletar", "remover", "apagar"                                      |
+| Trocar o nome de um arquivo/projeto        | **renomear**                                                                            | "editar nome", "mudar nome"                                         |
+| Ação de escrever/formatar em Markdown      | **marcar** (na voz de marca) / **escrever** (copy funcional)                            | "digitar", "codificar"                                              |
+| Botão que efetiva uma ação em diálogo      | **Confirmar** (genérico) ou o verbo específico da ação ("Criar", "Renomear", "Excluir") | "OK", "Sim", "Enviar"                                               |
+| Botão que cancela um diálogo               | **Cancelar**                                                                            | "Voltar", "Fechar" (reservado para fechar modais sem ação pendente) |
 
 Nota sobre "excluir" vs. "deletar": ambos aparecem na base de código por
 terem sido introduzidos em PRs diferentes (#15 introduziu "Excluir arquivo"
@@ -71,7 +71,7 @@ acessibilidade existentes.
 - **Mensagens de confirmação (dialog message)**: frase interrogativa
   terminada com `?`, seguida de aviso de irreversibilidade quando aplicável,
   terminado com ponto final. Ex.: `Excluir o projeto "X" e todos os seus
-  arquivos? Essa ação não pode ser desfeita.`
+arquivos? Essa ação não pode ser desfeita.`
 - **Toasts de sucesso**: frase curta, sem sujeito, no particípio ou
   substantivo + particípio. Pode usar emoji como reforço visual (não como
   substituto de texto). Ex.: "✅ Projeto criado", "🗑 Arquivo excluído",
@@ -93,14 +93,14 @@ acessibilidade existentes.
 
 ## 5. Exemplos: bom vs. ruim
 
-| Contexto | Bom | Ruim | Por quê |
-|---|---|---|---|
-| Botão de criar projeto | "Criar" | "Enviar" / "OK" | O verbo específico da ação é mais claro que um genérico de formulário |
-| Erro de nome duplicado | "Já existe um projeto com esse nome." | "Nome inválido." | Diz exatamente qual é o problema |
-| Toast de exclusão | "🗑 Arquivo excluído" | "Deletado com sucesso!" | Anglicismo + exclamação genérica de app |
-| Estado vazio da lista de projetos | "Nenhum projeto ainda. Marque o primeiro." | "Você ainda não tem projetos. Clique abaixo para começar!" | Mantém o verbo "marcar" da marca, sem instrução redundante de UI |
-| Erro de sincronização | "Falha ao sincronizar com o Drive: <detalhe>" | "Oops, algo deu errado!" | Nomeia a operação que falhou; evita "oops" genérico |
-| Confirmação de exclusão | "Excluir o projeto \"X\" e todos os seus arquivos? Essa ação não pode ser desfeita." | "Tem certeza?" | Explicita o escopo e a irreversibilidade da ação |
+| Contexto                          | Bom                                                                                  | Ruim                                                       | Por quê                                                               |
+| --------------------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------- | --------------------------------------------------------------------- |
+| Botão de criar projeto            | "Criar"                                                                              | "Enviar" / "OK"                                            | O verbo específico da ação é mais claro que um genérico de formulário |
+| Erro de nome duplicado            | "Já existe um projeto com esse nome."                                                | "Nome inválido."                                           | Diz exatamente qual é o problema                                      |
+| Toast de exclusão                 | "🗑 Arquivo excluído"                                                                 | "Deletado com sucesso!"                                    | Anglicismo + exclamação genérica de app                               |
+| Estado vazio da lista de projetos | "Nenhum projeto ainda. Marque o primeiro."                                           | "Você ainda não tem projetos. Clique abaixo para começar!" | Mantém o verbo "marcar" da marca, sem instrução redundante de UI      |
+| Erro de sincronização             | "Falha ao sincronizar com o Drive: <detalhe>"                                        | "Oops, algo deu errado!"                                   | Nomeia a operação que falhou; evita "oops" genérico                   |
+| Confirmação de exclusão           | "Excluir o projeto \"X\" e todos os seus arquivos? Essa ação não pode ser desfeita." | "Tem certeza?"                                             | Explicita o escopo e a irreversibilidade da ação                      |
 
 ## 6. Estados novos adicionados nesta revisão (#17)
 
@@ -124,5 +124,5 @@ acessibilidade existentes.
 - `"Selecione arquivo"` → `"Selecione um arquivo"` (faltava o artigo,
   quebrando o padrão de `"Selecione um projeto"`).
 - `"Erro: " + err.message` (fallback de cópia) → `"Erro ao copiar: " +
-  err.message`, para seguir o padrão `"Erro ao <verbo>: <detalhe>"` usado em
+err.message`, para seguir o padrão `"Erro ao <verbo>: <detalhe>"` usado em
   todos os outros toasts de erro do app.

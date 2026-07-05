@@ -37,7 +37,9 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 export function isEnvelope(value: unknown): value is StorageEnvelope {
-  return isPlainObject(value) && typeof value.schemaVersion === 'number' && isPlainObject(value.projects)
+  return (
+    isPlainObject(value) && typeof value.schemaVersion === 'number' && isPlainObject(value.projects)
+  )
 }
 
 const migrations: Migration[] = [

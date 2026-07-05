@@ -53,7 +53,9 @@ export function loadGoogleIdentity(): Promise<GoogleIdentityGlobal> {
     return Promise.resolve(window.google)
   }
 
-  const existingScript = document.querySelector<HTMLScriptElement>(`script[src="${GIS_SCRIPT_SRC}"]`)
+  const existingScript = document.querySelector<HTMLScriptElement>(
+    `script[src="${GIS_SCRIPT_SRC}"]`,
+  )
 
   return new Promise((resolve, reject) => {
     const onLoad = () => {
@@ -66,9 +68,13 @@ export function loadGoogleIdentity(): Promise<GoogleIdentityGlobal> {
 
     if (existingScript) {
       existingScript.addEventListener('load', onLoad, { once: true })
-      existingScript.addEventListener('error', () => reject(new Error('Failed to load Google Identity Services')), {
-        once: true,
-      })
+      existingScript.addEventListener(
+        'error',
+        () => reject(new Error('Failed to load Google Identity Services')),
+        {
+          once: true,
+        },
+      )
       return
     }
 
@@ -77,9 +83,13 @@ export function loadGoogleIdentity(): Promise<GoogleIdentityGlobal> {
     script.async = true
     script.defer = true
     script.addEventListener('load', onLoad, { once: true })
-    script.addEventListener('error', () => reject(new Error('Failed to load Google Identity Services')), {
-      once: true,
-    })
+    script.addEventListener(
+      'error',
+      () => reject(new Error('Failed to load Google Identity Services')),
+      {
+        once: true,
+      },
+    )
     document.head.appendChild(script)
   })
 }

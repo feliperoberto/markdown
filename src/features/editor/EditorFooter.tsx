@@ -14,7 +14,13 @@ export interface EditorFooterProps {
  * Footer stats (char/token counters) and the edit/preview view-toggle tabs
  * (issue #18), mirroring the prototype's footer markup 1:1.
  */
-export function EditorFooter({ chars, tokens, view, onSwitchView, onCopy }: EditorFooterProps): JSX.Element {
+export function EditorFooter({
+  chars,
+  tokens,
+  view,
+  onSwitchView,
+  onCopy,
+}: EditorFooterProps): JSX.Element {
   const isEdit = view === 'edit'
 
   return (
@@ -34,7 +40,12 @@ export function EditorFooter({ chars, tokens, view, onSwitchView, onCopy }: Edit
             </span>
           </div>
         </div>
-        <IconButton icon="📋" label="Copiar todo o conteúdo do arquivo" title="Copiar tudo" onClick={onCopy} />
+        <IconButton
+          icon="📋"
+          label="Copiar todo o conteúdo do arquivo"
+          title="Copiar tudo"
+          onClick={onCopy}
+        />
       </div>
       <div class="footer-row">
         <div class="footer-tab-group">

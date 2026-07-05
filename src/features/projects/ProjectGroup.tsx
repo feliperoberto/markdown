@@ -46,6 +46,13 @@ export function ProjectGroup({
     setIsExpanded((expanded) => !expanded)
   }
 
+  function handleHeaderKeyDown(e: KeyboardEvent) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      toggleExpanded()
+    }
+  }
+
   function toggleMenu(e: MouseEvent) {
     e.stopPropagation()
     setIsMenuOpen((open) => !open)
@@ -75,7 +82,8 @@ export function ProjectGroup({
       defaultValue: projectName,
       validate: (value) => {
         if (!value) return 'Digite um nome para o projeto.'
-        if (value !== projectName && projectNames.includes(value)) return 'Já existe um projeto com esse nome.'
+        if (value !== projectName && projectNames.includes(value))
+          return 'Já existe um projeto com esse nome.'
         return null
       },
     })
@@ -94,7 +102,14 @@ export function ProjectGroup({
 
   return (
     <div className="project-group">
-      <div className={`project-header${isActiveProject ? ' active' : ''}`} onClick={toggleExpanded}>
+      <div
+        className={`project-header${isActiveProject ? ' active' : ''}`}
+        role="button"
+        tabIndex={0}
+        aria-expanded={isExpanded}
+        onClick={toggleExpanded}
+        onKeyDown={handleHeaderKeyDown}
+      >
         <span className={`project-toggle${isExpanded ? ' expanded' : ''}`} aria-hidden="true">
           ▶
         </span>
@@ -110,7 +125,11 @@ export function ProjectGroup({
       </div>
 
       {isMenuOpen && (
-        <div className="dropdown-menu visible" role="menu" aria-label={`Ações do projeto ${projectName}`}>
+        <div
+          className="dropdown-menu visible"
+          role="menu"
+          aria-label={`Ações do projeto ${projectName}`}
+        >
           <span role="menuitem">
             <Button variant="default" onClick={handleNewFile}>
               Novo arquivo

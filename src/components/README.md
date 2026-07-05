@@ -49,15 +49,17 @@ Two components, one visual language: `Button` (labeled, e.g. dialog actions)
 and `IconButton` (icon-only, e.g. toolbar/sidebar).
 
 ### Variants observed in current usage
-| Variant | Source class | Example |
-|---|---|---|
-| `primary` | `.btn-config-action.primary` | Modal "Salvar" / dialog confirm |
-| `default` | `.btn-config-action`, `.sidebar-footer-btn` | Modal "Cancelar", sidebar new-project/import/config/install |
-| `danger` | `.btn-config-action.danger` | Confirm-dialog destructive confirm (e.g. delete project) |
-| icon-only, header | `.btn-icon` | font-size "Aa" cycle, theme toggle, fullscreen, Drive |
-| icon-only, file row | `.file-action-btn.rename` / `.delete` | sidebar file rename/delete |
+
+| Variant             | Source class                                | Example                                                     |
+| ------------------- | ------------------------------------------- | ----------------------------------------------------------- |
+| `primary`           | `.btn-config-action.primary`                | Modal "Salvar" / dialog confirm                             |
+| `default`           | `.btn-config-action`, `.sidebar-footer-btn` | Modal "Cancelar", sidebar new-project/import/config/install |
+| `danger`            | `.btn-config-action.danger`                 | Confirm-dialog destructive confirm (e.g. delete project)    |
+| icon-only, header   | `.btn-icon`                                 | font-size "Aa" cycle, theme toggle, fullscreen, Drive       |
+| icon-only, file row | `.file-action-btn.rename` / `.delete`       | sidebar file rename/delete                                  |
 
 ### States
+
 - **Default** — as themed per variant above.
 - **Hover** (pointer devices only) — subtle background lift, no token exists
   yet; reuse `rgba(255,255,255,0.06)` overlay already used for `:active`
@@ -71,6 +73,7 @@ and `IconButton` (icon-only, e.g. toolbar/sidebar).
   (matches `.btn-download:disabled`, `.btn-drive-action:disabled`).
 
 ### Sizing
+
 - `IconButton` default: 42×42px (`.btn-icon`), touch target ≥44px enforced
   at the 480px breakpoint already (`.btn-icon, .btn-menu { width/height: 38px }`
   — note: SWE should reconcile this against WCAG 44px target; flag if kept).
@@ -79,6 +82,7 @@ and `IconButton` (icon-only, e.g. toolbar/sidebar).
   `font: var(--body) 0.85rem/700`.
 
 ### ARIA
+
 - `IconButton` MUST always carry `aria-label` (icon glyphs are not
   accessible names) — `title` may additionally be set for the mouse tooltip
   but never replaces `aria-label`. Mirrors current `fontSizeBtn`, `driveBtn`,
@@ -91,11 +95,13 @@ and `IconButton` (icon-only, e.g. toolbar/sidebar).
   dialog's own `role="dialog"` and label text ("Excluir"), not from the button.
 
 ### Keyboard
+
 - Native `<button>` semantics — Enter/Space activate. No custom keydown
   handling needed (unlike Modal/Checkbox).
 - Must be in natural DOM tab order; icon-only buttons are not `tabindex="-1"`.
 
 ### Props sketch
+
 ```
 Button:     variant: 'default' | 'primary' | 'danger', disabled?, onClick, children (label)
 IconButton: icon (node), label (string, -> aria-label), variant?: 'default' | 'compact',
@@ -111,6 +117,7 @@ Config/Drive-style panel dialogs. Visual shell matches
 `.config-modal-overlay` / `.config-modal` / `.drive-modal`.
 
 ### ASCII sketch
+
 ```
 ┌───────────────────────────── overlay (dim + blur) ─────────────────────────┐
 │                    ┌── modal (role=dialog) ──────────────┐                 │
@@ -122,8 +129,9 @@ Config/Drive-style panel dialogs. Visual shell matches
 ```
 
 ### States
+
 - **Closed** — not rendered, or `aria-hidden="true"` + `opacity: 0;
-  pointer-events: none` if kept mounted for animation (matches current
+pointer-events: none` if kept mounted for animation (matches current
   `.visible` toggle approach).
 - **Open** — `opacity: 1`, overlay click outside modal closes it (only when
   click target === overlay itself, not a bubbled child click).
@@ -131,6 +139,7 @@ Config/Drive-style panel dialogs. Visual shell matches
   token needed (unlike Toast, Modal has no slide animation currently).
 
 ### Sizing
+
 - `width: 340px; max-width: 100%; max-height: 90vh; overflow-y: auto;`
   `border-radius: 14px; padding: 1.5rem;` background `var(--ground-2)`,
   border `1px solid rgba(255,255,255,0.12)`,
@@ -139,6 +148,7 @@ Config/Drive-style panel dialogs. Visual shell matches
 - Close button: 32×32px, `border-radius: 7px`.
 
 ### ARIA
+
 - Overlay: `aria-hidden` toggled with visibility.
 - Modal container: `role="dialog"`, `aria-modal="true"`,
   `aria-labelledby="<title-id>"`, `tabindex="-1"` (so it's programmatically
@@ -148,8 +158,10 @@ Config/Drive-style panel dialogs. Visual shell matches
 - Title: plain heading/`div` with the referenced id; no separate `role`.
 
 ### Keyboard / focus-trap behavior
+
 Directly reuses the behavior already implemented in
 `prototype/components/dialog-utils.js`, ported to Preact effects:
+
 1. On open: store `document.activeElement` as the trigger; move focus to the
    first focusable element inside the modal (or the modal container itself
    if none exist).
@@ -165,6 +177,7 @@ Directly reuses the behavior already implemented in
    closing.
 
 ### Props sketch
+
 ```
 Modal: open: boolean, onClose: () => void, titleId: string, title: node,
        children (body), footer? (node), labelledBy?, initialFocusRef?
@@ -178,11 +191,12 @@ Transient feedback for sync status, import/export success/failure. Matches
 `.toast` in `prototype/index.html` (created imperatively via `showToast()`).
 
 ### Visual states / variants
-| Variant | Left border | Used for |
-|---|---|---|
-| `success` (default) | `var(--c-green)` | e.g. "Projeto importado" |
-| `error` | `var(--c-coral)` | e.g. import/export or Drive sync failure |
-| `warning` | `var(--c-amber)` | e.g. partial import, quota warning |
+
+| Variant             | Left border      | Used for                                 |
+| ------------------- | ---------------- | ---------------------------------------- |
+| `success` (default) | `var(--c-green)` | e.g. "Projeto importado"                 |
+| `error`             | `var(--c-coral)` | e.g. import/export or Drive sync failure |
+| `warning`           | `var(--c-amber)` | e.g. partial import, quota warning       |
 
 - Background `var(--ground-2)`, border `1px solid rgba(255,255,255,0.14)`,
   text `var(--cream)`, `font: var(--body) 0.85rem/500`, `border-radius: 9px`,
@@ -192,6 +206,7 @@ Transient feedback for sync status, import/export success/failure. Matches
 - Position: fixed, bottom center, `max-width: 90vw`.
 
 ### Auto-dismiss timing (from current `showToast()`)
+
 - `error`: 6000ms
 - `warning`: 4000ms
 - `success` (default): 2000ms
@@ -200,6 +215,7 @@ Transient feedback for sync status, import/export success/failure. Matches
   sync retries).
 
 ### ARIA
+
 - Container: `role="status"` + `aria-live="polite"` for success/warning (non-
   disruptive), `role="alert"` (implicit `aria-live="assertive"`) for `error`
   so screen readers announce failures immediately — this is a refinement
@@ -209,9 +225,11 @@ Transient feedback for sync status, import/export success/failure. Matches
   interactive (no close button, no action button in current usage).
 
 ### Keyboard
+
 - Non-interactive — not in tab order, no keyboard handling required.
 
 ### Props sketch
+
 ```
 Toast: message: string, variant?: 'success' | 'error' | 'warning', durationMs?
        (defaults per variant table above)
@@ -228,6 +246,7 @@ Multi-select in the projects sidebar (`.file-checkbox`), used to select
 files for batch ZIP download.
 
 ### Visual states
+
 - **Default (unchecked)** — 15×15px, native checkbox appearance via
   `accent-color: var(--accent)` (keeps native OS checkmark rendering rather
   than a custom SVG — matches current prototype exactly, minimal effort).
@@ -236,7 +255,7 @@ files for batch ZIP download.
 - **Hover** — `cursor: pointer` (native default is otherwise unstyled;
   no custom hover treatment exists in the prototype).
 - **Focus-visible** — needs the same `outline: 2px solid var(--accent);
-  outline-offset: 2px` treatment as buttons; not present in current
+outline-offset: 2px` treatment as buttons; not present in current
   prototype CSS (`.file-checkbox` has no `:focus-visible` rule) — flagged
   as a gap to close in this component rather than carry forward.
 - **Disabled** — not currently used in this feature set; skip unless a
@@ -244,10 +263,12 @@ files for batch ZIP download.
   invent a disabled treatment speculatively).
 
 ### Sizing
+
 - 15×15px box, `flex-shrink: 0` (sits inline in a flex file-row alongside
   filename + action buttons).
 
 ### ARIA
+
 - Native `<input type="checkbox">` — no custom `role` needed (native
   semantics are already fully accessible).
 - `aria-label` required per-instance since there's no visible `<label>` text
@@ -260,6 +281,7 @@ files for batch ZIP download.
   beyond that.
 
 ### Keyboard
+
 - Native input — Space toggles checked state, Tab/Shift+Tab moves focus in
   and out. No custom keydown handling required; do not intercept Enter (not
   a native checkbox behavior, would be an unexpected addition).
@@ -268,6 +290,7 @@ files for batch ZIP download.
   not `click`/`input`.
 
 ### Props sketch
+
 ```
 Checkbox: checked: boolean, onChange: (checked: boolean) => void, label: string (-> aria-label),
           disabled? (not currently used, keep optional for API completeness only)
@@ -277,13 +300,13 @@ Checkbox: checked: boolean, onChange: (checked: boolean) => void, label: string 
 
 ## Summary table
 
-| Component | Root element(s) | Key ARIA | Focus behavior | Token highlights |
-|---|---|---|---|---|
-| Button | `<button>` | `aria-label` if icon-only, `aria-haspopup` if opens modal | native | `--accent`, `--cream`, `--ground-2` |
-| IconButton | `<button>` | `aria-label` (required), `title` optional | native | `--cream`, `--accent` (focus ring) |
-| Modal | overlay `div` + dialog `div` | `role="dialog"`, `aria-modal`, `aria-labelledby` | full focus-trap + restore, stacked Escape | `--ground-2`, `--accent`, `--transition` |
-| Toast | `div` (via ToastHost stack) | `role="status"`/`role="alert"` + `aria-live` | non-interactive, no focus | `--c-green`/`--c-coral`/`--c-amber`, `--ground-2` |
-| Checkbox | `<input type="checkbox">` | `aria-label` (required, no visible label) | native, triggers on `change` | `--accent` (accent-color) |
+| Component  | Root element(s)              | Key ARIA                                                  | Focus behavior                            | Token highlights                                  |
+| ---------- | ---------------------------- | --------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------- |
+| Button     | `<button>`                   | `aria-label` if icon-only, `aria-haspopup` if opens modal | native                                    | `--accent`, `--cream`, `--ground-2`               |
+| IconButton | `<button>`                   | `aria-label` (required), `title` optional                 | native                                    | `--cream`, `--accent` (focus ring)                |
+| Modal      | overlay `div` + dialog `div` | `role="dialog"`, `aria-modal`, `aria-labelledby`          | full focus-trap + restore, stacked Escape | `--ground-2`, `--accent`, `--transition`          |
+| Toast      | `div` (via ToastHost stack)  | `role="status"`/`role="alert"` + `aria-live`              | non-interactive, no focus                 | `--c-green`/`--c-coral`/`--c-amber`, `--ground-2` |
+| Checkbox   | `<input type="checkbox">`    | `aria-label` (required, no visible label)                 | native, triggers on `change`              | `--accent` (accent-color)                         |
 
 ## Known token gaps (not fixed here, flagged for future work)
 

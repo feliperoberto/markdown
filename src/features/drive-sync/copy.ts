@@ -78,5 +78,6 @@ export const driveSyncCopy = {
   offlineBadgeTitle: 'Você está offline — a edição local continua funcionando normalmente.',
   offlineStatus:
     'Você está offline. A edição local continua funcionando — a sincronização com o Drive será retomada automaticamente quando a conexão voltar.',
-  offlineSyncSkippedToast: 'Sem conexão — a sincronização será retomada quando você ficar online novamente.',
+  offlineSyncSkippedToast:
+    'Sem conexão — a sincronização será retomada quando você ficar online novamente.',
 } as const

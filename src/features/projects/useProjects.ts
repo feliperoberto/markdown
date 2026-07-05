@@ -49,7 +49,7 @@ export function useProjects(): UseProjectsResult {
       persist(model.createProject(projects, name))
       setCurrentProject(name)
     },
-    [projects, persist]
+    [projects, persist],
   )
 
   const renameProject = useCallback(
@@ -57,7 +57,7 @@ export function useProjects(): UseProjectsResult {
       persist(model.renameProject(projects, oldName, newName))
       setCurrentProject((current) => (current === oldName ? newName : current))
     },
-    [projects, persist]
+    [projects, persist],
   )
 
   const deleteProject = useCallback(
@@ -67,22 +67,24 @@ export function useProjects(): UseProjectsResult {
       setCurrentProject((current) => (current === name ? null : current))
       setCurrentFile((file) => (currentProject === name ? null : file))
     },
-    [projects, persist, currentProject]
+    [projects, persist, currentProject],
   )
 
   const createFile = useCallback(
     (projectName: string, fileName: string, content = '') => {
       persist(model.createFile(projects, projectName, fileName, content))
     },
-    [projects, persist]
+    [projects, persist],
   )
 
   const renameFile = useCallback(
     (projectName: string, oldFileName: string, newFileName: string) => {
       persist(model.renameFile(projects, projectName, oldFileName, newFileName))
-      setCurrentFile((file) => (currentProject === projectName && file === oldFileName ? newFileName : file))
+      setCurrentFile((file) =>
+        currentProject === projectName && file === oldFileName ? newFileName : file,
+      )
     },
-    [projects, persist, currentProject]
+    [projects, persist, currentProject],
   )
 
   const deleteFile = useCallback(
@@ -93,14 +95,14 @@ export function useProjects(): UseProjectsResult {
         setCurrentFile(null)
       }
     },
-    [projects, persist, currentProject, currentFile]
+    [projects, persist, currentProject, currentFile],
   )
 
   const updateFileContent = useCallback(
     (projectName: string, fileName: string, content: string) => {
       persist(model.updateFileContent(projects, projectName, fileName, content))
     },
-    [projects, persist]
+    [projects, persist],
   )
 
   const importProjects = useCallback(
@@ -110,7 +112,7 @@ export function useProjects(): UseProjectsResult {
       backupProjects(projects)
       persist(model.mergeProjects(projects, incoming))
     },
-    [projects, persist]
+    [projects, persist],
   )
 
   // Full-state replace for "restore from backup" (e.g. Drive restore) —
@@ -120,7 +122,7 @@ export function useProjects(): UseProjectsResult {
       backupProjects(projects)
       persist(model.replaceProjects(incoming))
     },
-    [projects, persist]
+    [projects, persist],
   )
 
   return {

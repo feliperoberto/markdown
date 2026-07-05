@@ -16,7 +16,7 @@ export function PreviewPane({ html, hidden }: PreviewPaneProps): JSX.Element {
     <div className={`pane preview-pane${hidden ? ' hidden' : ''}`}>
       <div className="preview-wrapper">
         <div className="preview-label">Resultado</div>
-        {/* eslint-disable-next-line react/no-danger -- content is sanitized via DOMPurify in renderMarkdown() */}
+        {/* content is sanitized via DOMPurify in renderMarkdown() before reaching this component */}
         <div className="preview-content" id="preview" dangerouslySetInnerHTML={{ __html: html }} />
       </div>
     </div>
