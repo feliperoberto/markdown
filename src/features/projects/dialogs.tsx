@@ -46,7 +46,16 @@ interface PromptModalProps extends PromptDialogOptions {
   onResolve: (value: string | null) => void
 }
 
-function PromptModal({ title, label, defaultValue = '', placeholder, validate, titleId, inputId, onResolve }: PromptModalProps) {
+function PromptModal({
+  title,
+  label,
+  defaultValue = '',
+  placeholder,
+  validate,
+  titleId,
+  inputId,
+  onResolve,
+}: PromptModalProps) {
   const [value, setValue] = useState(defaultValue)
   const [error, setError] = useState<string | null>(null)
   const [open, setOpen] = useState(true)

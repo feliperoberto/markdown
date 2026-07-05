@@ -21,7 +21,11 @@ import {
   isPlaceholderClientId,
   setStoredClientId,
 } from './config'
-import { loadGoogleIdentity, type GoogleTokenClient, type GoogleTokenResponse } from './google-identity'
+import {
+  loadGoogleIdentity,
+  type GoogleTokenClient,
+  type GoogleTokenResponse,
+} from './google-identity'
 import { driveSyncCopy } from './copy'
 
 /**
@@ -77,12 +81,7 @@ const AUTO_SYNC_MAX_STALE_MS = 10 * 60 * 1000
 /** If local data changed, still wait at least this long before re-syncing. */
 const AUTO_SYNC_MIN_INTERVAL_AFTER_CHANGE_MS = 5 * 60 * 1000
 
-export type DriveSyncDotStatus =
-  | 'offline'
-  | 'connected'
-  | 'connected-offline'
-  | 'syncing'
-  | 'error'
+export type DriveSyncDotStatus = 'offline' | 'connected' | 'connected-offline' | 'syncing' | 'error'
 
 export interface GoogleDriveSyncProviderOptions {
   /** Called whenever the connection/sync visual state changes (for a status dot, etc). */
@@ -102,7 +101,7 @@ export interface GoogleDriveSyncProviderOptions {
 function naiveHash(value: string): string {
   return value
     .split('')
-    .reduce((hash, char) => (((hash << 5) - hash) + char.charCodeAt(0)) | 0, 0)
+    .reduce((hash, char) => ((hash << 5) - hash + char.charCodeAt(0)) | 0, 0)
     .toString()
 }
 
@@ -178,7 +177,7 @@ export class GoogleDriveSyncProvider implements SyncProvider {
    */
   private async acquireAccessToken(
     clientId: string,
-    { epoch, notifyOnError = true }: { epoch: number; notifyOnError?: boolean }
+    { epoch, notifyOnError = true }: { epoch: number; notifyOnError?: boolean },
   ): Promise<void> {
     const google = await loadGoogleIdentity()
 
@@ -208,9 +207,8 @@ export class GoogleDriveSyncProvider implements SyncProvider {
 
     this.accessToken = response.access_token
     this.tokenClientId = clientId
-    this.tokenExpiresAt = typeof response.expires_in === 'number'
-      ? Date.now() + response.expires_in * 1000
-      : null
+    this.tokenExpiresAt =
+      typeof response.expires_in === 'number' ? Date.now() + response.expires_in * 1000 : null
   }
 
   /**
@@ -238,7 +236,7 @@ export class GoogleDriveSyncProvider implements SyncProvider {
       await Promise.race([
         this.acquireAccessToken(this.tokenClientId, { epoch, notifyOnError: false }),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Drive silent token refresh timed out')), 15_000)
+          setTimeout(() => reject(new Error('Drive silent token refresh timed out')), 15_000),
         ),
       ])
     } catch (err) {
@@ -282,7 +280,11 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     }
   }
 
-  private async findDriveFile(): Promise<{ id: string; name: string; modifiedTime: string } | null> {
+  private async findDriveFile(): Promise<{
+    id: string
+    name: string
+    modifiedTime: string
+  } | null> {
     const res = await fetch(
       `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name='${DRIVE_FILENAME}'&fields=files(id,name,modifiedTime)`,
       { headers: { Authorization: `Bearer ${this.accessToken}` } },
@@ -311,14 +313,17 @@ export class GoogleDriveSyncProvider implements SyncProvider {
 
     let res: Response
     if (existing) {
-      res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${this.driveFileId}?uploadType=media`, {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${this.accessToken}`,
-          'Content-Type': 'application/json',
+      res = await fetch(
+        `https://www.googleapis.com/upload/drive/v3/files/${this.driveFileId}?uploadType=media`,
+        {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${this.accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: blob,
         },
-        body: blob,
-      })
+      )
     } else {
       const metadata = { name: DRIVE_FILENAME, parents: ['appDataFolder'] }
       const form = new FormData()
@@ -389,9 +394,12 @@ export class GoogleDriveSyncProvider implements SyncProvider {
       throw new Error('No Drive backup found')
     }
 
-    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${this.driveFileId}?alt=media`, {
-      headers: { Authorization: `Bearer ${this.accessToken}` },
-    })
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${this.driveFileId}?alt=media`,
+      {
+        headers: { Authorization: `Bearer ${this.accessToken}` },
+      },
+    )
 
     if (!res.ok) {
       const err = await res.json()
@@ -424,7 +432,10 @@ export class GoogleDriveSyncProvider implements SyncProvider {
         throw err
       }
       console.error('Sync error:', err)
-      this.options.onNotify?.('Falha ao sincronizar com o Drive: ' + (err as Error).message, 'error')
+      this.options.onNotify?.(
+        'Falha ao sincronizar com o Drive: ' + (err as Error).message,
+        'error',
+      )
       throw err
     }
   }

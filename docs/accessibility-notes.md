@@ -2,24 +2,24 @@
 
 ## 1. Accessible names for icon-only controls (`aria-label`, PT-BR)
 
-| Element(s) | `aria-label` |
-|---|---|
-| `#menuBtn` (☰) | "Abrir menu de projetos" |
-| `#driveBtn` (☁️) | "Abrir Google Drive" |
-| `#fontSizeBtn` (Aa) | "Alternar tamanho do texto do editor" |
-| `#fullscreenBtn` (⛶) | "Alternar tela cheia" |
-| `#newProjectBtn` (➕) | "Criar novo projeto" |
-| `#importZipBtn` (📥) | "Importar projetos de um arquivo ZIP" |
-| `#configBtn` (⚙️) | "Abrir configurações" |
-| `#installBtn` (📲) | "Instalar aplicativo" |
-| `#downloadBtn` (⬇️) | "Baixar arquivo atual" |
-| `#copyBtn` (📋) | "Copiar todo o conteúdo do arquivo" |
-| `#configModalClose` (✕) | "Fechar configurações" |
-| `#driveModalClose` (✕) | "Fechar Google Drive" |
-| `.project-menu` (⋮, per project) | "Mais opções do projeto {nome}" |
-| `.file-action-btn.rename` (✏️, per file) | "Renomear arquivo {nome}" |
-| `.file-action-btn.delete` (🗑, per file) | "Excluir arquivo {nome}" |
-| `.file-checkbox` (per file) | "Selecionar {nome} para download em lote" |
+| Element(s)                               | `aria-label`                              |
+| ---------------------------------------- | ----------------------------------------- |
+| `#menuBtn` (☰)                          | "Abrir menu de projetos"                  |
+| `#driveBtn` (☁️)                         | "Abrir Google Drive"                      |
+| `#fontSizeBtn` (Aa)                      | "Alternar tamanho do texto do editor"     |
+| `#fullscreenBtn` (⛶)                     | "Alternar tela cheia"                     |
+| `#newProjectBtn` (➕)                    | "Criar novo projeto"                      |
+| `#importZipBtn` (📥)                     | "Importar projetos de um arquivo ZIP"     |
+| `#configBtn` (⚙️)                        | "Abrir configurações"                     |
+| `#installBtn` (📲)                       | "Instalar aplicativo"                     |
+| `#downloadBtn` (⬇️)                      | "Baixar arquivo atual"                    |
+| `#copyBtn` (📋)                          | "Copiar todo o conteúdo do arquivo"       |
+| `#configModalClose` (✕)                  | "Fechar configurações"                    |
+| `#driveModalClose` (✕)                   | "Fechar Google Drive"                     |
+| `.project-menu` (⋮, per project)         | "Mais opções do projeto {nome}"           |
+| `.file-action-btn.rename` (✏️, per file) | "Renomear arquivo {nome}"                 |
+| `.file-action-btn.delete` (🗑, per file)  | "Excluir arquivo {nome}"                  |
+| `.file-checkbox` (per file)              | "Selecionar {nome} para download em lote" |
 
 Decorative glyphs that duplicate an adjacent visible text label (e.g. sidebar
 footer icons next to "Novo"/"Importar"/"Config"/"Instalar", the drive status
@@ -29,6 +29,7 @@ given a redundant label.
 ## 2. Modal behavior (Config modal & Drive modal)
 
 Both `#configModal` and `#driveModal` now:
+
 - Carry `role="dialog"`, `aria-modal="true"`, `aria-labelledby` pointing at
   their visible title, and the overlay carries `aria-hidden` toggled with
   visibility.
@@ -43,6 +44,7 @@ Both `#configModal` and `#driveModal` now:
 
 `showProjectMenu()` now renders `role="menu"` on the dropdown container and
 `role="menuitem"` on each action button:
+
 - Opening the menu focuses the first menu item.
 - `ArrowDown` / `ArrowUp` cycle focus between menu items (wrapping).
 - `Escape` and `Tab` close the menu and return focus to the `⋮` button that
@@ -53,6 +55,7 @@ Both `#configModal` and `#driveModal` now:
 
 Tab order through the sidebar file tree (when open) follows DOM order,
 top to bottom:
+
 1. Project header (click target for expand/collapse — currently a `div`
    with a click handler, not yet a native `<button>`; noted as follow-up
    debt, see below) → `⋮` project menu button.

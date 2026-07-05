@@ -25,7 +25,11 @@ export interface EditorFeatureProps {
  * prototype's `updatePreview()`/`switchView()`/font-size globals — no
  * new editor behavior was added.
  */
-export function EditorFeature({ content, onContentChange, onCopy }: EditorFeatureProps): JSX.Element {
+export function EditorFeature({
+  content,
+  onContentChange,
+  onCopy,
+}: EditorFeatureProps): JSX.Element {
   const { view, switchView } = useEditorView()
   const { cycleFontSize } = useEditorFontSize()
   const previewHtml = useMarkdownPreview(content)
@@ -45,7 +49,13 @@ export function EditorFeature({ content, onContentChange, onCopy }: EditorFeatur
         />
         <PreviewPane html={previewHtml} hidden={isEdit} />
       </main>
-      <EditorFooter chars={chars} tokens={tokens} view={view} onSwitchView={switchView} onCopy={onCopy} />
+      <EditorFooter
+        chars={chars}
+        tokens={tokens}
+        view={view}
+        onSwitchView={switchView}
+        onCopy={onCopy}
+      />
     </div>
   )
 }

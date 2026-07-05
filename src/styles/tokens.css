@@ -51,10 +51,10 @@
   /* ============================================================
      TYPOGRAPHY — Font families
      ============================================================ */
-  --hand: "Caveat", cursive;
-  --serif-display: "Fraunces", Georgia, serif;
-  --body: "Lora", Georgia, serif;
-  --mono: "Courier Prime", "Courier New", monospace;
+  --hand: 'Caveat', cursive;
+  --serif-display: 'Fraunces', Georgia, serif;
+  --body: 'Lora', Georgia, serif;
+  --mono: 'Courier Prime', 'Courier New', monospace;
 
   /* ============================================================
      TYPOGRAPHY — Font sizes / weights
@@ -111,7 +111,7 @@
  *
  * See GitHub issue #14.
  */
-[data-theme="dark"] {
+[data-theme='dark'] {
   --ground: #100c17;
   --ground-2: #19121f;
   --ground-deep: #08060c;

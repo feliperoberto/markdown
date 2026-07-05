@@ -16,7 +16,7 @@ build step, no types, and no component model.
 
 Tasks #9–#11 already scaffolded the replacement (Vite + Preact + TypeScript,
 a feature-sliced folder taxonomy, pinned npm dependencies). This ADR records
-*why* that stack was chosen, so the decision isn't re-litigated later.
+_why_ that stack was chosen, so the decision isn't re-litigated later.
 
 Options considered:
 

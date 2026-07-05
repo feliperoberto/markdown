@@ -99,6 +99,7 @@ export function Modal({
     <div
       class={`${styles.overlay} ${open ? styles.overlayVisible : ''}`}
       aria-hidden={!open}
+      role="presentation"
       onClick={handleOverlayClick}
     >
       {open && (
@@ -114,7 +115,12 @@ export function Modal({
             <div id={titleId} class={styles.title}>
               {title}
             </div>
-            <button type="button" class={styles.closeButton} aria-label={closeLabel} onClick={onClose}>
+            <button
+              type="button"
+              class={styles.closeButton}
+              aria-label={closeLabel}
+              onClick={onClose}
+            >
               ✕
             </button>
           </div>

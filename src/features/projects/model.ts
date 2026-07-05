@@ -8,7 +8,9 @@ export function projectExists(state: ProjectsState, projectName: string): boolea
 }
 
 export function fileExists(state: ProjectsState, projectName: string, fileName: string): boolean {
-  return Boolean(state[projectName] && Object.prototype.hasOwnProperty.call(state[projectName], fileName))
+  return Boolean(
+    state[projectName] && Object.prototype.hasOwnProperty.call(state[projectName], fileName),
+  )
 }
 
 export function createProject(state: ProjectsState, projectName: string): ProjectsState {
@@ -16,8 +18,17 @@ export function createProject(state: ProjectsState, projectName: string): Projec
   return { ...state, [projectName]: {} }
 }
 
-export function renameProject(state: ProjectsState, oldName: string, newName: string): ProjectsState {
-  if (!newName || oldName === newName || !projectExists(state, oldName) || projectExists(state, newName)) {
+export function renameProject(
+  state: ProjectsState,
+  oldName: string,
+  newName: string,
+): ProjectsState {
+  if (
+    !newName ||
+    oldName === newName ||
+    !projectExists(state, oldName) ||
+    projectExists(state, newName)
+  ) {
     return state
   }
   const next: ProjectsState = { ...state }
@@ -37,7 +48,7 @@ export function createFile(
   state: ProjectsState,
   projectName: string,
   fileName: string,
-  content = ''
+  content = '',
 ): ProjectsState {
   if (!projectExists(state, projectName) || !fileName || fileExists(state, projectName, fileName)) {
     return state
@@ -58,7 +69,7 @@ export function renameFile(
   state: ProjectsState,
   projectName: string,
   oldFileName: string,
-  newFileName: string
+  newFileName: string,
 ): ProjectsState {
   if (
     !newFileName ||
@@ -75,7 +86,11 @@ export function renameFile(
   return { ...state, [projectName]: files }
 }
 
-export function deleteFile(state: ProjectsState, projectName: string, fileName: string): ProjectsState {
+export function deleteFile(
+  state: ProjectsState,
+  projectName: string,
+  fileName: string,
+): ProjectsState {
   if (!fileExists(state, projectName, fileName)) return state
   const files = { ...state[projectName] }
   delete files[fileName]
@@ -86,7 +101,7 @@ export function updateFileContent(
   state: ProjectsState,
   projectName: string,
   fileName: string,
-  content: string
+  content: string,
 ): ProjectsState {
   if (!fileExists(state, projectName, fileName)) return state
   const file = state[projectName]![fileName] as ProjectFile

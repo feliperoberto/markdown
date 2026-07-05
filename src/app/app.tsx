@@ -45,10 +45,12 @@ export function App(): JSX.Element {
     currentProject && currentFile ? (projects[currentProject]?.[currentFile] ?? null) : null
   const currentProjectFiles = currentProject ? (projects[currentProject] ?? null) : null
 
-  const batchSelectionEntries: BatchSelectionEntry[] = batchSelection.flatMap(({ projectName, fileName }) => {
-    const file = projects[projectName]?.[fileName]
-    return file ? [{ projectName, fileName, file }] : []
-  })
+  const batchSelectionEntries: BatchSelectionEntry[] = batchSelection.flatMap(
+    ({ projectName, fileName }) => {
+      const file = projects[projectName]?.[fileName]
+      return file ? [{ projectName, fileName, file }] : []
+    },
+  )
 
   return (
     <div className="app-shell">
