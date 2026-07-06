@@ -41,7 +41,23 @@ export const driveSyncCopy = {
     'Ao conectar, seus projetos são enviados para uma pasta privada do app dentro do seu Google Drive ' +
     '("appDataFolder"), acessível apenas por este aplicativo. Ela não aparece na listagem normal do seu ' +
     'Drive nem é visível para outros apps — não são criados arquivos soltos no seu Drive pessoal. ' +
-    'Nenhum outro dado da sua conta Google é acessado ou enviado.',
+    'Nenhum outro dado da sua conta Google é acessado ou enviado. O token de acesso obtido na conexão ' +
+    'fica apenas na memória desta aba — não é salvo no navegador, então será preciso conectar novamente ' +
+    'ao recarregar a página.',
+
+  /**
+   * Data-disclosure moment, part 2 (issue #41): explains what happens
+   * *without* Drive sync (the default, always-on state) and states plainly
+   * that there is no server/backend or analytics collecting data anywhere
+   * in this app. Shown at the top of the panel regardless of connection
+   * state, since it's true either way. See `docs/data-and-privacy.md` for
+   * the full write-up this summarizes.
+   */
+  localStorageNote:
+    'Por padrão, seus projetos ficam salvos apenas neste navegador (localStorage) — não existe servidor ' +
+    'nem coleta de dados neste app. Se você limpar os dados do site ou trocar de navegador/dispositivo, ' +
+    'o conteúdo local é perdido, pois não há cópia automática em nenhum lugar. Ative a sincronização com ' +
+    'o Google Drive abaixo se quiser um backup fora deste navegador.',
 
   connectButtonLabel: 'Conectar com Google',
   connectButtonDescription: 'Autorizar acesso ao Drive',
