@@ -15,14 +15,14 @@ test.describe('export/import golden path', () => {
 
     await page.getByRole('button', { name: 'Novo projeto' }).click()
     await page.getByLabel('Nome do novo projeto').fill(projectName)
-    await page.getByRole('button', { name: 'Salvar' }).click()
+    await page.getByRole('button', { name: 'Criar' }).click()
 
     await page
       .getByRole('button', { name: `Mais opções do projeto ${projectName}`, exact: true })
       .click()
-    await page.getByRole('button', { name: 'Novo arquivo' }).click()
+    await page.getByRole('menuitem', { name: 'Novo arquivo' }).click()
     await page.getByLabel('Nome do arquivo').fill(fileName)
-    await page.getByRole('button', { name: 'Salvar' }).click()
+    await page.getByRole('button', { name: 'Criar' }).click()
 
     // Creating a file doesn't auto-select it, so open it explicitly.
     await page.getByText(fileName).click()
@@ -40,8 +40,8 @@ test.describe('export/import golden path', () => {
     await page
       .getByRole('button', { name: `Mais opções do projeto ${projectName}`, exact: true })
       .click()
-    await page.getByRole('button', { name: 'Excluir projeto' }).click()
-    await page.getByRole('button', { name: 'Confirmar' }).click()
+    await page.getByRole('menuitem', { name: 'Excluir projeto' }).click()
+    await page.getByRole('button', { name: 'Excluir', exact: true }).click()
     await expect(page.getByText(projectName)).toHaveCount(0)
 
     await page.getByRole('button', { name: 'Importar ZIP' }).click()

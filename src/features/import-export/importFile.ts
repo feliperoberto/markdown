@@ -11,10 +11,19 @@ import { sanitizeNameSegment } from './sanitize'
  */
 export function importFile(file: File): Promise<FileEntry> {
   return new Promise((resolve, reject) => {
+    const cleanName = sanitizeNameSegment(file.name.replace(/\.[^/.]+$/, ''))
+    // A name that sanitizes to nothing (e.g. "...md", a dotfile, or a name
+    // made entirely of control/path characters) previously became a file
+    // keyed by the empty string — a nameless, unselectable row silently
+    // merged into the project.
+    if (!cleanName) {
+      reject(new Error(`Nome de arquivo inválido: "${file.name}"`))
+      return
+    }
+
     const reader = new FileReader()
     reader.onload = (event) => {
       const content = String(event.target?.result ?? '')
-      const cleanName = sanitizeNameSegment(file.name.replace(/\.[^/.]+$/, ''))
       resolve({
         name: cleanName,
         content,

@@ -2,11 +2,25 @@ import type { JSX } from 'preact'
 import { useState } from 'preact/hooks'
 import { EditorFeature } from '@/features/editor'
 import { ProjectsSidebar, useProjects } from '@/features/projects'
-import { ImportExportToolbar } from '@/features/import-export'
+import {
+  ImportExportToolbar,
+  importFile,
+  exportProject,
+  exportProjectFileName,
+} from '@/features/import-export'
 import type { BatchSelectionEntry } from '@/features/import-export'
 import { DriveSyncPanel } from '@/features/drive-sync'
 import { PwaInstallPrompt } from '@/features/pwa-install'
 import { IconButton, useToast } from '@/components'
+
+function downloadBlob(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  link.click()
+  URL.revokeObjectURL(url)
+}
 
 // Shell wiring together the extracted projects/files sidebar (#19), the
 // editor/preview pane (#18), the import/export toolbar (#20), the
@@ -70,6 +84,34 @@ export function App(): JSX.Element {
     currentProject && currentFile ? (projects[currentProject]?.[currentFile] ?? null) : null
   const currentProjectFiles = currentProject ? (projects[currentProject] ?? null) : null
 
+  // Per-project "Baixar projeto"/"Upload" menu actions (issue: these
+  // existed in the prototype's project dropdown but the functions they
+  // need — exportProject/importFile — live in the import-export feature,
+  // which `projects` may not import directly (see CONTRIBUTING.md
+  // "Feature taxonomy"). app.tsx already composes both features, so the
+  // actual calls live here and are threaded down as callback props.
+  const handleExportProjectFromMenu = async (projectName: string) => {
+    const files = projects[projectName]
+    if (!files) return
+    try {
+      const blob = await exportProject(projectName, files)
+      downloadBlob(blob, exportProjectFileName(projectName))
+      showToast(`Projeto "${projectName}" exportado`, 'success')
+    } catch (error) {
+      showToast(`Erro ao exportar projeto: ${(error as Error).message}`, 'error')
+    }
+  }
+
+  const handleUploadFileToProject = async (projectName: string, file: File) => {
+    try {
+      const entry = await importFile(file)
+      createFile(projectName, entry.name, entry.content)
+      showToast(`Arquivo "${entry.name}" importado`, 'success')
+    } catch (error) {
+      showToast(`Erro ao importar arquivo: ${(error as Error).message}`, 'error')
+    }
+  }
+
   const batchSelectionEntries: BatchSelectionEntry[] = batchSelection.flatMap(
     ({ projectName, fileName }) => {
       const file = projects[projectName]?.[fileName]
@@ -111,6 +153,8 @@ export function App(): JSX.Element {
           onDeleteProject={deleteProject}
           onSelectionChange={setBatchSelection}
           mobileHidden={sidebarHiddenOnMobile}
+          onExportProject={handleExportProjectFromMenu}
+          onUploadFile={handleUploadFileToProject}
         />
         <main className="app-main">
           {currentProject && currentFile ? (

@@ -1,4 +1,4 @@
-import { JSZip } from './zip'
+import { packProjectFolders } from './zip'
 import type { ProjectFiles } from './types'
 
 /**
@@ -6,12 +6,7 @@ import type { ProjectFiles } from './types'
  * matching the legacy "download-project" dropdown action.
  */
 export async function exportProject(projectName: string, files: ProjectFiles): Promise<Blob> {
-  const zip = new JSZip()
-  const folder = zip.folder(projectName)
-  Object.entries(files).forEach(([fileName, fileData]) => {
-    folder?.file(`${fileName}.md`, fileData.content ?? '')
-  })
-  return zip.generateAsync({ type: 'blob', compression: 'DEFLATE' })
+  return packProjectFolders([{ projectName, files }])
 }
 
 /** Suggested `download` filename for a project export. */

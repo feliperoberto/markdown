@@ -69,20 +69,26 @@ export function useProjects(): UseProjectsResult {
     setCurrentFile(null)
   }, [])
 
+  // CRUD toasts (create/rename/delete) were dropped in the migration —
+  // the prototype fired one on every mutation ("✅ Projeto criado",
+  // "🗑 Arquivo excluído", etc.) and existing users expect that feedback;
+  // a silent state change reads as "did that actually work?".
   const createProject = useCallback(
     (name: string) => {
       persist(model.createProject(projects, name))
       setCurrentProject(name)
+      showToast('✅ Projeto criado', 'success')
     },
-    [projects, persist],
+    [projects, persist, showToast],
   )
 
   const renameProject = useCallback(
     (oldName: string, newName: string) => {
       persist(model.renameProject(projects, oldName, newName))
       setCurrentProject((current) => (current === oldName ? newName : current))
+      showToast('✅ Projeto renomeado', 'success')
     },
-    [projects, persist],
+    [projects, persist, showToast],
   )
 
   const deleteProject = useCallback(
@@ -101,15 +107,17 @@ export function useProjects(): UseProjectsResult {
         return wasCurrentProject ? null : current
       })
       setCurrentFile((file) => (wasCurrentProject ? null : file))
+      showToast('🗑 Projeto excluído', 'success')
     },
-    [projects, persist],
+    [projects, persist, showToast],
   )
 
   const createFile = useCallback(
     (projectName: string, fileName: string, content = '') => {
       persist(model.createFile(projects, projectName, fileName, content))
+      showToast('✅ Novo arquivo', 'success')
     },
-    [projects, persist],
+    [projects, persist, showToast],
   )
 
   const renameFile = useCallback(
@@ -118,8 +126,9 @@ export function useProjects(): UseProjectsResult {
       setCurrentFile((file) =>
         currentProject === projectName && file === oldFileName ? newFileName : file,
       )
+      showToast('✅ Arquivo renomeado', 'success')
     },
-    [projects, persist, currentProject],
+    [projects, persist, currentProject, showToast],
   )
 
   const deleteFile = useCallback(
@@ -129,8 +138,9 @@ export function useProjects(): UseProjectsResult {
       if (currentProject === projectName && currentFile === fileName) {
         setCurrentFile(null)
       }
+      showToast('🗑 Arquivo excluído', 'success')
     },
-    [projects, persist, currentProject, currentFile],
+    [projects, persist, currentProject, currentFile, showToast],
   )
 
   const updateFileContent = useCallback(

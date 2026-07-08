@@ -19,11 +19,22 @@ export interface PromptDialogOptions {
   defaultValue?: string
   placeholder?: string
   validate?: (value: string) => string | void | null | undefined
+  /**
+   * Confirm-button label. Defaults to "Salvar" for backward
+   * compatibility, but callers should pass the specific action verb
+   * ("Criar", "Renomear") per the copy guide (`docs/copy-guide.md` §2):
+   * a generic form-submit word is weaker than naming the actual action.
+   */
+  confirmLabel?: string
 }
 
 export interface ConfirmDialogOptions {
   title: string
   message: string
+  /** Confirm-button label. Defaults to "Confirmar" for backward compatibility. */
+  confirmLabel?: string
+  /** Renders the confirm button as `danger` (red) instead of the default variant. */
+  danger?: boolean
 }
 
 let dialogIdSeq = 0
@@ -52,6 +63,7 @@ function PromptModal({
   defaultValue = '',
   placeholder,
   validate,
+  confirmLabel = 'Salvar',
   titleId,
   inputId,
   onResolve,
@@ -65,15 +77,28 @@ function PromptModal({
     onResolve(result)
   }
 
+  // Validates on every keystroke (matching the prototype's PromptDialog),
+  // but only surfaces the error once the field has content or the user
+  // tried to submit — so an empty field doesn't show "Digite um nome…"
+  // before the user has typed anything.
+  function runValidation(currentValue: string, isSubmit: boolean): string | null {
+    const trimmed = currentValue.trim()
+    const message = validate?.(trimmed) || null
+    setError(isSubmit || trimmed.length > 0 ? message : null)
+    return message
+  }
+
+  function handleInput(event: Event) {
+    const next = (event.target as HTMLInputElement).value
+    setValue(next)
+    runValidation(next, false)
+  }
+
   function handleSubmit(event: Event) {
     event.preventDefault()
-    const trimmed = value.trim()
-    const validationError = validate?.(trimmed)
-    if (validationError) {
-      setError(validationError)
-      return
-    }
-    close(trimmed || null)
+    const validationError = runValidation(value, true)
+    if (validationError) return
+    close(value.trim() || null)
   }
 
   return (
@@ -88,7 +113,7 @@ function PromptModal({
             Cancelar
           </Button>
           <Button variant="primary" onClick={handleSubmit}>
-            Salvar
+            {confirmLabel}
           </Button>
         </>
       }
@@ -98,9 +123,10 @@ function PromptModal({
         <input
           id={inputId}
           type="text"
+          class={error ? 'invalid' : undefined}
           value={value}
           placeholder={placeholder}
-          onInput={(event) => setValue((event.target as HTMLInputElement).value)}
+          onInput={handleInput}
         />
         {error && <p role="alert">{error}</p>}
       </form>
@@ -131,7 +157,14 @@ interface ConfirmModalProps extends ConfirmDialogOptions {
   onResolve: (confirmed: boolean) => void
 }
 
-function ConfirmModal({ title, message, titleId, onResolve }: ConfirmModalProps) {
+function ConfirmModal({
+  title,
+  message,
+  confirmLabel = 'Confirmar',
+  danger = true,
+  titleId,
+  onResolve,
+}: ConfirmModalProps) {
   const [open, setOpen] = useState(true)
 
   function close(confirmed: boolean) {
@@ -150,8 +183,8 @@ function ConfirmModal({ title, message, titleId, onResolve }: ConfirmModalProps)
           <Button variant="default" onClick={() => close(false)}>
             Cancelar
           </Button>
-          <Button variant="danger" onClick={() => close(true)}>
-            Confirmar
+          <Button variant={danger ? 'danger' : 'primary'} onClick={() => close(true)}>
+            {confirmLabel}
           </Button>
         </>
       }

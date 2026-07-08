@@ -27,6 +27,14 @@ export async function importZip(file: File | Blob): Promise<ProjectsPatch> {
   const zip = await JSZip.loadAsync(file)
   const imported: ProjectsPatch = {}
   const pending: Promise<void>[] = []
+  // Tracks project/file keys already claimed within THIS zip, so two
+  // distinct entries that sanitize to the same key (e.g. "notes.md" and
+  // "notes .md", or entries under different original paths that collapse
+  // after sanitization) don't silently overwrite one another with no
+  // indication anything was lost — surfaced via the returned `skipped`
+  // count rather than an exception, so the rest of the archive still imports.
+  const claimedKeys = new Set<string>()
+  let skippedDuplicates = 0
 
   zip.forEach((relativePath, zipEntry) => {
     if (zipEntry.dir) return
@@ -38,6 +46,13 @@ export async function importZip(file: File | Blob): Promise<ProjectsPatch> {
     const rawFileName = parts[parts.length - 1] ?? ''
     const fileName = sanitizeNameSegment(rawFileName.replace(/\.md$/i, ''))
     if (!projectName || !fileName) return
+
+    const key = `${projectName}/${fileName}`
+    if (claimedKeys.has(key)) {
+      skippedDuplicates++
+      return
+    }
+    claimedKeys.add(key)
 
     pending.push(
       zipEntry.async('string').then((content) => {
@@ -56,6 +71,12 @@ export async function importZip(file: File | Blob): Promise<ProjectsPatch> {
 
   if (Object.keys(imported).length === 0) {
     throw new Error('ZIP sem arquivos .md válidos')
+  }
+
+  if (skippedDuplicates > 0) {
+    console.warn(
+      `importZip: ${skippedDuplicates} entrada(s) ignorada(s) por colidir com um nome já importado neste ZIP.`,
+    )
   }
 
   return imported

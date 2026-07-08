@@ -20,6 +20,15 @@ const SANITIZE_CONFIG = {
 }
 
 export function renderMarkdown(input: string): string {
-  const html = marked.parse(input, { async: false }) as string
+  // { async: false } guarantees marked.parse() returns a string
+  // synchronously (never a Promise), so the cast below is sound today —
+  // but guard it anyway: if a future marked extension/plugin ever
+  // returned a Promise despite this option, DOMPurify.sanitize(promise)
+  // would silently stringify it to "[object Promise]" and render that,
+  // rather than throwing where the real cause is obvious.
+  const html = marked.parse(input, { async: false })
+  if (typeof html !== 'string') {
+    throw new Error('marked.parse() returned a non-string result despite { async: false }')
+  }
   return DOMPurify.sanitize(html, SANITIZE_CONFIG)
 }

@@ -103,4 +103,22 @@ describe('importZip', () => {
       }
     }
   })
+
+  // Regression test: two entries that sanitize to the same project/file
+  // key (e.g. differing only in control characters or path prefixes
+  // stripped by sanitizeNameSegment) previously silently overwrote one
+  // another with no indication anything was lost. The first entry claimed
+  // now wins; later collisions are skipped (and logged), not silently applied.
+  it('keeps the first entry when two ZIP entries sanitize to the same project/file key', async () => {
+    const zip = new JSZip()
+    zip.file('Project/notes.md', 'first content')
+    // A leading-dot variant that sanitizeNameSegment collapses to the same "notes" key.
+    zip.file('Project/.notes.md', 'second content (should be skipped)')
+    const blob = await zip.generateAsync({ type: 'blob' })
+
+    const patch = await importZip(blob)
+
+    expect(Object.keys(patch.Project ?? {})).toEqual(['notes'])
+    expect(patch.Project?.notes?.content).toBe('first content')
+  })
 })

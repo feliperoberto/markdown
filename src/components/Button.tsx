@@ -10,6 +10,8 @@ export interface ButtonProps {
   children: ComponentChildren
   type?: 'button' | 'submit' | 'reset'
   ariaHasPopup?: JSX.AriaAttributes['aria-haspopup']
+  /** Overrides the implicit `button` role — e.g. `menuitem` inside a `role="menu"` container. */
+  role?: JSX.HTMLAttributes<HTMLButtonElement>['role']
 }
 
 /**
@@ -23,6 +25,7 @@ export function Button({
   children,
   type = 'button',
   ariaHasPopup,
+  role,
 }: ButtonProps) {
   const variantClass =
     variant === 'primary' ? styles.primary : variant === 'danger' ? styles.danger : styles.default
@@ -34,6 +37,7 @@ export function Button({
       disabled={disabled}
       onClick={onClick}
       aria-haspopup={ariaHasPopup}
+      role={role}
     >
       {children}
     </button>
@@ -52,6 +56,8 @@ export interface IconButtonProps {
   ariaHasPopup?: JSX.AriaAttributes['aria-haspopup']
   ariaExpanded?: boolean
   ariaControls?: string
+  /** DOM id, so a caller can look the element up (e.g. to restore focus) without a ref. */
+  id?: string
 }
 
 /**
@@ -69,11 +75,13 @@ export function IconButton({
   ariaHasPopup,
   ariaExpanded,
   ariaControls,
+  id,
 }: IconButtonProps) {
   const sizeClass = variant === 'compact' ? styles.iconButtonCompact : ''
 
   return (
     <button
+      id={id}
       type="button"
       class={`${styles.iconButton} ${sizeClass}`}
       disabled={disabled}

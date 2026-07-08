@@ -1,5 +1,5 @@
 import type { JSX } from 'preact'
-import { useState } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 import { ProjectGroup } from './ProjectGroup'
 import { showPromptDialog } from './dialogs'
 import type { ProjectsState } from './types'
@@ -24,6 +24,12 @@ export interface ProjectsSidebarProps {
   // viewports without this). Undefined/false on desktop, where the
   // sidebar is always visible inline regardless of this prop.
   mobileHidden?: boolean
+  // Per-project "Baixar projeto"/"Upload" menu actions — implemented in
+  // app.tsx (see its doc comment) since this feature may not import
+  // import-export directly. Optional so the menu items only render when
+  // a caller opts in.
+  onExportProject?: (projectName: string) => void
+  onUploadFile?: (projectName: string, file: File) => void
 }
 
 // Renders the full project/file sidebar tree. Owns only tree
@@ -43,9 +49,44 @@ export function ProjectsSidebar({
   onDeleteProject,
   onSelectionChange,
   mobileHidden = false,
+  onExportProject,
+  onUploadFile,
 }: ProjectsSidebarProps): JSX.Element {
   const [selectedByProject, setSelectedByProject] = useState<Record<string, Set<string>>>({})
   const projectNames = Object.keys(projects)
+
+  // Prunes stale selection entries whenever the project/file set changes
+  // (rename, delete, import, restore). Previously a renamed/deleted file
+  // stayed in `selectedByProject` forever: the checkbox visually stayed
+  // "checked" for a file that no longer exists under that name, and — had
+  // `batchSelectionEntries` (app.tsx) not separately filtered dead
+  // entries — a batch export could silently drop a file the user believed
+  // was still selected.
+  useEffect(() => {
+    setSelectedByProject((prev) => {
+      let changed = false
+      const next: Record<string, Set<string>> = {}
+      for (const [projectName, fileNames] of Object.entries(prev)) {
+        const files = projects[projectName]
+        if (!files) {
+          changed = true
+          continue
+        }
+        const survivors = new Set([...fileNames].filter((name) => name in files))
+        if (survivors.size !== fileNames.size) changed = true
+        if (survivors.size > 0) next[projectName] = survivors
+      }
+      if (!changed) return prev
+
+      onSelectionChange?.(
+        Object.entries(next).flatMap(([proj, files]) =>
+          Array.from(files).map((file) => ({ projectName: proj, fileName: file })),
+        ),
+      )
+      return next
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onSelectionChange intentionally excluded: it's a per-render callback prop, not state this effect should re-run for.
+  }, [projects])
 
   function toggleSelected(projectName: string, fileName: string, selected: boolean) {
     setSelectedByProject((prev) => {
@@ -70,6 +111,7 @@ export function ProjectsSidebar({
       title: 'Novo projeto',
       label: 'Nome do novo projeto',
       placeholder: 'Ex.: Meu Projeto',
+      confirmLabel: 'Criar',
       validate: (value) => {
         if (!value) return 'Digite um nome para o projeto.'
         if (projectNames.includes(value)) return 'Já existe um projeto com esse nome.'
@@ -109,6 +151,8 @@ export function ProjectsSidebar({
               onDeleteFile={onDeleteFile}
               onRenameProject={onRenameProject}
               onDeleteProject={onDeleteProject}
+              onExportProject={onExportProject}
+              onUploadFile={onUploadFile}
             />
           ))
         )}

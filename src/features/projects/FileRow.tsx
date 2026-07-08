@@ -1,4 +1,5 @@
 import type { JSX } from 'preact'
+import { memo } from 'preact/compat'
 import { useRef, useState } from 'preact/hooks'
 import type { ProjectFile } from './types'
 import { showPromptDialog } from './dialogs'
@@ -18,7 +19,11 @@ export interface FileRowProps {
 
 // Renders one file row in the sidebar tree, including swipe-to-reveal
 // actions (touch) and the multi-select checkbox used for batch download.
-export function FileRow({
+// Wrapped in memo() so editing the active file's content doesn't reconcile
+// every OTHER file row in the sidebar on every keystroke — effective only
+// as long as `fileNames` is itself a stable reference (see ProjectGroup,
+// which memoizes it), since a fresh array every render would defeat this.
+export const FileRow = memo(function FileRow({
   projectName,
   file,
   isActive,
@@ -117,4 +122,4 @@ export function FileRow({
       </div>
     </div>
   )
-}
+})

@@ -76,10 +76,12 @@ describe('ProjectsSidebar + useProjects', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Novo projeto' }))
     expect(await screen.findByText('My Project')).not.toBeNull()
 
-    // Open the project's "..." menu and create a file inside it.
+    // Open the project's "..." menu and create a file inside it. Menu
+    // items are role="menuitem" (issue: the menu previously had no real
+    // menu semantics/keyboard nav), not the implicit "button" role.
     vi.mocked(showPromptDialog).mockResolvedValueOnce('notes')
     fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto My Project/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Novo arquivo' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Novo arquivo' }))
     expect(await screen.findByText('notes')).not.toBeNull()
 
     // Rename the file.

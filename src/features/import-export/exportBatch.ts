@@ -1,4 +1,4 @@
-import { JSZip } from './zip'
+import { packProjectFolders } from './zip'
 import type { BatchSelectionEntry } from './types'
 
 /**
@@ -7,26 +7,20 @@ import type { BatchSelectionEntry } from './types'
  * folder — matching the legacy "downloadBatchBtn" handler.
  */
 export async function exportBatch(selection: BatchSelectionEntry[]): Promise<Blob> {
-  const zip = new JSZip()
-  const filesByProject = new Map<string, BatchSelectionEntry[]>()
+  const filesByProject = new Map<string, Record<string, { content: string }>>()
 
-  for (const entry of selection) {
-    const existing = filesByProject.get(entry.projectName)
+  for (const { projectName, fileName, file } of selection) {
+    const existing = filesByProject.get(projectName)
     if (existing) {
-      existing.push(entry)
+      existing[fileName] = file
     } else {
-      filesByProject.set(entry.projectName, [entry])
+      filesByProject.set(projectName, { [fileName]: file })
     }
   }
 
-  filesByProject.forEach((entries, projectName) => {
-    const folder = zip.folder(projectName)
-    entries.forEach(({ fileName, file }) => {
-      folder?.file(`${fileName}.md`, file.content ?? '')
-    })
-  })
-
-  return zip.generateAsync({ type: 'blob', compression: 'DEFLATE' })
+  return packProjectFolders(
+    Array.from(filesByProject, ([projectName, files]) => ({ projectName, files })),
+  )
 }
 
 /** Suggested `download` filename for a batch export. */

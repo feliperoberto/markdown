@@ -32,10 +32,9 @@ export function EditorFeature({
 }: EditorFeatureProps): JSX.Element {
   const { view, switchView } = useEditorView()
   const { cycleFontSize } = useEditorFontSize()
-  const previewHtml = useMarkdownPreview(content)
-  const { chars, tokens } = countCharsAndTokens(content)
-
   const isEdit = view === 'edit'
+  const previewHtml = useMarkdownPreview(content, isEdit)
+  const { chars, tokens } = countCharsAndTokens(content)
 
   return (
     <div class="editor-feature">
