@@ -1,6 +1,6 @@
 import type { JSX } from 'preact'
-import { useState } from 'preact/hooks'
-import { EditorFeature } from '@/features/editor'
+import { useEffect, useState } from 'preact/hooks'
+import { EditorFeature, FontSizeButton, useEditorFontSize } from '@/features/editor'
 import { ProjectsSidebar, useProjects } from '@/features/projects'
 import {
   ImportExportToolbar,
@@ -15,6 +15,7 @@ import { ThemeToggle } from '@/features/theme'
 import { FullscreenToggle } from '@/features/fullscreen'
 import { SplashScreen } from '@/features/onboarding'
 import { Breadcrumbs, IconButton, useToast } from '@/components'
+import { copyToClipboard } from '@/lib/copyToClipboard'
 
 function downloadBlob(blob: Blob, fileName: string): void {
   const url = URL.createObjectURL(blob)
@@ -56,7 +57,29 @@ export function App(): JSX.Element {
   // 768px) block in global.css), so this is a no-op above that breakpoint.
   const [sidebarHiddenOnMobile, setSidebarHiddenOnMobile] = useState(true)
 
+  // Clicking outside the drawer closes it too (issue: previously the
+  // hamburger button was the ONLY way to close it — the prototype's
+  // `document.addEventListener('click', ...)` closes on any click outside
+  // #sidebar/#menuBtn). Unconditional like the prototype's: a no-op on
+  // desktop since the sidebar is never actually hidden there regardless
+  // of this state.
+  useEffect(() => {
+    if (sidebarHiddenOnMobile) return
+
+    function handleOutsideClick(e: MouseEvent) {
+      const target = e.target as Node
+      const sidebarEl = document.getElementById('projectsSidebar')
+      const menuButtonEl = document.getElementById('sidebarMenuButton')
+      if (sidebarEl?.contains(target) || menuButtonEl?.contains(target)) return
+      setSidebarHiddenOnMobile(true)
+    }
+
+    document.addEventListener('click', handleOutsideClick)
+    return () => document.removeEventListener('click', handleOutsideClick)
+  }, [sidebarHiddenOnMobile])
+
   const showToast = useToast()
+  const { cycleFontSize } = useEditorFontSize()
 
   const activeContent =
     currentProject && currentFile ? (projects[currentProject]?.[currentFile]?.content ?? '') : ''
@@ -73,7 +96,7 @@ export function App(): JSX.Element {
       return
     }
     try {
-      await navigator.clipboard.writeText(activeContent)
+      await copyToClipboard(activeContent)
       showToast('📋 Copiado', 'success')
     } catch (error) {
       showToast(
@@ -129,6 +152,7 @@ export function App(): JSX.Element {
         <header className="app-toolbar">
           <div className="header-left">
             <IconButton
+              id="sidebarMenuButton"
               icon="☰"
               label="Abrir menu de projetos"
               ariaExpanded={!sidebarHiddenOnMobile}
@@ -149,6 +173,7 @@ export function App(): JSX.Element {
           />
           <div className="header-right">
             <DriveSyncPanel getSnapshot={() => ({ projects })} onImported={restoreProjects} />
+            <FontSizeButton onCycle={cycleFontSize} />
             <ThemeToggle />
             <FullscreenToggle />
             <PwaInstallPrompt />

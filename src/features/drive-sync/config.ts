@@ -15,11 +15,20 @@ const CLIENT_ID_STORAGE_KEY = 'driveClientId'
 
 export const PLACEHOLDER_CLIENT_ID = 'SEU_CLIENT_ID_AQUI.apps.googleusercontent.com'
 
+// Returns '' (never the placeholder) when nothing is stored, so callers
+// can put this directly in an <input value> without pre-filling it with
+// text that reads as real, already-entered data. A caller that wants
+// guidance copy for an empty field should use PLACEHOLDER_CLIENT_ID (or
+// clientIdPlaceholder copy) as the input's `placeholder` attribute
+// instead — a real value previously let a user click "Salvar" without
+// typing anything and silently persist the placeholder string as their
+// Client ID, since it made the empty-input guard never see an empty string.
 export function getStoredClientId(): string {
-  return localStorageAdapter.get(CLIENT_ID_STORAGE_KEY) || PLACEHOLDER_CLIENT_ID
+  return localStorageAdapter.get(CLIENT_ID_STORAGE_KEY) ?? ''
 }
 
 export function setStoredClientId(clientId: string): void {
+  if (isPlaceholderClientId(clientId)) return
   localStorageAdapter.set(CLIENT_ID_STORAGE_KEY, clientId)
 }
 

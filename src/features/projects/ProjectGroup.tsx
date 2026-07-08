@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { FileRow } from './FileRow'
 import { showConfirmDialog, showPromptDialog } from './dialogs'
 import type { ProjectFiles } from './types'
-import { Button, IconButton } from '@/components'
+import { IconButton } from '@/components'
 
 export interface ProjectGroupProps {
   projectName: string
@@ -47,6 +47,7 @@ export const ProjectGroup = memo(function ProjectGroup({
 }: ProjectGroupProps): JSX.Element {
   const [isExpanded, setIsExpanded] = useState(true)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 })
   // Memoized so FileRow's memo() isn't defeated by a fresh array every
   // render (Object.keys always returns a new array reference).
   const fileNames = useMemo(() => Object.keys(files), [files])
@@ -67,9 +68,26 @@ export const ProjectGroup = memo(function ProjectGroup({
     }
   }
 
+  // Computes the dropdown's position from the trigger button's own
+  // bounding box (issue: the menu previously had no positioning logic at
+  // all — it relied solely on `position: fixed` with no top/left, so it
+  // rendered wherever an offset-less fixed box defaults to, and its items
+  // used the generic Button component instead of `.dropdown-item`,
+  // producing a ~3x-oversized horizontal strip instead of an anchored
+  // vertical menu). Matches the prototype's showProjectMenu() math
+  // exactly: anchored just below-left of the trigger, clamped to the
+  // viewport's left edge.
   function toggleMenu(e: MouseEvent) {
     e.stopPropagation()
-    setIsMenuOpen((open) => !open)
+    setIsMenuOpen((open) => {
+      if (open) return false
+      const buttonEl = document.getElementById(menuButtonId)
+      const rect = buttonEl?.getBoundingClientRect()
+      if (rect) {
+        setMenuPosition({ top: rect.bottom + 4, left: Math.max(4, rect.left - 180) })
+      }
+      return true
+    })
   }
 
   // Keyboard-navigable dropdown menu (issue: the menu rendered role="menu"
@@ -218,26 +236,47 @@ export const ProjectGroup = memo(function ProjectGroup({
           className="dropdown-menu visible"
           role="menu"
           aria-label={`Ações do projeto ${projectName}`}
+          style={{ top: `${menuPosition.top}px`, left: `${menuPosition.left}px` }}
         >
-          <Button variant="default" role="menuitem" onClick={handleNewFile}>
-            Novo arquivo
-          </Button>
+          <button type="button" className="dropdown-item" role="menuitem" onClick={handleNewFile}>
+            ➕ Novo arquivo
+          </button>
           {onUploadFile && (
-            <Button variant="default" role="menuitem" onClick={handleUploadClick}>
-              Upload
-            </Button>
+            <button
+              type="button"
+              className="dropdown-item"
+              role="menuitem"
+              onClick={handleUploadClick}
+            >
+              📤 Upload
+            </button>
           )}
+          <button
+            type="button"
+            className="dropdown-item"
+            role="menuitem"
+            onClick={handleRenameProject}
+          >
+            ✏️ Renomear projeto
+          </button>
           {onExportProject && (
-            <Button variant="default" role="menuitem" onClick={handleExportProject}>
-              Baixar projeto
-            </Button>
+            <button
+              type="button"
+              className="dropdown-item"
+              role="menuitem"
+              onClick={handleExportProject}
+            >
+              ⬇️ Baixar projeto
+            </button>
           )}
-          <Button variant="default" role="menuitem" onClick={handleRenameProject}>
-            Renomear projeto
-          </Button>
-          <Button variant="danger" role="menuitem" onClick={handleDeleteProject}>
-            Excluir projeto
-          </Button>
+          <button
+            type="button"
+            className="dropdown-item danger"
+            role="menuitem"
+            onClick={handleDeleteProject}
+          >
+            🗑 Excluir projeto
+          </button>
         </div>
       )}
 

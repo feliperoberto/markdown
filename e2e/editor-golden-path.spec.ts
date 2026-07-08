@@ -18,7 +18,7 @@ test.describe('editor golden path', () => {
     await page
       .getByRole('button', { name: `Mais opções do projeto ${projectName}`, exact: true })
       .click()
-    await page.getByRole('menuitem', { name: 'Novo arquivo' }).click()
+    await page.getByRole('menuitem', { name: /Novo arquivo/ }).click()
     await page.getByLabel('Nome do arquivo').fill(fileName)
     await page.getByRole('button', { name: 'Criar' }).click()
 

@@ -20,7 +20,7 @@ test.describe('export/import golden path', () => {
     await page
       .getByRole('button', { name: `Mais opções do projeto ${projectName}`, exact: true })
       .click()
-    await page.getByRole('menuitem', { name: 'Novo arquivo' }).click()
+    await page.getByRole('menuitem', { name: /Novo arquivo/ }).click()
     await page.getByLabel('Nome do arquivo').fill(fileName)
     await page.getByRole('button', { name: 'Criar' }).click()
 
@@ -40,7 +40,7 @@ test.describe('export/import golden path', () => {
     await page
       .getByRole('button', { name: `Mais opções do projeto ${projectName}`, exact: true })
       .click()
-    await page.getByRole('menuitem', { name: 'Excluir projeto' }).click()
+    await page.getByRole('menuitem', { name: /Excluir projeto/ }).click()
     await page.getByRole('button', { name: 'Excluir', exact: true }).click()
     await expect(page.getByText(projectName)).toHaveCount(0)
 

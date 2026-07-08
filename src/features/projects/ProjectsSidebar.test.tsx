@@ -81,7 +81,7 @@ describe('ProjectsSidebar + useProjects', () => {
     // menu semantics/keyboard nav), not the implicit "button" role.
     vi.mocked(showPromptDialog).mockResolvedValueOnce('notes')
     fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto My Project/ }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Novo arquivo' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /Novo arquivo/ }))
     expect(await screen.findByText('notes')).not.toBeNull()
 
     // Rename the file.

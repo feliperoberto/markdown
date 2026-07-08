@@ -178,7 +178,7 @@ export function DriveSyncPanel({ getSnapshot, onImported }: DriveSyncPanelProps)
     <>
       <span class={styles.iconWrapper}>
         <IconButton
-          icon="☁"
+          icon="☁️"
           label="Sincronização com Google Drive"
           ariaHasPopup="dialog"
           onClick={() => setOpen(true)}

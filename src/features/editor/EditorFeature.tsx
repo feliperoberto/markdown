@@ -1,10 +1,8 @@
 import type { JSX } from 'preact/jsx-runtime'
 import { EditorFooter } from '@/features/editor/EditorFooter'
 import { EditorPane } from '@/features/editor/EditorPane'
-import { FontSizeButton } from '@/features/editor/FontSizeButton'
 import { PreviewPane } from '@/features/editor/PreviewPane'
 import { countCharsAndTokens } from '@/features/editor/charTokenCount'
-import { useEditorFontSize } from '@/features/editor/useEditorFontSize'
 import { useEditorView } from '@/features/editor/useEditorView'
 import { useMarkdownPreview } from '@/features/editor/useMarkdownPreview'
 
@@ -20,10 +18,13 @@ export interface EditorFeatureProps {
 /**
  * Owns the editor + preview feature end to end (issue #18): the
  * `<textarea>`/preview panes, the markdown render+sanitize call
- * (delegated to `src/lib/markdown.ts`), view-toggle state, font-size
- * state, and the char/token counters. Structural extraction of the
- * prototype's `updatePreview()`/`switchView()`/font-size globals — no
- * new editor behavior was added.
+ * (delegated to `src/lib/markdown.ts`), view-toggle state, and the
+ * char/token counters. Structural extraction of the prototype's
+ * `updatePreview()`/`switchView()` globals — no new editor behavior was
+ * added. Font-size is owned by app.tsx (mounted as a header icon button,
+ * matching the prototype's #fontSizeBtn location — it previously lived
+ * here instead, rendering as a stray block-level row above the editor
+ * and breaking this component's own flex layout).
  */
 export function EditorFeature({
   content,
@@ -31,14 +32,12 @@ export function EditorFeature({
   onCopy,
 }: EditorFeatureProps): JSX.Element {
   const { view, switchView } = useEditorView()
-  const { cycleFontSize } = useEditorFontSize()
   const isEdit = view === 'edit'
   const previewHtml = useMarkdownPreview(content, isEdit)
   const { chars, tokens } = countCharsAndTokens(content)
 
   return (
     <div class="editor-feature">
-      <FontSizeButton onCycle={cycleFontSize} />
       <main>
         <EditorPane
           content={content}

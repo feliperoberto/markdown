@@ -129,6 +129,21 @@ body {
   min-width: 0;
 }
 
+/* EditorFeature's own root element (issue: the prototype's equivalent
+   markup has no wrapping div between `.content-area` and its
+   `.toolbar`/`main` children at all — this component boundary is new to
+   the migration, and without its own flex-participation rules, the
+   unstyled div broke the flex chain that makes #editor/.preview-pane
+   fill the available height instead of leaving a dead gap above the
+   footer). Mirrors .app-main's own flex setup exactly. */
+.editor-feature {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
 /* Import/export toolbar row (lives inside .app-toolbar) */
 .import-export-toolbar {
   display: flex;
