@@ -27,6 +27,7 @@ import {
   type GoogleTokenResponse,
 } from './google-identity'
 import { driveSyncCopy } from './copy'
+import { localStorageAdapter } from '@/lib/storage-adapter'
 
 /**
  * Thrown (instead of letting a raw fetch/TypeError bubble up) when a sync
@@ -105,6 +106,22 @@ function naiveHash(value: string): string {
     .toString()
 }
 
+/**
+ * Reads `key` as an epoch-ms timestamp, treating a missing OR non-numeric
+ * stored value as 0 rather than `NaN`. A corrupt/hand-edited
+ * `lastDriveSync` value previously produced `parseInt(...) === NaN`,
+ * which poisons every downstream arithmetic comparison (`now - NaN`,
+ * `NaN > threshold`) to `false` — silently stopping auto-sync forever,
+ * since neither the "stale" nor "changed recently" trigger could ever
+ * fire again.
+ */
+function readStoredTimestamp(key: string): number {
+  const raw = localStorageAdapter.get(key)
+  if (raw === null) return 0
+  const parsed = parseInt(raw, 10)
+  return Number.isNaN(parsed) ? 0 : parsed
+}
+
 export class GoogleDriveSyncProvider implements SyncProvider {
   private accessToken: string | null = null
   private driveFileId: string | null = null
@@ -130,10 +147,11 @@ export class GoogleDriveSyncProvider implements SyncProvider {
   }
 
   getStatus(): SyncStatus {
-    const lastSync = localStorage.getItem(LAST_SYNC_STORAGE_KEY)
+    const lastSync = localStorageAdapter.get(LAST_SYNC_STORAGE_KEY)
+    const parsed = lastSync ? parseInt(lastSync, 10) : null
     return {
       connected: this.accessToken !== null,
-      lastSyncedAt: lastSync ? parseInt(lastSync, 10) : null,
+      lastSyncedAt: parsed !== null && Number.isNaN(parsed) ? null : parsed,
     }
   }
 
@@ -289,6 +307,18 @@ export class GoogleDriveSyncProvider implements SyncProvider {
       `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name='${DRIVE_FILENAME}'&fields=files(id,name,modifiedTime)`,
       { headers: { Authorization: `Bearer ${this.accessToken}` } },
     )
+
+    // A non-2xx response (transient rate-limit/5xx, not necessarily an
+    // auth failure) previously fell through as if "no file exists" —
+    // uploadSnapshot then took the create branch and POSTed a duplicate
+    // backup instead of PATCHing the real one. Mirrors the res.ok guard
+    // uploadSnapshot/importFromDrive already have; the error body may not
+    // be valid JSON, so parsing it is best-effort.
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.error?.message || res.statusText)
+    }
+
     const data = await res.json()
     if (data.files && data.files.length > 0) {
       this.driveFileId = data.files[0].id
@@ -297,7 +327,17 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     return null
   }
 
+  /**
+   * Uploads `snapshot` to Drive and, on success, records the post-upload
+   * bookkeeping (`lastDriveSync` + `projectsLastModified`) here — the one
+   * place that actually knows the upload succeeded and already has the
+   * hash inputs in scope. Previously only `runAutoSyncTick` wrote
+   * `projectsLastModified`; a manual sync via `exportToDrive`/`sync` left
+   * it stale, so the *next* auto-sync tick saw a hash mismatch against
+   * data that was already just uploaded and re-uploaded it redundantly.
+   */
   private async uploadSnapshot(snapshot: ProjectsSnapshot): Promise<void> {
+    const projectsJson = JSON.stringify(snapshot.projects)
     const payload = JSON.stringify(
       {
         version: 1,
@@ -338,12 +378,15 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     }
 
     if (!res.ok) {
-      const err = await res.json()
+      const err = await res.json().catch(() => ({}))
       throw new Error(err.error?.message || res.statusText)
     }
 
     const result = await res.json()
     this.driveFileId = result.id
+
+    localStorageAdapter.set(LAST_SYNC_STORAGE_KEY, Date.now().toString())
+    localStorageAdapter.set(PROJECTS_LAST_MODIFIED_STORAGE_KEY, naiveHash(projectsJson))
   }
 
   /** Manual, immediate export ("Salvar no Drive" button). */
@@ -402,14 +445,24 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     )
 
     if (!res.ok) {
-      const err = await res.json()
+      const err = await res.json().catch(() => ({}))
       throw new Error(err.error?.message || res.statusText)
     }
 
-    const data = await res.json()
+    // A truncated/corrupted/hand-edited backup file is not valid JSON —
+    // res.json() previously rejected uncaught with a raw SyntaxError
+    // ("Unexpected token…") instead of the same clear
+    // "Formato de backup inválido" message a missing `projects` field
+    // already produces below.
+    let data: { projects?: unknown }
+    try {
+      data = await res.json()
+    } catch {
+      throw new Error('Formato de backup inválido')
+    }
     if (!data.projects) throw new Error('Formato de backup inválido')
 
-    return data.projects
+    return data.projects as Record<string, unknown>
   }
 
   /**
@@ -422,8 +475,9 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     if (!this.accessToken) return
 
     try {
+      // Bookkeeping (lastDriveSync + projectsLastModified) is recorded by
+      // uploadSnapshot itself on success — see its doc comment.
       await this.exportToDrive(snapshot)
-      localStorage.setItem(LAST_SYNC_STORAGE_KEY, Date.now().toString())
     } catch (err) {
       if (err instanceof DriveSyncOfflineError) {
         // Already surfaced as a graceful "offline, will retry" toast by
@@ -468,8 +522,8 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     const snapshot = getSnapshot()
     const currentHash = naiveHash(JSON.stringify(snapshot.projects))
 
-    const lastSync = parseInt(localStorage.getItem(LAST_SYNC_STORAGE_KEY) || '0', 10)
-    const lastModifiedHash = localStorage.getItem(PROJECTS_LAST_MODIFIED_STORAGE_KEY) || '0'
+    const lastSync = readStoredTimestamp(LAST_SYNC_STORAGE_KEY)
+    const lastModifiedHash = localStorageAdapter.get(PROJECTS_LAST_MODIFIED_STORAGE_KEY) || '0'
     const now = Date.now()
     const timeSinceSync = now - lastSync
 
@@ -492,9 +546,9 @@ export class GoogleDriveSyncProvider implements SyncProvider {
 
     try {
       await this.ensureFreshAccessToken()
+      // Bookkeeping (lastDriveSync + projectsLastModified) is recorded by
+      // uploadSnapshot itself on success — see its doc comment.
       await this.uploadSnapshot(snapshot)
-      localStorage.setItem(LAST_SYNC_STORAGE_KEY, Date.now().toString())
-      localStorage.setItem(PROJECTS_LAST_MODIFIED_STORAGE_KEY, currentHash)
       this.options.onStatusChange?.('connected')
       // Silent success - no toast, matching the original behavior.
     } catch (err) {
