@@ -58,6 +58,8 @@ export interface IconButtonProps {
   ariaControls?: string
   /** DOM id, so a caller can look the element up (e.g. to restore focus) without a ref. */
   id?: string
+  /** Extra class(es) appended after the component's own module classes — e.g. a global-CSS color-coding class like `file-action-btn rename`. */
+  className?: string
 }
 
 /**
@@ -76,6 +78,7 @@ export function IconButton({
   ariaExpanded,
   ariaControls,
   id,
+  className,
 }: IconButtonProps) {
   const sizeClass = variant === 'compact' ? styles.iconButtonCompact : ''
 
@@ -83,7 +86,7 @@ export function IconButton({
     <button
       id={id}
       type="button"
-      class={`${styles.iconButton} ${sizeClass}`}
+      class={`${styles.iconButton} ${sizeClass}${className ? ` ${className}` : ''}`}
       disabled={disabled}
       onClick={onClick}
       aria-label={label}

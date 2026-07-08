@@ -109,12 +109,14 @@ export const FileRow = memo(function FileRow({
       <div className="file-actions">
         <IconButton
           variant="compact"
-          icon="✎"
+          className="file-action-btn rename"
+          icon="✏️"
           label={`Renomear arquivo ${file.name}`}
           onClick={handleRename}
         />
         <IconButton
           variant="compact"
+          className="file-action-btn delete"
           icon="🗑"
           label={`Excluir arquivo ${file.name}`}
           onClick={handleDelete}

@@ -109,11 +109,11 @@ function PromptModal({
       title={title}
       footer={
         <>
-          <Button variant="default" onClick={() => close(null)}>
-            Cancelar
-          </Button>
           <Button variant="primary" onClick={handleSubmit}>
             {confirmLabel}
+          </Button>
+          <Button variant="default" onClick={() => close(null)}>
+            Cancelar
           </Button>
         </>
       }
@@ -123,7 +123,7 @@ function PromptModal({
         <input
           id={inputId}
           type="text"
-          class={error ? 'invalid' : undefined}
+          class={`config-input${error ? ' invalid' : ''}`}
           value={value}
           placeholder={placeholder}
           onInput={handleInput}
@@ -180,11 +180,11 @@ function ConfirmModal({
       title={title}
       footer={
         <>
-          <Button variant="default" onClick={() => close(false)}>
-            Cancelar
-          </Button>
           <Button variant={danger ? 'danger' : 'primary'} onClick={() => close(true)}>
             {confirmLabel}
+          </Button>
+          <Button variant="default" onClick={() => close(false)}>
+            Cancelar
           </Button>
         </>
       }

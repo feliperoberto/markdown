@@ -127,6 +127,7 @@ export function ProjectsSidebar({
       id="projectsSidebar"
       aria-label="Projetos e arquivos"
     >
+      <span className="sidebar-title">Projetos</span>
       <Button variant="primary" onClick={handleNewProject}>
         Novo projeto
       </Button>

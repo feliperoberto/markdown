@@ -192,27 +192,43 @@ export function DriveSyncPanel({ getSnapshot, onImported }: DriveSyncPanelProps)
       <Modal open={open} onClose={() => setOpen(false)} titleId={TITLE_ID} title="Google Drive">
         {!isOnline && <p class={styles.offlineNotice}>{driveSyncCopy.offlineStatus}</p>}
         <p class={styles.disclosureNote}>{driveSyncCopy.localStorageNote}</p>
-        <form onSubmit={handleSaveClientId}>
+        <form class={styles.clientIdForm} onSubmit={handleSaveClientId}>
           <label htmlFor="drive-client-id">{driveSyncCopy.clientIdLabel}</label>
           <input
             id="drive-client-id"
+            class="config-input"
             type="text"
             value={clientId}
             placeholder={driveSyncCopy.clientIdPlaceholder}
             onInput={(event) => setClientIdInput((event.target as HTMLInputElement).value)}
           />
-          <p>{driveSyncCopy.clientIdSecurityNote}</p>
-          <p>{configured ? driveSyncCopy.configuredStatus : driveSyncCopy.notConfiguredStatus}</p>
-          <p>{driveSyncCopy.helpText}</p>
-          <Button type="submit" variant="default">
-            Salvar Client ID
-          </Button>
-          <Button variant="default" onClick={handleClearClientId}>
-            Limpar
-          </Button>
+          <p class={styles.disclosureNote}>{driveSyncCopy.clientIdSecurityNote}</p>
+          <div class={`config-status ${configured ? 'configured' : 'not-configured'}`}>
+            {configured ? driveSyncCopy.configuredStatus : driveSyncCopy.notConfiguredStatus}
+          </div>
+          <p class={styles.disclosureNote}>{driveSyncCopy.helpText}</p>
+          <div class={styles.actionRow}>
+            <Button type="submit" variant="default">
+              Salvar Client ID
+            </Button>
+            <Button variant="default" onClick={handleClearClientId}>
+              Limpar
+            </Button>
+          </div>
         </form>
 
-        <p>{user ? `Conectado como ${user}` : driveSyncCopy.notConnectedStatus}</p>
+        <div class="drive-status">
+          <span class="drive-status-icon" aria-hidden="true">
+            {user ? '✅' : '☁️'}
+          </span>
+          {user ? (
+            <div class="drive-status-text">
+              <span class="drive-status-name">{`Conectado como ${user}`}</span>
+            </div>
+          ) : (
+            <span class="drive-status-text">{driveSyncCopy.notConnectedStatus}</span>
+          )}
+        </div>
         {connected && (
           <p class={styles.disclosureNote}>
             {formatLastSynced(lastSyncedAt)
@@ -222,7 +238,7 @@ export function DriveSyncPanel({ getSnapshot, onImported }: DriveSyncPanelProps)
         )}
         {!connected && <p class={styles.disclosureNote}>{driveSyncCopy.dataDisclosure}</p>}
 
-        <div>
+        <div class={styles.actionRow}>
           {connected ? (
             <Button variant="danger" disabled={busy} onClick={handleDisconnect}>
               {driveSyncCopy.disconnectButtonLabel}

@@ -169,6 +169,18 @@ body {
   gap: 0.75rem;
 }
 
+/* Section label above the project list (issue: the sidebar had no
+   visible "PROJETOS" heading at all — only an aria-label on the <nav>
+   for screen readers). */
+.sidebar-title {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--cream-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.28em;
+}
+
 .projects-list {
   flex: 1;
   overflow-y: auto;
@@ -322,6 +334,31 @@ body {
 
 .file-item.swiped .file-actions {
   right: 0.4rem;
+}
+
+/* Color-coded swipe-revealed action buttons (issue: rename/delete
+   previously rendered as bare, uncolored icon glyphs — the prototype
+   uses solid colored square chips so the two actions are visually
+   distinct at a glance, especially the destructive one). */
+.file-action-btn {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.file-action-btn.rename {
+  background: var(--c-sky);
+}
+
+.file-action-btn.delete {
+  background: var(--c-coral);
 }
 
 /* Sidebar footer */
@@ -740,6 +777,99 @@ footer,
 
 .dropdown-item.danger {
   color: var(--c-coral);
+}
+
+/* ============================================================
+   DIALOG / CONFIG TEXT INPUTS
+   ============================================================
+   Used by both the create/rename prompt dialogs (dialogs.tsx) and the
+   Drive Client ID field (DriveSyncPanel.tsx) — same class the prototype
+   reused across its generic #dialogInput and #configClientId fields.
+   Previously entirely unstyled: every dialog's text input rendered as a
+   bare browser-default box (white background, default border), clashing
+   with the dark modal chrome around it, because nothing but the
+   conditional `.invalid` modifier was ever applied. */
+.config-input {
+  padding: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 7px;
+  background-color: rgba(255, 255, 255, 0.04);
+  color: var(--cream);
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  transition: border-color var(--transition);
+}
+
+.config-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(255, 122, 107, 0.15);
+}
+
+.config-input::placeholder {
+  color: var(--cream-soft);
+  opacity: 0.5;
+}
+
+.config-input.invalid {
+  border-color: var(--c-coral);
+  box-shadow: 0 0 0 3px rgba(255, 122, 107, 0.15);
+}
+
+/* Configured/not-configured indicator row (Drive Client ID status).
+   Previously a bare <p>, indistinguishable from the surrounding
+   disclosure paragraphs. */
+.config-status {
+  padding: 0.7rem 0.85rem;
+  border-radius: 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.config-status.configured {
+  background-color: rgba(127, 207, 114, 0.12);
+  color: var(--c-green);
+}
+
+.config-status.not-configured {
+  background-color: rgba(255, 122, 107, 0.12);
+  color: var(--c-coral);
+}
+
+/* Drive connection-status row (connected/not-connected). Same "quiet
+   backgrounded card" treatment as .config-status, applied to the
+   connection state instead of the configuration state. */
+.drive-status {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem;
+  background-color: rgba(255, 255, 255, 0.03);
+  border-radius: 9px;
+  font-family: var(--body);
+  font-size: 0.85rem;
+  color: var(--cream-soft);
+}
+
+.drive-status-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.drive-status-text {
+  flex: 1;
+  line-height: 1.4;
+}
+
+.drive-status-name {
+  font-family: var(--body);
+  font-weight: 700;
+  color: var(--cream);
+  font-size: 0.85rem;
 }
 
 /* ============================================================
