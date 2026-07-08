@@ -52,6 +52,20 @@
   border: 0;
 }
 
+/**
+ * Gives every direct block inside the modal (offline notice, Client ID
+ * form, connection-status row, last-synced/disclosure text, action row)
+ * consistent vertical rhythm. Previously these were flat siblings with
+ * no margin between them, so blocks with their own internal padding
+ * (e.g. .config-status, .drive-status) sat flush against the next
+ * paragraph with no breathing room.
+ */
+.modalBody {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
 .clientIdForm {
   display: flex;
   flex-direction: column;

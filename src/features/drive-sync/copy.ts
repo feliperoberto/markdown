@@ -10,19 +10,6 @@ export const driveSyncCopy = {
   clientIdLabel: 'Client ID',
   clientIdPlaceholder: 'xxxxxxx.apps.googleusercontent.com',
 
-  /**
-   * Clarifies, right next to the input, that this value behaves
-   * differently from a typical "secret" credential. Strengthened (issue
-   * #30, product-owner pass) to explicitly say "não é uma senha" — the
-   * word "senha" (password) is the mental model most likely to make a user
-   * hesitate to paste this value, so naming it directly and ruling it out
-   * is clearer than only contrasting with "chave secreta".
-   */
-  clientIdSecurityNote:
-    'Este Client ID é uma informação pública do OAuth — não é uma senha nem uma chave secreta. ' +
-    'É seguro colá-lo aqui e mantê-lo salvo neste navegador; ele sozinho não dá acesso à sua conta ' +
-    'ou aos seus arquivos do Drive.',
-
   configuredStatus: '✅ Configurado',
   notConfiguredStatus: '⚠️ Não configurado',
 
@@ -48,20 +35,6 @@ export const driveSyncCopy = {
     'Nenhum outro dado da sua conta Google é acessado ou enviado. O token de acesso obtido na conexão ' +
     'fica apenas na memória desta aba — não é salvo no navegador, então será preciso conectar novamente ' +
     'ao recarregar a página.',
-
-  /**
-   * Data-disclosure moment, part 2 (issue #41): explains what happens
-   * *without* Drive sync (the default, always-on state) and states plainly
-   * that there is no server/backend or analytics collecting data anywhere
-   * in this app. Shown at the top of the panel regardless of connection
-   * state, since it's true either way. See `docs/data-and-privacy.md` for
-   * the full write-up this summarizes.
-   */
-  localStorageNote:
-    'Por padrão, seus projetos ficam salvos apenas neste navegador (localStorage) — não existe servidor ' +
-    'nem coleta de dados neste app. Se você limpar os dados do site ou trocar de navegador/dispositivo, ' +
-    'o conteúdo local é perdido, pois não há cópia automática em nenhum lugar. Ative a sincronização com ' +
-    'o Google Drive abaixo se quiser um backup fora deste navegador.',
 
   connectButtonLabel: 'Conectar com Google',
   connectButtonDescription: 'Autorizar acesso ao Drive',
