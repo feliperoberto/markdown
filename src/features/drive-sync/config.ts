@@ -9,21 +9,22 @@
  * this Client ID is the actual sensitive credential, and it is
  * deliberately kept in memory only — see `google-drive-provider.ts`.
  */
+import { localStorageAdapter } from '@/lib/storage-adapter'
 
 const CLIENT_ID_STORAGE_KEY = 'driveClientId'
 
 export const PLACEHOLDER_CLIENT_ID = 'SEU_CLIENT_ID_AQUI.apps.googleusercontent.com'
 
 export function getStoredClientId(): string {
-  return localStorage.getItem(CLIENT_ID_STORAGE_KEY) || PLACEHOLDER_CLIENT_ID
+  return localStorageAdapter.get(CLIENT_ID_STORAGE_KEY) || PLACEHOLDER_CLIENT_ID
 }
 
 export function setStoredClientId(clientId: string): void {
-  localStorage.setItem(CLIENT_ID_STORAGE_KEY, clientId)
+  localStorageAdapter.set(CLIENT_ID_STORAGE_KEY, clientId)
 }
 
 export function clearStoredClientId(): void {
-  localStorage.removeItem(CLIENT_ID_STORAGE_KEY)
+  localStorageAdapter.remove(CLIENT_ID_STORAGE_KEY)
 }
 
 export function isPlaceholderClientId(clientId: string): boolean {

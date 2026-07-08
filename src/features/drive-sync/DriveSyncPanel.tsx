@@ -1,10 +1,11 @@
 import type { JSX } from 'preact'
-import { useMemo, useRef, useState } from 'preact/hooks'
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { Button, IconButton, Modal, useToast } from '@/components'
 import { useOnlineStatus } from '@/lib/useOnlineStatus'
 import { GoogleDriveSyncProvider } from './google-drive-provider'
 import type { DriveSyncDotStatus } from './google-drive-provider'
 import { driveSyncCopy } from './copy'
+import { formatLastSynced } from './formatLastSynced'
 import {
   clearStoredClientId,
   getStoredClientId,
@@ -38,14 +39,26 @@ export function DriveSyncPanel({ getSnapshot, onImported }: DriveSyncPanelProps)
   const [busy, setBusy] = useState(false)
   const isOnline = useOnlineStatus()
 
+  // Always dereferenced fresh from the provider's onNotify callback, so
+  // showToast's identity never needs to be a useMemo dependency below.
+  // Previously the provider was recreated whenever showToast changed
+  // (harmless today only because Toast.tsx happens to return a stable
+  // reference) — a provider rebuild mid-session would orphan the OLD
+  // instance's running auto-sync setInterval with no way to stop it from
+  // the UI, since providerRef would only ever point at the new instance.
+  const showToastRef = useRef(showToast)
+  showToastRef.current = showToast
+
+  // Created exactly once for the component's lifetime — no dependency
+  // that could ever cause a rebuild.
   const provider = useMemo(
     () =>
       new GoogleDriveSyncProvider({
         onStatusChange: setStatus,
         onUserResolved: setUser,
-        onNotify: (message, kind) => showToast(message, kind),
+        onNotify: (message, kind) => showToastRef.current(message, kind),
       }),
-    [showToast],
+    [],
   )
   const providerRef = useRef(provider)
   providerRef.current = provider
@@ -56,23 +69,44 @@ export function DriveSyncPanel({ getSnapshot, onImported }: DriveSyncPanelProps)
   const getSnapshotRef = useRef(getSnapshot)
   getSnapshotRef.current = getSnapshot
 
+  // Stops the auto-sync polling loop (and revokes the token) if this
+  // panel ever unmounts while connected. It never unmounts in the
+  // current app shell (always rendered in the header), so this was
+  // previously a latent-only gap — but the interval otherwise runs
+  // forever with no lifecycle tied to the component that started it.
+  useEffect(() => {
+    return () => providerRef.current.disconnect()
+  }, [])
+
   // Derived from the PERSISTED client ID (what `connect()` actually
   // reads), not the live/unsaved input — see Fix 5.
   const [storedClientId, setStoredClientIdState] = useState(() => getStoredClientId())
   const configured = isClientIdConfigured(storedClientId)
 
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(
+    () => providerRef.current.getStatus().lastSyncedAt,
+  )
+
   function handleSaveClientId(event: Event) {
     event.preventDefault()
     const trimmed = clientId.trim()
+    if (!trimmed) {
+      // Prototype parity: an empty/whitespace Client ID was rejected
+      // rather than silently persisted with a success toast, which left
+      // Connect disabled with no explanation of why.
+      showToast(driveSyncCopy.clientIdEmptyWarning, 'warning')
+      return
+    }
     setStoredClientId(trimmed)
     setStoredClientIdState(trimmed)
-    showToast('Client ID salvo', 'success')
+    showToast(driveSyncCopy.clientIdSavedToast, 'success')
   }
 
   function handleClearClientId() {
     clearStoredClientId()
     setClientIdInput(getStoredClientId())
     setStoredClientIdState(getStoredClientId())
+    showToast(driveSyncCopy.clientIdClearedToast, 'success')
   }
 
   async function handleConnect() {
@@ -107,6 +141,7 @@ export function DriveSyncPanel({ getSnapshot, onImported }: DriveSyncPanelProps)
     setBusy(true)
     try {
       await providerRef.current.sync(getSnapshot())
+      setLastSyncedAt(providerRef.current.getStatus().lastSyncedAt)
     } catch {
       // onNotify already surfaced the error as a toast.
     } finally {
@@ -123,7 +158,8 @@ export function DriveSyncPanel({ getSnapshot, onImported }: DriveSyncPanelProps)
     try {
       const projects = await providerRef.current.importFromDrive()
       onImported(projects)
-      showToast('Projetos restaurados do Drive', 'success')
+      const count = Object.keys(projects).length
+      showToast(`📥 ${count} projeto(s) restaurado(s)`, 'success')
     } catch (error) {
       showToast(`Erro ao restaurar: ${(error as Error).message}`, 'error')
     } finally {
@@ -177,6 +213,13 @@ export function DriveSyncPanel({ getSnapshot, onImported }: DriveSyncPanelProps)
         </form>
 
         <p>{user ? `Conectado como ${user}` : driveSyncCopy.notConnectedStatus}</p>
+        {connected && (
+          <p class={styles.disclosureNote}>
+            {formatLastSynced(lastSyncedAt)
+              ? `🕐 Última sincronização: ${formatLastSynced(lastSyncedAt)}`
+              : driveSyncCopy.neverSyncedStatus}
+          </p>
+        )}
         {!connected && <p class={styles.disclosureNote}>{driveSyncCopy.dataDisclosure}</p>}
 
         <div>

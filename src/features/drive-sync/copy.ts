@@ -26,6 +26,10 @@ export const driveSyncCopy = {
   configuredStatus: '✅ Configurado',
   notConfiguredStatus: '⚠️ Não configurado',
 
+  clientIdEmptyWarning: 'Client ID não pode estar vazio',
+  clientIdSavedToast: '✅ Configuração salva',
+  clientIdClearedToast: 'Configuração restaurada',
+
   helpText:
     'Para sincronizar com o Drive, crie um projeto no Google Cloud Console, ative a Drive API e gere credenciais OAuth.',
 
