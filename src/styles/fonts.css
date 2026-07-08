@@ -1,0 +1,32 @@
+/**
+ * Self-hosted fonts (bundled, not loaded from Google Fonts).
+ *
+ * The prototype loaded these 4 families from fonts.googleapis.com via a
+ * <link>. The app's CSP is `font-src 'self'` (no external font origin
+ * allowed), so they are bundled locally via @fontsource and served from
+ * this origin — this also means they precache for offline use (matched
+ * by the service worker's woff/woff2 glob).
+ *
+ * Weights/styles match what the prototype's @import actually requested:
+ *   Caveat:wght@400;700
+ *   Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600
+ *   Lora:ital,wght@0,400;0,700;1,400
+ *   Courier+Prime:ital,wght@0,400;0,700;1,400
+ */
+@import '@fontsource/caveat/400.css';
+@import '@fontsource/caveat/700.css';
+
+@import '@fontsource/fraunces/400.css';
+@import '@fontsource/fraunces/400-italic.css';
+@import '@fontsource/fraunces/500.css';
+@import '@fontsource/fraunces/500-italic.css';
+@import '@fontsource/fraunces/600.css';
+@import '@fontsource/fraunces/600-italic.css';
+
+@import '@fontsource/lora/400.css';
+@import '@fontsource/lora/400-italic.css';
+@import '@fontsource/lora/700.css';
+
+@import '@fontsource/courier-prime/400.css';
+@import '@fontsource/courier-prime/400-italic.css';
+@import '@fontsource/courier-prime/700.css';

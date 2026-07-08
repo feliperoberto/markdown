@@ -12,14 +12,33 @@
       - script-src: 'self' plus accounts.google.com, the only external
         script origin (Google Identity Services, loaded dynamically by
         src/features/drive-sync/google-identity.ts).
-      - connect-src: 'self' plus www.googleapis.com, used for all Drive API
-        calls and the OAuth userinfo endpoint (see
-        src/features/drive-sync/google-drive-provider.ts). No other Google
-        origin (e.g. oauth2.googleapis.com) is contacted by this app.
-      - style-src/font-src: 'self' only — the app does not load Google
-        Fonts or any other external stylesheet/font (see vite.config.ts).
-      - No inline <script>/<style> tags exist in this file, and none are
-        injected dynamically, so 'unsafe-inline' is intentionally omitted.
+      - connect-src: 'self', www.googleapis.com (Drive API + OAuth userinfo,
+        see src/features/drive-sync/google-drive-provider.ts), and
+        accounts.google.com (GIS's own fetch/XHR traffic during the token
+        flow — script-src alone does not cover requests the loaded script
+        makes back to its own origin).
+      - frame-src: accounts.google.com — GIS's token flow uses a hidden
+        iframe on its own origin for silent re-auth
+        (ensureFreshAccessToken); without this the interactive popup still
+        opens (it's a separate top-level window, not governed by
+        frame-src), but silent token refresh is blocked.
+      - form-action: 'self' — DOMPurify's default sanitize config keeps
+        <form>/<input>, so without this a hostile markdown document (a
+        shared file or a tampered Drive backup) could render a working
+        phishing form that posts to an attacker-controlled origin from
+        inside the preview pane.
+      - img-src: 'self' https: data: — user markdown may legitimately
+        embed remote images (![](https://...)); restricting to 'self'
+        would silently break every such embed. (Tracking-pixel-style
+        images are an accepted tradeoff of allowing this at all.)
+      - style-src/font-src: 'self' only — fonts are bundled locally
+        (src/styles/fonts.css, self-hosted via @fontsource) rather than
+        loaded from Google Fonts, so no external font-src grant is needed.
+      - No inline <script>/<style> tags exist in this file. The service
+        worker registration the build injects (vite-plugin-pwa,
+        injectRegister: 'auto') is an EXTERNAL script (registerSW.js),
+        allowed by script-src 'self' — not inline — so 'unsafe-inline' is
+        still intentionally omitted.
         (User markdown is rendered via DOMPurify-sanitized HTML; any
         `style="..."` attribute it might let through will simply be
         ignored by the browser under this policy rather than tightened
@@ -28,7 +47,7 @@
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' https://accounts.google.com; connect-src 'self' https://www.googleapis.com; style-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none';"
+      content="default-src 'self'; script-src 'self' https://accounts.google.com; connect-src 'self' https://www.googleapis.com https://accounts.google.com; frame-src https://accounts.google.com; img-src 'self' https: data:; style-src 'self'; font-src 'self'; form-action 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none';"
     />
     <!--
       iOS/iPadOS Safari has no `beforeinstallprompt` and relies on these

@@ -6,6 +6,7 @@ import { ImportExportToolbar } from '@/features/import-export'
 import type { BatchSelectionEntry } from '@/features/import-export'
 import { DriveSyncPanel } from '@/features/drive-sync'
 import { PwaInstallPrompt } from '@/features/pwa-install'
+import { IconButton } from '@/components'
 
 // Shell wiring together the extracted projects/files sidebar (#19), the
 // editor/preview pane (#18), the import/export toolbar (#20), the
@@ -32,6 +33,12 @@ export function App(): JSX.Element {
     ReadonlyArray<{ projectName: string; fileName: string }>
   >([])
 
+  // Mobile sidebar drawer (issue: the sidebar had no way to dismiss on
+  // narrow viewports). Desktop CSS ignores this class entirely (the
+  // `.sidebar-hidden` transform only applies inside the @media(max-width:
+  // 768px) block in global.css), so this is a no-op above that breakpoint.
+  const [sidebarHiddenOnMobile, setSidebarHiddenOnMobile] = useState(true)
+
   const activeContent =
     currentProject && currentFile ? (projects[currentProject]?.[currentFile]?.content ?? '') : ''
 
@@ -55,6 +62,13 @@ export function App(): JSX.Element {
   return (
     <div className="app-shell">
       <header className="app-toolbar">
+        <IconButton
+          icon="☰"
+          label="Abrir menu de projetos"
+          ariaExpanded={!sidebarHiddenOnMobile}
+          ariaControls="projectsSidebar"
+          onClick={() => setSidebarHiddenOnMobile((hidden) => !hidden)}
+        />
         <ImportExportToolbar
           onImport={importProjects}
           currentFile={currentFileEntry}
@@ -81,6 +95,7 @@ export function App(): JSX.Element {
           onRenameProject={renameProject}
           onDeleteProject={deleteProject}
           onSelectionChange={setBatchSelection}
+          mobileHidden={sidebarHiddenOnMobile}
         />
         <main className="app-main">
           {currentProject && currentFile ? (

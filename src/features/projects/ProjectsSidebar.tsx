@@ -20,6 +20,10 @@ export interface ProjectsSidebarProps {
   // checkbox set changes, so a consumer (e.g. the batch download area)
   // can react without this component owning that UI.
   onSelectionChange?: (selection: ReadonlyArray<{ projectName: string; fileName: string }>) => void
+  // Mobile drawer state (issue: sidebar has no way to dismiss on narrow
+  // viewports without this). Undefined/false on desktop, where the
+  // sidebar is always visible inline regardless of this prop.
+  mobileHidden?: boolean
 }
 
 // Renders the full project/file sidebar tree. Owns only tree
@@ -38,6 +42,7 @@ export function ProjectsSidebar({
   onRenameProject,
   onDeleteProject,
   onSelectionChange,
+  mobileHidden = false,
 }: ProjectsSidebarProps): JSX.Element {
   const [selectedByProject, setSelectedByProject] = useState<Record<string, Set<string>>>({})
   const projectNames = Object.keys(projects)
@@ -75,7 +80,11 @@ export function ProjectsSidebar({
   }
 
   return (
-    <nav className="projects-sidebar" aria-label="Projetos e arquivos">
+    <nav
+      className={`projects-sidebar${mobileHidden ? ' sidebar-hidden' : ''}`}
+      id="projectsSidebar"
+      aria-label="Projetos e arquivos"
+    >
       <Button variant="primary" onClick={handleNewProject}>
         Novo projeto
       </Button>
