@@ -60,10 +60,10 @@ body {
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 1rem;
   position: relative;
   z-index: 50;
-  flex-wrap: wrap;
 }
 
 .app-toolbar::after {

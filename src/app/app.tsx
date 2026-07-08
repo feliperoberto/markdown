@@ -278,14 +278,12 @@ export function App(): JSX.Element {
             </div>
             {showBatchArea ? (
               <BatchDownloadArea entries={batchSelectionEntries} onDownload={handleDownloadBatch} />
-            ) : currentProject && currentFile ? (
+            ) : (
               <EditorFeature
                 content={activeContent}
                 onContentChange={handleContentChange}
                 onCopy={handleCopy}
               />
-            ) : (
-              <p>Nenhum arquivo selecionado</p>
             )}
           </main>
         </div>
