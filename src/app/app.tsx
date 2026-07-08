@@ -11,6 +11,7 @@ import {
 import type { BatchSelectionEntry } from '@/features/import-export'
 import { DriveSyncPanel } from '@/features/drive-sync'
 import { PwaInstallPrompt } from '@/features/pwa-install'
+import { ThemeToggle } from '@/features/theme'
 import { IconButton, useToast } from '@/components'
 
 function downloadBlob(blob: Blob, fileName: string): void {
@@ -137,6 +138,7 @@ export function App(): JSX.Element {
           batchSelection={batchSelectionEntries}
         />
         <DriveSyncPanel getSnapshot={() => ({ projects })} onImported={restoreProjects} />
+        <ThemeToggle />
         <PwaInstallPrompt />
       </header>
       <div className="app-body">
