@@ -1,9 +1,8 @@
 import type { JSX } from 'preact'
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { ProjectGroup } from './ProjectGroup'
 import { showPromptDialog } from './dialogs'
 import type { ProjectsState } from './types'
-import { Button } from '@/components'
 
 export interface ProjectsSidebarProps {
   projects: ProjectsState
@@ -30,6 +29,11 @@ export interface ProjectsSidebarProps {
   // a caller opts in.
   onExportProject?: (projectName: string) => void
   onUploadFile?: (projectName: string, file: File) => void
+  onUploadMultipleFiles?: (projectName: string, files: File[]) => void
+  /** Sidebar-footer "📥 Importar" (ZIP) — same taxonomy reason as above. */
+  onImportZip?: (file: File) => void
+  /** Sidebar-footer "⚙️ Config" — opens the Drive/Config modal (app.tsx owns it). */
+  onOpenConfig?: () => void
 }
 
 // Renders the full project/file sidebar tree. Owns only tree
@@ -51,9 +55,13 @@ export function ProjectsSidebar({
   mobileHidden = false,
   onExportProject,
   onUploadFile,
+  onUploadMultipleFiles,
+  onImportZip,
+  onOpenConfig,
 }: ProjectsSidebarProps): JSX.Element {
   const [selectedByProject, setSelectedByProject] = useState<Record<string, Set<string>>>({})
   const projectNames = Object.keys(projects)
+  const importZipInputRef = useRef<HTMLInputElement>(null)
 
   // Prunes stale selection entries whenever the project/file set changes
   // (rename, delete, import, restore). Previously a renamed/deleted file
@@ -121,43 +129,110 @@ export function ProjectsSidebar({
     if (name) onCreateProject(name)
   }
 
+  function handleImportZipClick(e: MouseEvent) {
+    e.stopPropagation()
+    importZipInputRef.current?.click()
+  }
+
+  function handleImportZipFileSelected(event: JSX.TargetedEvent<HTMLInputElement>) {
+    const file = (event.target as HTMLInputElement).files?.[0]
+    ;(event.target as HTMLInputElement).value = ''
+    if (file) onImportZip?.(file)
+  }
+
   return (
     <nav
       className={`projects-sidebar${mobileHidden ? ' sidebar-hidden' : ''}`}
       id="projectsSidebar"
       aria-label="Projetos e arquivos"
     >
-      <span className="sidebar-title">Projetos</span>
-      <Button variant="primary" onClick={handleNewProject}>
-        Novo projeto
-      </Button>
-
-      <div className="projects-list" id="projectsList">
-        {projectNames.length === 0 ? (
-          <div className="projects-list-empty">Nenhum projeto ainda. Marque o primeiro.</div>
-        ) : (
-          projectNames.map((projectName) => (
-            <ProjectGroup
-              key={projectName}
-              projectName={projectName}
-              files={projects[projectName]!}
-              isActiveProject={currentProject === projectName}
-              currentFile={currentProject === projectName ? currentFile : null}
-              selectedFiles={selectedByProject[projectName] ?? new Set()}
-              projectNames={projectNames}
-              onSelectFile={onSelectFile}
-              onToggleSelected={toggleSelected}
-              onCreateFile={onCreateFile}
-              onRenameFile={onRenameFile}
-              onDeleteFile={onDeleteFile}
-              onRenameProject={onRenameProject}
-              onDeleteProject={onDeleteProject}
-              onExportProject={onExportProject}
-              onUploadFile={onUploadFile}
-            />
-          ))
-        )}
+      <div className="sidebar-header">
+        <span className="sidebar-title" id="sidebarTitle">
+          Projetos
+        </span>
       </div>
+      <div className="sidebar-content">
+        <div
+          className="projects-list"
+          id="projectsList"
+          role="region"
+          aria-labelledby="sidebarTitle"
+        >
+          {projectNames.length === 0 ? (
+            <div className="projects-list-empty">Nenhum projeto ainda. Marque o primeiro.</div>
+          ) : (
+            projectNames.map((projectName) => (
+              <ProjectGroup
+                key={projectName}
+                projectName={projectName}
+                files={projects[projectName]!}
+                isActiveProject={currentProject === projectName}
+                currentFile={currentProject === projectName ? currentFile : null}
+                selectedFiles={selectedByProject[projectName] ?? new Set()}
+                projectNames={projectNames}
+                onSelectFile={onSelectFile}
+                onToggleSelected={toggleSelected}
+                onCreateFile={onCreateFile}
+                onRenameFile={onRenameFile}
+                onDeleteFile={onDeleteFile}
+                onRenameProject={onRenameProject}
+                onDeleteProject={onDeleteProject}
+                onExportProject={onExportProject}
+                onUploadFile={onUploadFile}
+                onUploadMultipleFiles={onUploadMultipleFiles}
+              />
+            ))
+          )}
+        </div>
+
+        <div className="sidebar-footer">
+          <button
+            type="button"
+            className="sidebar-footer-btn"
+            title="Novo projeto"
+            aria-label="Criar novo projeto"
+            onClick={handleNewProject}
+          >
+            <span className="sidebar-footer-icon" aria-hidden="true">
+              ➕
+            </span>
+            <span className="sidebar-footer-label">Novo</span>
+          </button>
+          <button
+            type="button"
+            className="sidebar-footer-btn"
+            title="Importar ZIP"
+            aria-label="Importar projetos de um arquivo ZIP"
+            onClick={handleImportZipClick}
+          >
+            <span className="sidebar-footer-icon" aria-hidden="true">
+              📥
+            </span>
+            <span className="sidebar-footer-label">Importar</span>
+          </button>
+          <button
+            type="button"
+            className="sidebar-footer-btn"
+            title="Configurações"
+            aria-label="Abrir configurações"
+            aria-haspopup="dialog"
+            onClick={onOpenConfig}
+          >
+            <span className="sidebar-footer-icon" aria-hidden="true">
+              ⚙️
+            </span>
+            <span className="sidebar-footer-label">Config</span>
+          </button>
+        </div>
+      </div>
+
+      <input
+        ref={importZipInputRef}
+        type="file"
+        accept=".zip"
+        hidden
+        onChange={handleImportZipFileSelected}
+      />
     </nav>
   )
 }

@@ -20,6 +20,14 @@ export interface DriveSyncPanelProps {
   getSnapshot: () => ProjectsSnapshot
   /** Called with a Drive backup's `projects` payload after a successful restore. */
   onImported: (projects: Record<string, unknown>) => void
+  /**
+   * Lets a second entry point (the sidebar's prototype-matching "⚙️
+   * Config" footer button) open the SAME modal instance instead of
+   * spawning a second one with its own disconnected state. Uncontrolled
+   * (manages its own open/close) when omitted — the header's own cloud
+   * icon trigger doesn't need this.
+   */
+  openSignal?: number
 }
 
 const TITLE_ID = 'drive-sync-panel-title'
@@ -30,7 +38,11 @@ const TITLE_ID = 'drive-sync-panel-title'
  * shared `Modal`/`Toast`/`Button` components — the sync algorithm itself
  * is untouched.
  */
-export function DriveSyncPanel({ getSnapshot, onImported }: DriveSyncPanelProps): JSX.Element {
+export function DriveSyncPanel({
+  getSnapshot,
+  onImported,
+  openSignal,
+}: DriveSyncPanelProps): JSX.Element {
   const showToast = useToast()
   const [open, setOpen] = useState(false)
   const [status, setStatus] = useState<DriveSyncDotStatus>('offline')
@@ -77,6 +89,14 @@ export function DriveSyncPanel({ getSnapshot, onImported }: DriveSyncPanelProps)
   useEffect(() => {
     return () => providerRef.current.disconnect()
   }, [])
+
+  // Any change to openSignal's value (a simple incrementing counter) opens
+  // the modal — this is a "fire an event" signal, not a value to sync
+  // against, so it intentionally does NOT compare against a previous
+  // value; effect deps already guarantee it only re-runs on an actual change.
+  useEffect(() => {
+    if (openSignal !== undefined) setOpen(true)
+  }, [openSignal])
 
   // Derived from the PERSISTED client ID (what `connect()` actually
   // reads), not the live/unsaved input — see Fix 5.

@@ -12,3 +12,6 @@ export type { CheckboxProps } from './Checkbox'
 
 export { Breadcrumbs } from './Breadcrumbs'
 export type { BreadcrumbsProps } from './Breadcrumbs'
+
+export { BatchDownloadArea } from './BatchDownloadArea'
+export type { BatchDownloadAreaProps, BatchDownloadAreaEntry } from './BatchDownloadArea'

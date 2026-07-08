@@ -73,7 +73,7 @@ describe('ProjectsSidebar + useProjects', () => {
 
     // Create a project.
     vi.mocked(showPromptDialog).mockResolvedValueOnce('My Project')
-    fireEvent.click(screen.getByRole('button', { name: 'Novo projeto' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Criar novo projeto' }))
     expect(await screen.findByText('My Project')).not.toBeNull()
 
     // Open the project's "..." menu and create a file inside it. Menu

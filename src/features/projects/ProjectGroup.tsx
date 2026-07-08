@@ -22,6 +22,14 @@ export interface ProjectGroupProps {
   onDeleteProject: (projectName: string) => void
   onExportProject?: (projectName: string) => void
   onUploadFile?: (projectName: string, file: File) => void
+  /**
+   * Import several .md files into this project at once. Not in the
+   * prototype (its per-project menu only has single-file Upload) — kept
+   * as a menu item here rather than hidden entirely, per explicit
+   * discussion, since removing multi-file import would be a real
+   * capability regression, not a fix.
+   */
+  onUploadMultipleFiles?: (projectName: string, files: File[]) => void
 }
 
 // One collapsible project entry in the sidebar tree: header (name, expand
@@ -44,6 +52,7 @@ export const ProjectGroup = memo(function ProjectGroup({
   onDeleteProject,
   onExportProject,
   onUploadFile,
+  onUploadMultipleFiles,
 }: ProjectGroupProps): JSX.Element {
   const [isExpanded, setIsExpanded] = useState(true)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -56,6 +65,7 @@ export const ProjectGroup = memo(function ProjectGroup({
   const menuButtonId = `project-menu-button-${projectName}`
   const menuRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const multiFileInputRef = useRef<HTMLInputElement>(null)
 
   function toggleExpanded() {
     setIsExpanded((expanded) => !expanded)
@@ -195,6 +205,18 @@ export const ProjectGroup = memo(function ProjectGroup({
     if (file) onUploadFile?.(projectName, file)
   }
 
+  function handleUploadMultipleClick(e: MouseEvent) {
+    e.stopPropagation()
+    setIsMenuOpen(false)
+    multiFileInputRef.current?.click()
+  }
+
+  function handleMultipleFilesSelected(event: JSX.TargetedEvent<HTMLInputElement>) {
+    const files = Array.from((event.target as HTMLInputElement).files ?? [])
+    ;(event.target as HTMLInputElement).value = ''
+    if (files.length > 0) onUploadMultipleFiles?.(projectName, files)
+  }
+
   // Double-click-to-rename shortcut on the project header, matching the
   // prototype (the ⋮ menu's "Renomear projeto" remains available too).
   function handleHeaderDoubleClick(e: MouseEvent) {
@@ -251,6 +273,16 @@ export const ProjectGroup = memo(function ProjectGroup({
               📤 Upload
             </button>
           )}
+          {onUploadMultipleFiles && (
+            <button
+              type="button"
+              className="dropdown-item"
+              role="menuitem"
+              onClick={handleUploadMultipleClick}
+            >
+              📤 Importar vários arquivos
+            </button>
+          )}
           <button
             type="button"
             className="dropdown-item"
@@ -287,6 +319,17 @@ export const ProjectGroup = memo(function ProjectGroup({
           accept=".md,text/markdown"
           hidden
           onChange={handleFileSelected}
+        />
+      )}
+
+      {onUploadMultipleFiles && (
+        <input
+          ref={multiFileInputRef}
+          type="file"
+          accept=".md,text/markdown"
+          multiple
+          hidden
+          onChange={handleMultipleFilesSelected}
         />
       )}
 

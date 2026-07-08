@@ -165,13 +165,19 @@ body {
   transition: transform var(--transition);
   position: relative;
   z-index: 100;
-  padding: 0.75rem;
-  gap: 0.75rem;
 }
 
-/* Section label above the project list (issue: the sidebar had no
-   visible "PROJETOS" heading at all — only an aria-label on the <nav>
-   for screen readers). */
+/* Section header (title only) above the project list, matching the
+   prototype's .sidebar-header/.sidebar-content split — previously this
+   component had no visible "PROJETOS" heading at all (only an
+   aria-label on the <nav> for screen readers) and no .sidebar-content
+   wrapper, so .sidebar-footer had nowhere correct to sit flush at the
+   bottom with its own border-top. */
+.sidebar-header {
+  padding: 1rem 1rem 0.85rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 .sidebar-title {
   font-family: var(--mono);
   font-size: 9px;
@@ -181,9 +187,17 @@ body {
   letter-spacing: 0.28em;
 }
 
+.sidebar-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .projects-list {
   flex: 1;
   overflow-y: auto;
+  padding: 0.75rem;
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
@@ -361,10 +375,66 @@ body {
   background: var(--c-coral);
 }
 
-/* Sidebar footer */
+/* Sidebar footer (issue: "Novo projeto" had been promoted to a
+   full-width primary button at the top of the sidebar and the
+   Importar/Config/Instalar actions relocated elsewhere, replacing this
+   4-button row entirely — restored to match the prototype exactly). */
 .sidebar-footer {
+  padding: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   gap: 0.5rem;
+}
+
+.sidebar-footer-btn {
+  flex: 1;
+  padding: 0.65rem 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background-color: rgba(255, 255, 255, 0.02);
+  color: var(--cream);
+  cursor: pointer;
+  transition: all var(--transition);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 56px;
+}
+
+.sidebar-footer-btn:active {
+  background-color: rgba(255, 255, 255, 0.06);
+  border-color: var(--accent);
+}
+
+.sidebar-footer-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.sidebar-footer-icon {
+  font-size: 1.1rem;
+}
+
+.sidebar-footer-label {
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cream-soft);
+  text-align: center;
+  line-height: 1;
+}
+
+@media (max-width: 380px) {
+  .sidebar-footer-label {
+    display: none;
+  }
+
+  .sidebar-footer-btn {
+    min-height: 44px;
+  }
 }
 
 /* ============================================================
@@ -660,6 +730,96 @@ main,
   background: var(--code-bg);
   font-family: var(--serif-display);
   font-weight: 600;
+}
+
+/* ============================================================
+   BATCH DOWNLOAD (third pane, replaces editor/preview when ≥2
+   files are checked for a multi-file ZIP export)
+   ============================================================ */
+.batch-download-area {
+  flex: 1;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+  gap: 0.5rem;
+}
+
+.batch-download-area.visible {
+  display: flex;
+}
+
+.batch-icon {
+  font-size: 3rem;
+  margin-bottom: 0.5rem;
+}
+
+.batch-title {
+  font-family: var(--hand);
+  font-size: 1.8rem;
+  color: var(--cream);
+}
+
+.batch-description {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cream-soft);
+  margin-bottom: 1rem;
+}
+
+.batch-files-list {
+  width: 100%;
+  max-width: 320px;
+  margin-bottom: 1rem;
+  text-align: left;
+}
+
+.batch-file-item {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--cream);
+  padding: 0.5rem 0.7rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 7px;
+  margin-bottom: 0.4rem;
+}
+
+.batch-file-project {
+  font-size: 8px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cream-soft);
+  margin-bottom: 0.15rem;
+}
+
+.batch-file-name {
+  color: var(--cream);
+}
+
+.btn-download-batch {
+  padding: 0.7rem 1.5rem;
+  background: var(--accent);
+  color: var(--ground);
+  border: none;
+  border-radius: 6px;
+  font-family: var(--body);
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.btn-download-batch:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn-download-batch:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 /* ============================================================

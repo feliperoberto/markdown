@@ -13,23 +13,26 @@ test.describe('export/import golden path', () => {
     const fileName = `readme-${Date.now()}`
     const content = '# Exported note\n\nRound-trip content check.'
 
-    await page.getByRole('button', { name: 'Novo projeto' }).click()
+    await page.getByRole('button', { name: 'Criar novo projeto' }).click()
     await page.getByLabel('Nome do novo projeto').fill(projectName)
-    await page.getByRole('button', { name: 'Criar' }).click()
+    await page.getByRole('button', { name: 'Criar', exact: true }).click()
 
     await page
       .getByRole('button', { name: `Mais opções do projeto ${projectName}`, exact: true })
       .click()
     await page.getByRole('menuitem', { name: /Novo arquivo/ }).click()
     await page.getByLabel('Nome do arquivo').fill(fileName)
-    await page.getByRole('button', { name: 'Criar' }).click()
+    await page.getByRole('button', { name: 'Criar', exact: true }).click()
 
     // Creating a file doesn't auto-select it, so open it explicitly.
     await page.getByText(fileName).click()
     await page.locator('#editor').fill(content)
 
     const downloadPromise = page.waitForEvent('download')
-    await page.getByRole('button', { name: 'Exportar projeto' }).click()
+    await page
+      .getByRole('button', { name: `Mais opções do projeto ${projectName}`, exact: true })
+      .click()
+    await page.getByRole('menuitem', { name: /Baixar projeto/ }).click()
     const download = await downloadPromise
     const zipPath = await download.path()
     expect(zipPath).toBeTruthy()
@@ -44,7 +47,7 @@ test.describe('export/import golden path', () => {
     await page.getByRole('button', { name: 'Excluir', exact: true }).click()
     await expect(page.getByText(projectName)).toHaveCount(0)
 
-    await page.getByRole('button', { name: 'Importar ZIP' }).click()
+    await page.getByRole('button', { name: 'Importar projetos de um arquivo ZIP' }).click()
     await page.locator('input[type="file"][accept=".zip"]').setInputFiles(zipPath as string)
 
     // Project groups render expanded by default, so the re-imported

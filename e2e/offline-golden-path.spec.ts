@@ -21,16 +21,16 @@ test.describe('offline golden path', () => {
     const projectName = `Offline Project ${Date.now()}`
     const fileName = `offline-${Date.now()}`
 
-    await page.getByRole('button', { name: 'Novo projeto' }).click()
+    await page.getByRole('button', { name: 'Criar novo projeto' }).click()
     await page.getByLabel('Nome do novo projeto').fill(projectName)
-    await page.getByRole('button', { name: 'Criar' }).click()
+    await page.getByRole('button', { name: 'Criar', exact: true }).click()
 
     await page
       .getByRole('button', { name: `Mais opções do projeto ${projectName}`, exact: true })
       .click()
     await page.getByRole('menuitem', { name: /Novo arquivo/ }).click()
     await page.getByLabel('Nome do arquivo').fill(fileName)
-    await page.getByRole('button', { name: 'Criar' }).click()
+    await page.getByRole('button', { name: 'Criar', exact: true }).click()
 
     // Creating a file doesn't auto-select it, so open it explicitly (while
     // still online — this is just navigating to the file, not the part

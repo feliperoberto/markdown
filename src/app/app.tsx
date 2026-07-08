@@ -3,10 +3,14 @@ import { useEffect, useState } from 'preact/hooks'
 import { EditorFeature, FontSizeButton, useEditorFontSize } from '@/features/editor'
 import { ProjectsSidebar, useProjects } from '@/features/projects'
 import {
-  ImportExportToolbar,
   importFile,
+  importZip,
+  exportFile,
+  exportFileName,
   exportProject,
   exportProjectFileName,
+  exportBatch,
+  exportBatchFileName,
 } from '@/features/import-export'
 import type { BatchSelectionEntry } from '@/features/import-export'
 import { DriveSyncPanel } from '@/features/drive-sync'
@@ -14,7 +18,7 @@ import { PwaInstallPrompt } from '@/features/pwa-install'
 import { ThemeToggle } from '@/features/theme'
 import { FullscreenToggle } from '@/features/fullscreen'
 import { SplashScreen } from '@/features/onboarding'
-import { Breadcrumbs, IconButton, useToast } from '@/components'
+import { BatchDownloadArea, Breadcrumbs, IconButton, useToast } from '@/components'
 import { copyToClipboard } from '@/lib/copyToClipboard'
 
 function downloadBlob(blob: Blob, fileName: string): void {
@@ -50,6 +54,15 @@ export function App(): JSX.Element {
   const [batchSelection, setBatchSelection] = useState<
     ReadonlyArray<{ projectName: string; fileName: string }>
   >([])
+
+  // Incrementing this opens the Drive/Config modal from a second entry
+  // point (the sidebar's "⚙️ Config" footer button, matching the
+  // prototype's separate gear icon) without spawning a second
+  // DriveSyncPanel instance with its own disconnected state. Starts
+  // `undefined` (not 0) — DriveSyncPanel treats "any defined value" as
+  // an open request, so starting at a defined number would pop the
+  // modal open immediately on mount.
+  const [driveConfigOpenSignal, setDriveConfigOpenSignal] = useState<number | undefined>(undefined)
 
   // Mobile sidebar drawer (issue: the sidebar had no way to dismiss on
   // narrow viewports). Desktop CSS ignores this class entirely (the
@@ -108,7 +121,6 @@ export function App(): JSX.Element {
 
   const currentFileEntry =
     currentProject && currentFile ? (projects[currentProject]?.[currentFile] ?? null) : null
-  const currentProjectFiles = currentProject ? (projects[currentProject] ?? null) : null
 
   // Per-project "Baixar projeto"/"Upload" menu actions (issue: these
   // existed in the prototype's project dropdown but the functions they
@@ -138,12 +150,69 @@ export function App(): JSX.Element {
     }
   }
 
+  // Not in the prototype (its per-project menu only has single-file
+  // Upload) — kept reachable per explicit discussion rather than
+  // removed, since multi-file import is a real capability, not UI noise.
+  const handleUploadMultipleFilesToProject = async (projectName: string, files: File[]) => {
+    let successCount = 0
+    for (const file of files) {
+      try {
+        const entry = await importFile(file)
+        createFile(projectName, entry.name, entry.content)
+        successCount++
+      } catch (error) {
+        showToast(`Erro ao importar "${file.name}": ${(error as Error).message}`, 'error')
+      }
+    }
+    if (successCount > 0) {
+      showToast(`${successCount} arquivo(s) importado(s)`, 'success')
+    }
+  }
+
+  // Sidebar-footer "📥 Importar" (ZIP) — same taxonomy reason as above.
+  const handleImportZip = async (file: File) => {
+    try {
+      const patch = await importZip(file)
+      importProjects(patch)
+      const fileCount = Object.values(patch).reduce(
+        (total, files) => total + Object.keys(files).length,
+        0,
+      )
+      showToast(`${fileCount} arquivo(s) importado(s) do ZIP`, 'success')
+    } catch (error) {
+      showToast(`Erro ao importar ZIP: ${(error as Error).message}`, 'error')
+    }
+  }
+
+  // Per-file download icon next to the breadcrumb (matching the
+  // prototype's .btn-download) — replaces the removed header toolbar's
+  // "Exportar arquivo" button, which had no equivalent in the prototype.
+  const handleDownloadCurrentFile = () => {
+    if (!currentFileEntry) return
+    const blob = exportFile(currentFileEntry)
+    downloadBlob(blob, exportFileName(currentFileEntry))
+    showToast('📥 Baixado', 'success')
+  }
+
+  const handleDownloadBatch = async () => {
+    if (batchSelectionEntries.length === 0) return
+    try {
+      const blob = await exportBatch(batchSelectionEntries)
+      downloadBlob(blob, exportBatchFileName())
+      showToast('📦 Baixado', 'success')
+    } catch (error) {
+      showToast(`Erro ao criar ZIP: ${(error as Error).message}`, 'error')
+    }
+  }
+
   const batchSelectionEntries: BatchSelectionEntry[] = batchSelection.flatMap(
     ({ projectName, fileName }) => {
       const file = projects[projectName]?.[fileName]
       return file ? [{ projectName, fileName, file }] : []
     },
   )
+
+  const showBatchArea = batchSelectionEntries.length > 1
 
   return (
     <>
@@ -164,15 +233,12 @@ export function App(): JSX.Element {
               <span className="header-title">Marcar</span>
             </div>
           </div>
-          <ImportExportToolbar
-            onImport={importProjects}
-            currentFile={currentFileEntry}
-            currentProjectName={currentProject}
-            currentProjectFiles={currentProjectFiles}
-            batchSelection={batchSelectionEntries}
-          />
           <div className="header-right">
-            <DriveSyncPanel getSnapshot={() => ({ projects })} onImported={restoreProjects} />
+            <DriveSyncPanel
+              getSnapshot={() => ({ projects })}
+              onImported={restoreProjects}
+              openSignal={driveConfigOpenSignal}
+            />
             <FontSizeButton onCycle={cycleFontSize} />
             <ThemeToggle />
             <FullscreenToggle />
@@ -195,12 +261,24 @@ export function App(): JSX.Element {
             mobileHidden={sidebarHiddenOnMobile}
             onExportProject={handleExportProjectFromMenu}
             onUploadFile={handleUploadFileToProject}
+            onUploadMultipleFiles={handleUploadMultipleFilesToProject}
+            onImportZip={handleImportZip}
+            onOpenConfig={() => setDriveConfigOpenSignal((n) => (n ?? 0) + 1)}
           />
           <main className="app-main">
             <div className="toolbar">
               <Breadcrumbs projectName={currentProject} fileName={currentFile} />
+              <IconButton
+                icon="⬇️"
+                label="Baixar arquivo atual"
+                title="Baixar arquivo"
+                disabled={!currentFileEntry}
+                onClick={handleDownloadCurrentFile}
+              />
             </div>
-            {currentProject && currentFile ? (
+            {showBatchArea ? (
+              <BatchDownloadArea entries={batchSelectionEntries} onDownload={handleDownloadBatch} />
+            ) : currentProject && currentFile ? (
               <EditorFeature
                 content={activeContent}
                 onContentChange={handleContentChange}

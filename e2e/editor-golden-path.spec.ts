@@ -9,9 +9,9 @@ test.describe('editor golden path', () => {
     const projectName = `E2E Project ${Date.now()}`
     const fileName = `notes-${Date.now()}.md`
 
-    await page.getByRole('button', { name: 'Novo projeto' }).click()
+    await page.getByRole('button', { name: 'Criar novo projeto' }).click()
     await page.getByLabel('Nome do novo projeto').fill(projectName)
-    await page.getByRole('button', { name: 'Criar' }).click()
+    await page.getByRole('button', { name: 'Criar', exact: true }).click()
 
     await expect(page.getByText(projectName)).toBeVisible()
 
@@ -20,7 +20,7 @@ test.describe('editor golden path', () => {
       .click()
     await page.getByRole('menuitem', { name: /Novo arquivo/ }).click()
     await page.getByLabel('Nome do arquivo').fill(fileName)
-    await page.getByRole('button', { name: 'Criar' }).click()
+    await page.getByRole('button', { name: 'Criar', exact: true }).click()
 
     // Creating a file doesn't auto-select it, so open it explicitly before
     // expecting the editor pane to be usable.
