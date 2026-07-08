@@ -155,6 +155,7 @@ export function DriveSyncPanel({ getSnapshot, onImported }: DriveSyncPanelProps)
       </span>
       <Modal open={open} onClose={() => setOpen(false)} titleId={TITLE_ID} title="Google Drive">
         {!isOnline && <p class={styles.offlineNotice}>{driveSyncCopy.offlineStatus}</p>}
+        <p class={styles.disclosureNote}>{driveSyncCopy.localStorageNote}</p>
         <form onSubmit={handleSaveClientId}>
           <label htmlFor="drive-client-id">{driveSyncCopy.clientIdLabel}</label>
           <input
