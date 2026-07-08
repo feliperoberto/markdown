@@ -6,7 +6,7 @@ import { ImportExportToolbar } from '@/features/import-export'
 import type { BatchSelectionEntry } from '@/features/import-export'
 import { DriveSyncPanel } from '@/features/drive-sync'
 import { PwaInstallPrompt } from '@/features/pwa-install'
-import { IconButton } from '@/components'
+import { IconButton, useToast } from '@/components'
 
 // Shell wiring together the extracted projects/files sidebar (#19), the
 // editor/preview pane (#18), the import/export toolbar (#20), the
@@ -39,12 +39,30 @@ export function App(): JSX.Element {
   // 768px) block in global.css), so this is a no-op above that breakpoint.
   const [sidebarHiddenOnMobile, setSidebarHiddenOnMobile] = useState(true)
 
+  const showToast = useToast()
+
   const activeContent =
     currentProject && currentFile ? (projects[currentProject]?.[currentFile]?.content ?? '') : ''
 
   const handleContentChange = (content: string) => {
     if (currentProject && currentFile) {
       updateFileContent(currentProject, currentFile, content)
+    }
+  }
+
+  const handleCopy = async () => {
+    if (!activeContent) {
+      showToast('Arquivo vazio', 'warning')
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(activeContent)
+      showToast('📋 Copiado', 'success')
+    } catch (error) {
+      showToast(
+        `Erro ao copiar: ${(error as Error)?.message ?? 'não foi possível copiar'}`,
+        'error',
+      )
     }
   }
 
@@ -76,10 +94,7 @@ export function App(): JSX.Element {
           currentProjectFiles={currentProjectFiles}
           batchSelection={batchSelectionEntries}
         />
-        <DriveSyncPanel
-          getSnapshot={() => ({ projects })}
-          onImported={(imported) => restoreProjects(imported as typeof projects)}
-        />
+        <DriveSyncPanel getSnapshot={() => ({ projects })} onImported={restoreProjects} />
         <PwaInstallPrompt />
       </header>
       <div className="app-body">
@@ -99,7 +114,11 @@ export function App(): JSX.Element {
         />
         <main className="app-main">
           {currentProject && currentFile ? (
-            <EditorFeature content={activeContent} onContentChange={handleContentChange} />
+            <EditorFeature
+              content={activeContent}
+              onContentChange={handleContentChange}
+              onCopy={handleCopy}
+            />
           ) : (
             <p>Nenhum arquivo selecionado</p>
           )}

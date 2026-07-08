@@ -114,6 +114,12 @@ export function updateFileContent(
   }
 }
 
+/**
+ * ZIP-import merge: additive, incoming file wins on a same-key collision.
+ * Matches the legacy prototype's import behavior ("ZIP prevalece em
+ * conflito de arquivo") — an intentional overwrite of a same-named local
+ * file with the freshly-imported one.
+ */
 export function mergeProjects(base: ProjectsState, incoming: ProjectsState): ProjectsState {
   const next: ProjectsState = { ...base }
   for (const [projectName, files] of Object.entries(incoming)) {
@@ -123,11 +129,25 @@ export function mergeProjects(base: ProjectsState, incoming: ProjectsState): Pro
 }
 
 /**
- * Full-state replace, used for "restore from backup" flows (e.g. Drive
- * restore) where the incoming snapshot should reconcile local state, not
- * just layer additively on top of it (unlike `mergeProjects`, which is
- * for ZIP import and must remain additive).
+ * Drive-restore merge: additive, LOCAL file wins on a same-key collision.
+ * Matches the legacy prototype's `driveImport` (`{ ...data.projects,
+ * ...projects }` — local spread last), which always preserved local-only
+ * projects/files and never let a Drive backup silently overwrite local
+ * edits. This is a strict superset of that guarantee: union of all
+ * projects, local wins every file collision, nothing local is ever lost.
+ *
+ * Deliberately NOT a destructive replace — "restore" here means
+ * "reconcile a Drive backup into local state", not "wipe local state and
+ * replace it with the backup". A true destructive replace would need its
+ * own explicit, confirm-gated action; this function doesn't offer one.
  */
-export function replaceProjects(incoming: ProjectsState): ProjectsState {
-  return incoming
+export function mergeRestoredProjects(
+  local: ProjectsState,
+  incoming: ProjectsState,
+): ProjectsState {
+  const next: ProjectsState = { ...incoming }
+  for (const [projectName, files] of Object.entries(local)) {
+    next[projectName] = { ...next[projectName], ...files }
+  }
+  return next
 }

@@ -5,9 +5,30 @@ import {
   migrateStoredProjects,
   type StorageEnvelope,
 } from '@/lib/storage-migrations'
-import type { ProjectsState } from './types'
+import type { ProjectFile, ProjectsState } from './types'
 
 const PROJECTS_STORAGE_KEY = 'projects'
+
+// First-run seed, matching the prototype exactly (`defaultProject`/
+// `defaultFile` in its init block) — a brand-new user with nothing
+// stored got a starter project/file to type into immediately, rather
+// than landing on an empty "Nenhum projeto ainda" sidebar with no
+// obvious next action. Only fires when NOTHING is stored at all
+// (`raw === null`, i.e. genuinely first-ever load) — a user who
+// deliberately deleted every project should see the empty state they
+// created, not have a new one silently seeded back in.
+const DEFAULT_PROJECT_NAME = 'Meu Projeto'
+const DEFAULT_FILE_NAME = 'Sem título'
+
+function seedDefaultProjects(): ProjectsState {
+  const file: ProjectFile = {
+    name: DEFAULT_FILE_NAME,
+    content: '',
+    size: 0,
+    timestamp: new Date().toISOString(),
+  }
+  return { [DEFAULT_PROJECT_NAME]: { [DEFAULT_FILE_NAME]: file } }
+}
 
 // Rotating backups, written as an independent safety net immediately
 // before any destructive operation (bulk delete, ZIP import overwrite,
@@ -19,7 +40,14 @@ const MAX_BACKUPS = 5
 
 export function loadProjects(adapter: StorageAdapter = localStorageAdapter): ProjectsState {
   const raw = adapter.get(PROJECTS_STORAGE_KEY)
-  if (!raw) return {}
+  if (!raw) {
+    const seeded = seedDefaultProjects()
+    // Persist immediately (matching the prototype, which wrote the seed
+    // to localStorage right away) so a reload doesn't seed a second,
+    // differently-timestamped default project.
+    writeEnvelope({ schemaVersion: CURRENT_SCHEMA_VERSION, projects: seeded }, adapter)
+    return seeded
+  }
 
   let parsed: unknown
   try {

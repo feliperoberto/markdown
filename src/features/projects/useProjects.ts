@@ -1,7 +1,9 @@
 import { useCallback, useState } from 'preact/hooks'
 import * as model from './model'
 import { backupProjects, loadProjects, saveProjects } from './storage'
+import { normalizeProjectsState } from './validate'
 import type { ProjectsState } from './types'
+import { useToast } from '@/components'
 
 export interface UseProjectsResult {
   projects: ProjectsState
@@ -17,7 +19,11 @@ export interface UseProjectsResult {
   deleteFile: (projectName: string, fileName: string) => void
   updateFileContent: (projectName: string, fileName: string, content: string) => void
   importProjects: (incoming: ProjectsState) => void
-  restoreProjects: (incoming: ProjectsState) => void
+  // Accepts `unknown` (not `ProjectsState`) because the caller's source is
+  // untrusted external data (a Drive backup) — normalizeProjectsState
+  // validates the shape internally rather than the caller casting past
+  // the type system before this even sees it.
+  restoreProjects: (incoming: unknown) => void
 }
 
 // Owns the projects/files state for the app and persists every mutation
@@ -28,11 +34,30 @@ export function useProjects(): UseProjectsResult {
   const [projects, setProjects] = useState<ProjectsState>(() => loadProjects())
   const [currentProject, setCurrentProject] = useState<string | null>(null)
   const [currentFile, setCurrentFile] = useState<string | null>(null)
+  const showToast = useToast()
 
-  const persist = useCallback((next: ProjectsState) => {
-    setProjects(next)
-    saveProjects(next)
-  }, [])
+  // Persists first, then updates in-memory state only on success. Previously
+  // `setProjects` ran unconditionally and `saveProjects` was never guarded,
+  // so a QuotaExceededError (a large save, or Safari private-mode's
+  // zero-quota setItem) threw uncaught: the UI already showed the new
+  // content as if it had saved, while storage silently kept the old state
+  // - a save that looked successful but wasn't. Persisting before updating
+  // state means the editor never displays content that didn't actually
+  // reach storage; the previous, genuinely-saved state stays visible
+  // instead, alongside the error toast.
+  const persist = useCallback(
+    (next: ProjectsState) => {
+      try {
+        saveProjects(next)
+      } catch (error) {
+        console.error('Failed to save projects.', error)
+        showToast(`Erro ao salvar: ${(error as Error)?.message ?? 'armazenamento cheio'}`, 'error')
+        return
+      }
+      setProjects(next)
+    },
+    [showToast],
+  )
 
   const selectFile = useCallback((projectName: string, fileName: string) => {
     setCurrentProject(projectName)
@@ -64,10 +89,20 @@ export function useProjects(): UseProjectsResult {
     (name: string) => {
       backupProjects(projects)
       persist(model.deleteProject(projects, name))
-      setCurrentProject((current) => (current === name ? null : current))
-      setCurrentFile((file) => (currentProject === name ? null : file))
+      // Both updaters read the same functional-update mechanism so they
+      // can't disagree about whether `name` was the active project —
+      // previously `setCurrentFile` compared against the closed-over
+      // `currentProject` instead of fresh state, which could leave
+      // `currentFile` pointing at a file in the just-deleted project if
+      // this ran again before a re-render refreshed the closure.
+      let wasCurrentProject = false
+      setCurrentProject((current) => {
+        wasCurrentProject = current === name
+        return wasCurrentProject ? null : current
+      })
+      setCurrentFile((file) => (wasCurrentProject ? null : file))
     },
-    [projects, persist, currentProject],
+    [projects, persist],
   )
 
   const createFile = useCallback(
@@ -115,12 +150,19 @@ export function useProjects(): UseProjectsResult {
     [projects, persist],
   )
 
-  // Full-state replace for "restore from backup" (e.g. Drive restore) —
-  // distinct from `importProjects`'s additive ZIP-import merge semantics.
+  // Restore from a Drive backup: additive, LOCAL-WINS merge (matches the
+  // legacy prototype's `driveImport`), NOT a full-state replace. A full
+  // replace used to silently delete every local-only project/file that
+  // wasn't in the backup — recoverable via the pre-restore backup below,
+  // but a real behavior regression from the prototype. `incoming` is
+  // untrusted external data (a Drive backup, possibly hand-edited or
+  // written by a different schema version), so it's normalized first:
+  // malformed projects/files are dropped, names are structurally
+  // sanitized, and `file.name`/`size` are recomputed rather than trusted.
   const restoreProjects = useCallback(
-    (incoming: ProjectsState) => {
+    (incoming: unknown) => {
       backupProjects(projects)
-      persist(model.replaceProjects(incoming))
+      persist(model.mergeRestoredProjects(projects, normalizeProjectsState(incoming)))
     },
     [projects, persist],
   )

@@ -47,8 +47,11 @@ test.describe('export/import golden path', () => {
     await page.getByRole('button', { name: 'Importar ZIP' }).click()
     await page.locator('input[type="file"][accept=".zip"]').setInputFiles(zipPath as string)
 
+    // Project groups render expanded by default, so the re-imported
+    // project's file list is already visible — no click needed to reveal
+    // it (clicking the project name toggles the collapse state, which
+    // would instead COLLAPSE an already-expanded group).
     await expect(page.getByText(projectName)).toBeVisible()
-    await page.getByText(projectName).click()
     await expect(page.getByText(fileName)).toBeVisible()
     await page.getByText(fileName).click()
 

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/preact'
 import { useProjects } from './useProjects'
 import { ProjectsSidebar } from './ProjectsSidebar'
+import { ToastProvider } from '@/components'
 
 // `ProjectsSidebar` drives project/file creation through the accessible
 // `showPromptDialog`/`showConfirmDialog` modals (see `dialogs.tsx`), which
@@ -50,6 +51,16 @@ function Harness() {
   )
 }
 
+// useProjects now calls useToast() (error-toast on a failed save), so the
+// hook must render inside a ToastProvider.
+function renderHarness() {
+  return render(
+    <ToastProvider>
+      <Harness />
+    </ToastProvider>,
+  )
+}
+
 describe('ProjectsSidebar + useProjects', () => {
   beforeEach(() => {
     localStorage.clear()
@@ -58,7 +69,7 @@ describe('ProjectsSidebar + useProjects', () => {
   })
 
   it('reflects creating, renaming and deleting a file in the sidebar tree', async () => {
-    render(<Harness />)
+    renderHarness()
 
     // Create a project.
     vi.mocked(showPromptDialog).mockResolvedValueOnce('My Project')
