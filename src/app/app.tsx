@@ -13,7 +13,8 @@ import { DriveSyncPanel } from '@/features/drive-sync'
 import { PwaInstallPrompt } from '@/features/pwa-install'
 import { ThemeToggle } from '@/features/theme'
 import { FullscreenToggle } from '@/features/fullscreen'
-import { IconButton, useToast } from '@/components'
+import { SplashScreen } from '@/features/onboarding'
+import { Breadcrumbs, IconButton, useToast } from '@/components'
 
 function downloadBlob(blob: Blob, fileName: string): void {
   const url = URL.createObjectURL(blob)
@@ -122,56 +123,70 @@ export function App(): JSX.Element {
   )
 
   return (
-    <div className="app-shell">
-      <header className="app-toolbar">
-        <IconButton
-          icon="☰"
-          label="Abrir menu de projetos"
-          ariaExpanded={!sidebarHiddenOnMobile}
-          ariaControls="projectsSidebar"
-          onClick={() => setSidebarHiddenOnMobile((hidden) => !hidden)}
-        />
-        <ImportExportToolbar
-          onImport={importProjects}
-          currentFile={currentFileEntry}
-          currentProjectName={currentProject}
-          currentProjectFiles={currentProjectFiles}
-          batchSelection={batchSelectionEntries}
-        />
-        <DriveSyncPanel getSnapshot={() => ({ projects })} onImported={restoreProjects} />
-        <ThemeToggle />
-        <FullscreenToggle />
-        <PwaInstallPrompt />
-      </header>
-      <div className="app-body">
-        <ProjectsSidebar
-          projects={projects}
-          currentProject={currentProject}
-          currentFile={currentFile}
-          onSelectFile={selectFile}
-          onCreateProject={createProject}
-          onCreateFile={createFile}
-          onRenameFile={renameFile}
-          onDeleteFile={deleteFile}
-          onRenameProject={renameProject}
-          onDeleteProject={deleteProject}
-          onSelectionChange={setBatchSelection}
-          mobileHidden={sidebarHiddenOnMobile}
-          onExportProject={handleExportProjectFromMenu}
-          onUploadFile={handleUploadFileToProject}
-        />
-        <main className="app-main">
-          {currentProject && currentFile ? (
-            <EditorFeature
-              content={activeContent}
-              onContentChange={handleContentChange}
-              onCopy={handleCopy}
+    <>
+      <SplashScreen />
+      <div className="app-shell">
+        <header className="app-toolbar">
+          <div className="header-left">
+            <IconButton
+              icon="☰"
+              label="Abrir menu de projetos"
+              ariaExpanded={!sidebarHiddenOnMobile}
+              ariaControls="projectsSidebar"
+              onClick={() => setSidebarHiddenOnMobile((hidden) => !hidden)}
             />
-          ) : (
-            <p>Nenhum arquivo selecionado</p>
-          )}
-        </main>
+            <div className="header-brand">
+              <span className="brand-chip" aria-hidden="true" />
+              <span className="header-title">Marcar</span>
+            </div>
+          </div>
+          <ImportExportToolbar
+            onImport={importProjects}
+            currentFile={currentFileEntry}
+            currentProjectName={currentProject}
+            currentProjectFiles={currentProjectFiles}
+            batchSelection={batchSelectionEntries}
+          />
+          <div className="header-right">
+            <DriveSyncPanel getSnapshot={() => ({ projects })} onImported={restoreProjects} />
+            <ThemeToggle />
+            <FullscreenToggle />
+            <PwaInstallPrompt />
+          </div>
+        </header>
+        <div className="app-body">
+          <ProjectsSidebar
+            projects={projects}
+            currentProject={currentProject}
+            currentFile={currentFile}
+            onSelectFile={selectFile}
+            onCreateProject={createProject}
+            onCreateFile={createFile}
+            onRenameFile={renameFile}
+            onDeleteFile={deleteFile}
+            onRenameProject={renameProject}
+            onDeleteProject={deleteProject}
+            onSelectionChange={setBatchSelection}
+            mobileHidden={sidebarHiddenOnMobile}
+            onExportProject={handleExportProjectFromMenu}
+            onUploadFile={handleUploadFileToProject}
+          />
+          <main className="app-main">
+            <div className="toolbar">
+              <Breadcrumbs projectName={currentProject} fileName={currentFile} />
+            </div>
+            {currentProject && currentFile ? (
+              <EditorFeature
+                content={activeContent}
+                onContentChange={handleContentChange}
+                onCopy={handleCopy}
+              />
+            ) : (
+              <p>Nenhum arquivo selecionado</p>
+            )}
+          </main>
+        </div>
       </div>
-    </div>
+    </>
   )
 }
