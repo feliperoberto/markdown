@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'preact/hooks'
 import { FONT_SIZES, type EditorFontSize } from '@/features/editor/types'
+import { localStorageAdapter } from '@/lib/storage-adapter'
 
 const STORAGE_KEY = 'fontScale'
 const CSS_VAR = '--editor-font-size'
 const DEFAULT_SIZE: EditorFontSize = '13px'
 
 function readStoredFontSize(): EditorFontSize {
-  const stored = localStorage.getItem(STORAGE_KEY)
+  const stored = localStorageAdapter.get(STORAGE_KEY)
   return (FONT_SIZES as readonly string[]).includes(stored ?? '')
     ? (stored as EditorFontSize)
     : DEFAULT_SIZE
@@ -23,7 +24,7 @@ export function useEditorFontSize() {
 
   useEffect(() => {
     document.documentElement.style.setProperty(CSS_VAR, fontSize)
-    localStorage.setItem(STORAGE_KEY, fontSize)
+    localStorageAdapter.set(STORAGE_KEY, fontSize)
   }, [fontSize])
 
   const cycleFontSize = useCallback(() => {

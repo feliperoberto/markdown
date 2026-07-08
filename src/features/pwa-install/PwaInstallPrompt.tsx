@@ -3,6 +3,7 @@ import { useEffect, useState } from 'preact/hooks'
 import { InstallButton } from './InstallButton'
 import { IosInstallCard } from './IosInstallCard'
 import { useInstallPrompt } from './useInstallPrompt'
+import { localStorageAdapter } from '@/lib/storage-adapter'
 
 const IOS_CARD_DISMISSED_KEY = 'iosInstallCardDismissed'
 
@@ -20,12 +21,12 @@ export function PwaInstallPrompt(): JSX.Element | null {
 
   useEffect(() => {
     if (!isIos || isStandalone) return
-    const alreadyDismissed = localStorage.getItem(IOS_CARD_DISMISSED_KEY) === 'true'
+    const alreadyDismissed = localStorageAdapter.get(IOS_CARD_DISMISSED_KEY) === 'true'
     if (!alreadyDismissed) setIosCardOpen(true)
   }, [isIos, isStandalone])
 
   function dismissIosCard() {
-    localStorage.setItem(IOS_CARD_DISMISSED_KEY, 'true')
+    localStorageAdapter.set(IOS_CARD_DISMISSED_KEY, 'true')
     setIosCardOpen(false)
   }
 
