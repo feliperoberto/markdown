@@ -49,10 +49,45 @@ as useful to users.
 There is no automated workflow that creates tags or releases — this is a
 manual step performed as part of merging a release-worthy change.
 
+## Branching and pull requests
+
+- **Branch naming**: `task/N-short-name` for planned work tied to an issue,
+  `fix/N-short-name` for bug fixes, where `N` is the GitHub issue number
+  (e.g. `task/40-license-contributing-templates`). This mirrors the naming
+  already used across the project's epics and sub-issues.
+- **Open the PR against the right base**: if the issue is part of an active
+  epic integration branch (e.g. `epic-production-grade-43`), target the PR
+  at that branch rather than `main`. Otherwise, target `main`.
+- **Fill in `.github/pull_request_template.md`**: every PR should include a
+  short summary and the "Ready to merge" checklist (CI green, manually
+  tested, screenshots for UI changes, linked issue via `Closes #N`).
+- **CI must pass before merging**: `.github/workflows/ci.yml` runs on every
+  pull request and defines two required jobs:
+  - `test` — lint, typecheck, unit tests, and build.
+  - `e2e` — Playwright end-to-end tests.
+
+  Both must be green. See "Branch protection" below for how these are
+  enforced on `main`.
+
+## Feature taxonomy
+
+Code under `src/features/<feature>/` must not import from another
+`src/features/<other-feature>/` directly. Each feature may only import from
+`src/components/` and `src/lib/`. If one feature needs to compose with or
+trigger behavior in another (e.g. `drive-sync` needing data from `projects`,
+or `import-export` needing to trigger a save from `editor`), that
+composition happens in `src/app/` through an explicit exported interface (a
+function/hook exported from the feature's own index), not a direct import
+of another feature's internals.
+
+This keeps each feature independently understandable and replaceable. See
+the "Folder taxonomy" section of `docs/architecture.md` for the full
+rationale and folder-by-folder breakdown.
+
 ## Commit message style
 
-Write clear, readable commit messages that explain *what* changed and, where
-useful, *why*. Prefixing with a short type (`feat:`, `fix:`, `docs:`,
+Write clear, readable commit messages that explain _what_ changed and, where
+useful, _why_. Prefixing with a short type (`feat:`, `fix:`, `docs:`,
 `chore:`) is welcomed and mirrors most of the project's existing history, but
 it is **not enforced** by tooling — don't let commit-message formatting slow
 down small changes.
