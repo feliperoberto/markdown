@@ -109,11 +109,11 @@ function PromptModal({
       title={title}
       footer={
         <>
-          <Button variant="primary" onClick={handleSubmit}>
-            {confirmLabel}
-          </Button>
           <Button variant="default" onClick={() => close(null)}>
             Cancelar
+          </Button>
+          <Button variant="primary" onClick={handleSubmit}>
+            {confirmLabel}
           </Button>
         </>
       }
@@ -180,11 +180,11 @@ function ConfirmModal({
       title={title}
       footer={
         <>
-          <Button variant={danger ? 'danger' : 'primary'} onClick={() => close(true)}>
-            {confirmLabel}
-          </Button>
           <Button variant="default" onClick={() => close(false)}>
             Cancelar
+          </Button>
+          <Button variant={danger ? 'danger' : 'primary'} onClick={() => close(true)}>
+            {confirmLabel}
           </Button>
         </>
       }

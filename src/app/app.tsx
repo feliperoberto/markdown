@@ -64,18 +64,26 @@ export function App(): JSX.Element {
   // modal open immediately on mount.
   const [driveConfigOpenSignal, setDriveConfigOpenSignal] = useState<number | undefined>(undefined)
 
-  // Mobile sidebar drawer (issue: the sidebar had no way to dismiss on
-  // narrow viewports). Desktop CSS ignores this class entirely (the
-  // `.sidebar-hidden` transform only applies inside the @media(max-width:
-  // 768px) block in global.css), so this is a no-op above that breakpoint.
-  const [sidebarHiddenOnMobile, setSidebarHiddenOnMobile] = useState(true)
+  // Sidebar drawer visibility. Starts `false` (visible) matching the
+  // prototype's static markup, which never has a `hidden` class on
+  // `#sidebar` at load — the sidebar is always open on first paint at
+  // every viewport width; only explicit user actions (hamburger click,
+  // outside click, or selecting a file on mobile) close it. `.sidebar-
+  // hidden`'s CSS now applies at every width (previously mobile-only),
+  // so this state genuinely drives visibility everywhere, not just <768px.
+  const [sidebarHiddenOnMobile, setSidebarHiddenOnMobile] = useState(false)
 
   // Clicking outside the drawer closes it too (issue: previously the
   // hamburger button was the ONLY way to close it — the prototype's
   // `document.addEventListener('click', ...)` closes on any click outside
-  // #sidebar/#menuBtn). Unconditional like the prototype's: a no-op on
-  // desktop since the sidebar is never actually hidden there regardless
-  // of this state.
+  // #sidebar/#menuBtn, at every viewport width, matching this effect).
+  //
+  // Also ignores clicks inside any open dialog/modal (issue: confirming
+  // "Novo projeto"/"Novo arquivo" etc. clicks a button that's portal-
+  // mounted to document.body via dialogs.tsx's mountDialog() — outside
+  // #projectsSidebar/#sidebarMenuButton by definition — which bubbles up
+  // to this listener and silently closed the sidebar every time a dialog
+  // was confirmed, on every viewport width including desktop).
   useEffect(() => {
     if (sidebarHiddenOnMobile) return
 
@@ -84,6 +92,7 @@ export function App(): JSX.Element {
       const sidebarEl = document.getElementById('projectsSidebar')
       const menuButtonEl = document.getElementById('sidebarMenuButton')
       if (sidebarEl?.contains(target) || menuButtonEl?.contains(target)) return
+      if (target instanceof Element && target.closest('[role="dialog"]')) return
       setSidebarHiddenOnMobile(true)
     }
 

@@ -1,6 +1,7 @@
 import type { JSX } from 'preact'
 import { useState } from 'preact/hooks'
 import { useSplashScreen } from './useSplashScreen'
+import { PwaInstallPrompt } from '@/features/pwa-install'
 
 /**
  * The branded first-run welcome screen (see useSplashScreen for the
@@ -61,6 +62,11 @@ export function SplashScreen(): JSX.Element | null {
         <button class="btn-splash-dismiss" onClick={() => dismiss(dontShowAgain)}>
           Começar a marcar
         </button>
+        {/* Second entry point (in addition to the header's own icon) —
+            first-time visitors are the most likely to have a fresh
+            `beforeinstallprompt` eligibility signal, and the prototype
+            never had a splash screen to offer this on at all. */}
+        <PwaInstallPrompt />
       </div>
     </div>
   )

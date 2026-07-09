@@ -255,7 +255,6 @@ export function DriveSyncPanel({
                 : driveSyncCopy.neverSyncedStatus}
             </p>
           )}
-          {!connected && <p class={styles.disclosureNote}>{driveSyncCopy.dataDisclosure}</p>}
 
           <div class={styles.actionRow}>
             {connected ? (

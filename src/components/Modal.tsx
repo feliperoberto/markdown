@@ -35,6 +35,16 @@ export function Modal({
   const stackIdRef = useRef<symbol>(Symbol('modal'))
   const lastFocusedRef = useRef<Element | null>(null)
 
+  // Dereferenced fresh inside the effect instead of listed as a dependency
+  // (issue: callers like dialogs.tsx pass an inline `onClose={() =>
+  // close(null)}`, which gets a new identity on every render — every
+  // keystroke in a dialog's <input> re-renders the component, which
+  // re-triggered this whole effect, tearing down and re-running the
+  // focus-trap setup and re-focusing `focusable[0]` mid-keystroke, yanking
+  // focus out of the input the user was actively typing into).
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+
   useEffect(() => {
     if (!open) return
 
@@ -55,7 +65,7 @@ export function Modal({
       if (event.key === 'Escape') {
         if (!isTopmostModal(stackId)) return
         event.stopPropagation()
-        onClose()
+        onCloseRef.current()
         return
       }
 
@@ -87,7 +97,7 @@ export function Modal({
       }
       lastFocusedRef.current = null
     }
-  }, [open, onClose, initialFocusRef])
+  }, [open, initialFocusRef])
 
   function handleOverlayClick(event: MouseEvent) {
     if (event.target === event.currentTarget) {

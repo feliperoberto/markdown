@@ -1,6 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/preact'
 import { SplashScreen } from './SplashScreen'
+import { ToastProvider } from '@/components'
+
+// SplashScreen now renders <PwaInstallPrompt /> (a second install-button
+// entry point), which internally calls useToast() via useInstallPrompt() —
+// so the harness needs a ToastProvider ancestor, same requirement as
+// every other component that composes PwaInstallPrompt.
+function renderSplashScreen() {
+  return render(
+    <ToastProvider>
+      <SplashScreen />
+    </ToastProvider>,
+  )
+}
 
 describe('SplashScreen', () => {
   beforeEach(() => {
@@ -12,7 +25,7 @@ describe('SplashScreen', () => {
   })
 
   it('renders the brand/title/subtitle on first load', () => {
-    render(<SplashScreen />)
+    renderSplashScreen()
 
     expect(screen.getByText('Marcar para Existir')).not.toBeNull()
     expect(screen.getByText('Editor de Markdown')).not.toBeNull()
@@ -22,13 +35,13 @@ describe('SplashScreen', () => {
   it('renders nothing once the user has permanently dismissed it', () => {
     localStorage.setItem('splashDismissed', 'true')
 
-    const { container } = render(<SplashScreen />)
+    const { container } = renderSplashScreen()
 
-    expect(container.innerHTML).toBe('')
+    expect(container.querySelector('.splash-screen')).toBeNull()
   })
 
   it('clicking "Começar a marcar" dismisses it without checking the box', () => {
-    const { container } = render(<SplashScreen />)
+    const { container } = renderSplashScreen()
 
     fireEvent.click(screen.getByRole('button', { name: 'Começar a marcar' }))
 
@@ -37,7 +50,7 @@ describe('SplashScreen', () => {
   })
 
   it('checking "Não mostrar de novo" before dismissing persists the choice', () => {
-    const { container } = render(<SplashScreen />)
+    const { container } = renderSplashScreen()
 
     fireEvent.click(screen.getByLabelText('Não mostrar de novo'))
     fireEvent.click(screen.getByRole('button', { name: 'Começar a marcar' }))

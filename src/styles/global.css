@@ -167,6 +167,20 @@ body {
   z-index: 100;
 }
 
+/* Unconditional (issue: previously nested inside the mobile media query
+   below, so the hamburger toggle silently did nothing above 768px — the
+   prototype's own `.sidebar.hidden` rule applies at every viewport
+   width, including desktop, and is itself what turns the sidebar into
+   an absolute overlay when hidden). */
+.projects-sidebar.sidebar-hidden {
+  transform: translateX(-100%);
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.3);
+}
+
 /* Section header (title only) above the project list, matching the
    prototype's .sidebar-header/.sidebar-content split — previously this
    component had no visible "PROJETOS" heading at all (only an
@@ -1057,10 +1071,6 @@ footer,
     height: 100%;
     box-shadow: 4px 0 24px rgba(0, 0, 0, 0.3);
     transition: transform var(--transition);
-  }
-
-  .projects-sidebar.sidebar-hidden {
-    transform: translateX(-100%);
   }
 }
 
