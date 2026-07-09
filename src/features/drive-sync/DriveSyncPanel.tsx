@@ -213,7 +213,9 @@ export function DriveSyncPanel({
         <div class={styles.modalBody}>
           {!isOnline && <p class={styles.offlineNotice}>{driveSyncCopy.offlineStatus}</p>}
           <form class={styles.clientIdForm} onSubmit={handleSaveClientId}>
-            <label htmlFor="drive-client-id">{driveSyncCopy.clientIdLabel}</label>
+            <label class="config-label" htmlFor="drive-client-id">
+              {driveSyncCopy.clientIdLabel}
+            </label>
             <input
               id="drive-client-id"
               class="config-input"

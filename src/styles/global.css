@@ -364,6 +364,19 @@ body {
   right: 0.4rem;
 }
 
+/* Desktop equivalent of swipe-to-reveal (issue: rename/delete were only
+   ever reachable via touch swipe — .swiped is exclusively toggled by
+   touchstart/touchmove in FileRow.tsx, so mouse/trackpad users on
+   desktop had no way to reveal these actions at all). Pure CSS, so it
+   doesn't interfere with the existing touch-swipe JS/state in any way —
+   both mechanisms independently reveal the same .file-actions element.
+   `:focus-within` covers keyboard users tabbing onto one of the action
+   buttons directly. */
+.file-item:hover .file-actions,
+.file-item:focus-within .file-actions {
+  right: 0.4rem;
+}
+
 /* Color-coded swipe-revealed action buttons (issue: rename/delete
    previously rendered as bare, uncolored icon glyphs — the prototype
    uses solid colored square chips so the two actions are visually
@@ -963,6 +976,24 @@ footer,
    bare browser-default box (white background, default border), clashing
    with the dark modal chrome around it, because nothing but the
    conditional `.invalid` modifier was ever applied. */
+
+/* Wraps a dialog's label+input as a full-width block (issue: dialogs.tsx
+   never adopted this wrapper, so the label and input sat as bare,
+   unstyled siblings — cramped onto one line instead of the label
+   stacking above a full-width input). */
+.config-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.config-label {
+  font-family: var(--body);
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--cream);
+}
+
 .config-input {
   padding: 0.75rem;
   border: 1px solid rgba(255, 255, 255, 0.15);

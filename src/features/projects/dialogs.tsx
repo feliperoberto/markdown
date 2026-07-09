@@ -119,15 +119,19 @@ function PromptModal({
       }
     >
       <form onSubmit={handleSubmit}>
-        <label htmlFor={inputId}>{label ?? title}</label>
-        <input
-          id={inputId}
-          type="text"
-          class={`config-input${error ? ' invalid' : ''}`}
-          value={value}
-          placeholder={placeholder}
-          onInput={handleInput}
-        />
+        <div class="config-input-group">
+          <label class="config-label" htmlFor={inputId}>
+            {label ?? title}
+          </label>
+          <input
+            id={inputId}
+            type="text"
+            class={`config-input${error ? ' invalid' : ''}`}
+            value={value}
+            placeholder={placeholder}
+            onInput={handleInput}
+          />
+        </div>
         {error && <p role="alert">{error}</p>}
       </form>
     </Modal>
