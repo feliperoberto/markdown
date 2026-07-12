@@ -1,0 +1,83 @@
+name: Deploy to GitHub Pages
+
+# Triggered on push to main. CI (lint/typecheck/test/build) for main runs in
+# parallel via ci.yml; this workflow does its own independent build rather
+# than waiting on ci.yml, keeping the two workflows decoupled and avoiding a
+# workflow_run dependency (tradeoff: a red ci.yml on main won't block this
+# deploy, so keep branch protection on PRs into main as the real safety net).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Preserve custom domain (CNAME)
+        run: cp CNAME dist/CNAME
+
+      - name: Preserve root entry point (app.html -> index.html)
+        # Vite's build entry is app.html (see vite.config.ts), so dist/
+        # has no index.html. GitHub Pages requires index.html to serve the
+        # domain root ("/"), so copy the built app.html to index.html to
+        # keep https://feliperoberto.com.br/ resolving to the app.
+        run: cp dist/app.html dist/index.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  smoke-check:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: HTTP smoke check
+        env:
+          DEPLOY_URL: ${{ needs.deploy.outputs.page_url }}
+        run: |
+          set -euo pipefail
+          URL="https://feliperoberto.com.br/"
+          echo "Checking $URL"
+          BODY="$(curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors "$URL")"
+          if ! grep -qi "<title>Markdown</title>" <<< "$BODY"; then
+            echo "Smoke check failed: expected content not found at $URL"
+            exit 1
+          fi
+          echo "Smoke check passed."
