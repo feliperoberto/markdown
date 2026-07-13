@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#211a2b" />
+    <!--
+      Content-Security-Policy (issue #28). Set via <meta> because this is a
+      static GitHub Pages site with no server available to emit a real HTTP
+      header.
+
+      - script-src: 'self' plus accounts.google.com, the only external
+        script origin (Google Identity Services, loaded dynamically by
+        src/features/drive-sync/google-identity.ts).
+      - connect-src: 'self', www.googleapis.com (Drive API + OAuth userinfo,
+        see src/features/drive-sync/google-drive-provider.ts), and
+        accounts.google.com (GIS's own fetch/XHR traffic during the token
+        flow — script-src alone does not cover requests the loaded script
+        makes back to its own origin).
+      - frame-src: accounts.google.com — GIS's token flow uses a hidden
+        iframe on its own origin for silent re-auth
+        (ensureFreshAccessToken); without this the interactive popup still
+        opens (it's a separate top-level window, not governed by
+        frame-src), but silent token refresh is blocked.
+      - form-action: 'self' — DOMPurify's default sanitize config keeps
+        <form>/<input>, so without this a hostile markdown document (a
+        shared file or a tampered Drive backup) could render a working
+        phishing form that posts to an attacker-controlled origin from
+        inside the preview pane.
+      - img-src: 'self' https: data: — user markdown may legitimately
+        embed remote images (![](https://...)); restricting to 'self'
+        would silently break every such embed. (Tracking-pixel-style
+        images are an accepted tradeoff of allowing this at all.)
+      - style-src/font-src: 'self' only — fonts are bundled locally
+        (src/styles/fonts.css, self-hosted via @fontsource) rather than
+        loaded from Google Fonts, so no external font-src grant is needed.
+      - No inline <script>/<style> tags exist in this file. The service
+        worker registration the build injects (vite-plugin-pwa,
+        injectRegister: 'auto') is an EXTERNAL script (registerSW.js),
+        allowed by script-src 'self' — not inline — so 'unsafe-inline' is
+        still intentionally omitted.
+        (User markdown is rendered via DOMPurify-sanitized HTML; any
+        `style="..."` attribute it might let through will simply be
+        ignored by the browser under this policy rather than tightened
+        with a nonce/hash, since it's untrusted content, not app code.)
+      - object-src/frame-ancestors: locked down defensively.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' https://accounts.google.com; connect-src 'self' https://www.googleapis.com https://accounts.google.com; frame-src https://accounts.google.com; img-src 'self' https: data:; style-src 'self'; font-src 'self'; form-action 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none';"
+    />
+    <!--
+      iOS/iPadOS Safari has no `beforeinstallprompt` and relies on these
+      meta tags (ported from prototype/index.html:6-8) for standalone/
+      home-screen behavior.
+    -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Marcar" />
+    <title>Markdown</title>
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

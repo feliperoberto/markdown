@@ -58,6 +58,10 @@
             --danger: #ff7a6b;
             --success: #7fcf72;
 
+            /* Paper-surface accents (code chips, links) */
+            --code-bg: #ece2cd;
+            --link: #3a6ea5;
+
             /* Fonts */
             --hand: "Caveat", cursive;
             --serif-display: "Fraunces", Georgia, serif;
@@ -68,6 +72,37 @@
             --editor-font-size: 13px;
 
             --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /*
+         * THEME — Dark palette
+         * ---------------------
+         * Overrides for [data-theme="dark"]. The `:root` block above stays
+         * the light/default palette (also selectable explicitly via
+         * [data-theme="light"], which matches no rule here and simply
+         * falls back to :root).
+         *
+         * The "paper vs. machine" contrast is preserved in dark mode:
+         * - `--ground-deep` (the machine/editor surface) goes near-black,
+         *   keeping the mono editor feeling cold and structural.
+         * - `--paper` becomes a warm, dim charcoal-brown (not pure grey/
+         *   black) so the preview pane still reads as paper — just paper
+         *   under lamplight instead of daylight — while remaining clearly
+         *   distinct from the machine surface.
+         */
+        [data-theme="dark"] {
+            --ground: #100c17;
+            --ground-2: #19121f;
+            --ground-deep: #08060c;
+            --paper: #2a2420;
+            --paper-edge: #3d352c;
+            --ink: #ece3d1;
+            --ink-soft: #a89d8a;
+            --cream: #ece7db;
+            --cream-soft: #8c8579;
+
+            --code-bg: #1c1712;
+            --link: #8ab4e8;
         }
 
         html, body {
@@ -314,6 +349,16 @@
 
         .project-group:hover {
             border-color: rgba(255, 255, 255, 0.13);
+        }
+
+        .projects-list-empty {
+            padding: 1.5rem 0.5rem;
+            text-align: center;
+            font-size: 0.8rem;
+            font-style: italic;
+            color: var(--cream-soft);
+            opacity: 0.7;
+            line-height: 1.5;
         }
 
         .project-header {
@@ -744,7 +789,7 @@
         }
 
         .preview-content a {
-            color: #3a6ea5;
+            color: var(--link);
             text-decoration: underline;
             text-underline-offset: 2px;
         }
@@ -755,7 +800,7 @@
         .preview-content code {
             font-family: var(--mono);
             font-size: 0.85em;
-            background: #ece2cd;
+            background: var(--code-bg);
             padding: 1px 5px;
             border-radius: 3px;
             color: var(--ink);
@@ -830,7 +875,7 @@
         }
 
         .preview-content th {
-            background: #ece2cd;
+            background: var(--code-bg);
             font-family: var(--serif-display);
             font-weight: 600;
         }
@@ -1441,6 +1486,32 @@
             border-color: var(--accent);
         }
 
+        /* Custom prompt/confirm dialog (reuses .config-modal-* shell) — issue #16 */
+        .dialog-message {
+            font-family: var(--body);
+            font-size: 0.85rem;
+            color: var(--cream-soft);
+            line-height: 1.5;
+        }
+
+        .dialog-error {
+            font-family: var(--body);
+            font-size: 0.78rem;
+            color: var(--c-coral);
+            min-height: 1.1em;
+        }
+
+        .config-input.invalid {
+            border-color: var(--c-coral);
+            box-shadow: 0 0 0 3px rgba(255, 122, 107, 0.15);
+        }
+
+        .btn-config-action.danger {
+            background-color: var(--c-coral);
+            color: var(--ground);
+            border-color: var(--c-coral);
+        }
+
         .config-help-text {
             font-family: var(--body);
             font-size: 0.78rem;
@@ -1569,6 +1640,8 @@
             background-clip: padding-box;
         }
     </style>
+    <!-- Google Identity Services / API client have no viable npm first-party
+         bundle and must stay as external scripts loaded from Google's CDN. -->
     <script src="https://apis.google.com/js/api.js"></script>
     <script src="https://accounts.google.com/gsi/client"></script>
 </head>
@@ -1599,44 +1672,45 @@
     <div id="app">
         <header>
             <div class="header-left">
-                <button class="btn-menu" id="menuBtn" title="Projetos">☰</button>
+                <button class="btn-menu" id="menuBtn" title="Projetos" aria-label="Abrir menu de projetos" aria-expanded="false" aria-controls="sidebar">☰</button>
                 <div class="header-brand">
-                    <span class="brand-chip"></span>
+                    <span class="brand-chip" aria-hidden="true"></span>
                     <span class="header-title">Marcar</span>
                 </div>
             </div>
             <div class="header-right">
-                <button class="btn-icon btn-drive" id="driveBtn" title="Google Drive">
-                    ☁️
-                    <span class="drive-dot" id="driveDot"></span>
+                <button class="btn-icon btn-drive" id="driveBtn" title="Google Drive" aria-label="Abrir Google Drive" aria-haspopup="dialog">
+                    <span aria-hidden="true">☁️</span>
+                    <span class="drive-dot" id="driveDot" aria-hidden="true"></span>
                 </button>
-                <button class="btn-icon" id="fontSizeBtn" title="Tamanho do texto">Aa</button>
-                <button class="btn-icon" id="fullscreenBtn" title="Tela cheia">⛶</button>
+                <button class="btn-icon" id="fontSizeBtn" title="Tamanho do texto" aria-label="Alternar tamanho do texto do editor">Aa</button>
+                <button class="btn-icon" id="themeToggle" title="Alternar tema" aria-label="Alternar tema claro/escuro">🌙</button>
+                <button class="btn-icon" id="fullscreenBtn" title="Tela cheia" aria-label="Alternar tela cheia">⛶</button>
             </div>
         </header>
 
         <div class="main-container">
             <div class="sidebar" id="sidebar">
                 <div class="sidebar-header">
-                    <span class="sidebar-title">Projetos</span>
+                    <span class="sidebar-title" id="sidebarTitle">Projetos</span>
                 </div>
                 <div class="sidebar-content">
-                    <div class="projects-list" id="projectsList"></div>
+                    <div class="projects-list" id="projectsList" role="region" aria-labelledby="sidebarTitle"></div>
                     <div class="sidebar-footer">
-                        <button class="sidebar-footer-btn" id="newProjectBtn" title="Novo projeto">
-                            <span class="sidebar-footer-icon">➕</span>
+                        <button class="sidebar-footer-btn" id="newProjectBtn" title="Novo projeto" aria-label="Criar novo projeto">
+                            <span class="sidebar-footer-icon" aria-hidden="true">➕</span>
                             <span class="sidebar-footer-label">Novo</span>
                         </button>
-                        <button class="sidebar-footer-btn" id="importZipBtn" title="Importar ZIP">
-                            <span class="sidebar-footer-icon">📥</span>
+                        <button class="sidebar-footer-btn" id="importZipBtn" title="Importar ZIP" aria-label="Importar projetos de um arquivo ZIP">
+                            <span class="sidebar-footer-icon" aria-hidden="true">📥</span>
                             <span class="sidebar-footer-label">Importar</span>
                         </button>
-                        <button class="sidebar-footer-btn" id="configBtn" title="Configurações">
-                            <span class="sidebar-footer-icon">⚙️</span>
+                        <button class="sidebar-footer-btn" id="configBtn" title="Configurações" aria-label="Abrir configurações" aria-haspopup="dialog">
+                            <span class="sidebar-footer-icon" aria-hidden="true">⚙️</span>
                             <span class="sidebar-footer-label">Config</span>
                         </button>
-                        <button class="sidebar-footer-btn" id="installBtn" title="Instalar app">
-                            <span class="sidebar-footer-icon">📲</span>
+                        <button class="sidebar-footer-btn" id="installBtn" title="Instalar app" aria-label="Instalar aplicativo">
+                            <span class="sidebar-footer-icon" aria-hidden="true">📲</span>
                             <span class="sidebar-footer-label">Instalar</span>
                         </button>
                     </div>
@@ -1650,7 +1724,7 @@
                     <div class="breadcrumbs" id="breadcrumbs">
                         <span class="breadcrumb empty">Nenhum arquivo aberto</span>
                     </div>
-                    <button class="btn-download" id="downloadBtn" disabled title="Baixar arquivo">⬇️</button>
+                    <button class="btn-download" id="downloadBtn" disabled title="Baixar arquivo" aria-label="Baixar arquivo atual">⬇️</button>
                 </div>
 
                 <main>
@@ -1685,7 +1759,7 @@
                                 <span class="footer-stat-value" id="tokenCount">0</span>
                             </div>
                         </div>
-                        <button class="btn-copy" id="copyBtn" title="Copiar tudo">📋</button>
+                        <button class="btn-copy" id="copyBtn" title="Copiar tudo" aria-label="Copiar todo o conteúdo do arquivo">📋</button>
                     </div>
                     <div class="footer-row">
                         <div class="footer-tab-group">
@@ -1699,11 +1773,11 @@
     </div>
 
     <!-- CONFIG MODAL -->
-    <div class="config-modal-overlay" id="configModalOverlay">
-        <div class="config-modal" id="configModal">
+    <div class="config-modal-overlay" id="configModalOverlay" aria-hidden="true">
+        <div class="config-modal" id="configModal" role="dialog" aria-modal="true" aria-labelledby="configModalTitle" tabindex="-1">
             <div class="config-modal-header">
-                <span class="config-modal-title">Configurações</span>
-                <button class="config-modal-close" id="configModalClose">✕</button>
+                <span class="config-modal-title" id="configModalTitle">Configurações</span>
+                <button class="config-modal-close" id="configModalClose" aria-label="Fechar configurações">✕</button>
             </div>
             <div class="config-section">
                 <div class="config-section-title">Google Drive</div>
@@ -1724,17 +1798,37 @@
     </div>
 
     <!-- GOOGLE DRIVE MODAL -->
-    <div class="drive-modal-overlay" id="driveModalOverlay">
-        <div class="drive-modal" id="driveModal">
+    <div class="drive-modal-overlay" id="driveModalOverlay" aria-hidden="true">
+        <div class="drive-modal" id="driveModal" role="dialog" aria-modal="true" aria-labelledby="driveModalTitle" tabindex="-1">
             <div class="drive-modal-header">
-                <span class="drive-modal-title">Google Drive</span>
-                <button class="drive-modal-close" id="driveModalClose">✕</button>
+                <span class="drive-modal-title" id="driveModalTitle">Google Drive</span>
+                <button class="drive-modal-close" id="driveModalClose" aria-label="Fechar Google Drive">✕</button>
             </div>
             <div class="drive-status" id="driveStatus">
-                <span class="drive-status-icon">☁️</span>
+                <span class="drive-status-icon" aria-hidden="true">☁️</span>
                 <span class="drive-status-text" id="driveStatusText">Não conectado</span>
             </div>
             <div class="drive-actions" id="driveActions"></div>
+        </div>
+    </div>
+
+    <!-- DIALOG MODAL (accessible replacement for prompt()/confirm() — issue #16) -->
+    <div class="config-modal-overlay" id="dialogModalOverlay" aria-hidden="true">
+        <div class="config-modal" id="dialogModal" role="dialog" aria-modal="true" aria-labelledby="dialogModalTitle" tabindex="-1">
+            <div class="config-modal-header">
+                <span class="config-modal-title" id="dialogModalTitle"></span>
+                <button class="config-modal-close" id="dialogModalClose" aria-label="Fechar">✕</button>
+            </div>
+            <p class="dialog-message" id="dialogMessage" hidden></p>
+            <div class="config-input-group" id="dialogInputGroup" hidden>
+                <label class="config-label" for="dialogInput" id="dialogInputLabel"></label>
+                <input type="text" id="dialogInput" class="config-input" autocomplete="off">
+                <p class="dialog-error" id="dialogError" role="alert" aria-live="polite"></p>
+            </div>
+            <div class="config-actions">
+                <button class="btn-config-action primary" id="dialogConfirmBtn"></button>
+                <button class="btn-config-action" id="dialogCancelBtn">Cancelar</button>
+            </div>
         </div>
     </div>
 
@@ -1773,6 +1867,18 @@
         const tokenCount = document.getElementById('tokenCount');
         const copyBtn = document.getElementById('copyBtn');
         const html = document.documentElement;
+
+        // ============================================================
+        // ACCESSIBILITY HELPERS & CUSTOM DIALOGS
+        // trapFocus/openModal/closeModal and showPromptDialog/showConfirmDialog
+        // (accessible replacements for prompt()/confirm(), issue #16) now live
+        // as shared ES modules under ./components/ and are attached to
+        // `window` by the <script type="module"> block near the end of
+        // <body> so this (non-module) script can keep calling them as
+        // plain globals, unchanged. See components/dialog-utils.js,
+        // components/dialog-state.js, components/PromptDialog.js and
+        // components/ConfirmDialog.js.
+        // ============================================================
 
         // ========== TOAST ==========
         // Declarado primeiro para estar disponível em todos os listeners abaixo
@@ -1867,29 +1973,36 @@
 
         // ========== MENU & CLICK OUTSIDE ==========
         menuBtn.addEventListener('click', () => {
-            sidebar.classList.toggle('hidden');
+            const isHidden = sidebar.classList.toggle('hidden');
+            menuBtn.setAttribute('aria-expanded', String(!isHidden));
         });
 
         document.addEventListener('click', (e) => {
             if (!sidebar.contains(e.target) && !menuBtn.contains(e.target)) {
                 sidebar.classList.add('hidden');
+                menuBtn.setAttribute('aria-expanded', 'false');
             }
         });
 
         // ========== NEW PROJECT ==========
-        newProjectBtn.addEventListener('click', (e) => {
+        newProjectBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            const name = prompt('Nome do novo projeto:');
-            if (name && name.trim()) {
-                const trimmedName = name.trim();
-                if (projects[trimmedName]) {
-                    showToast('Projeto já existe', 'warning');
-                    return;
+            const name = await showPromptDialog({
+                title: 'Novo projeto',
+                label: 'Nome do novo projeto',
+                placeholder: 'Ex.: Meu Projeto',
+                confirmLabel: 'Criar',
+                validate: (value) => {
+                    if (!value) return 'Digite um nome para o projeto.';
+                    if (projects[value]) return 'Já existe um projeto com esse nome.';
+                    return '';
                 }
-                projects[trimmedName] = {};
+            });
+            if (name) {
+                projects[name] = {};
                 localStorage.setItem('projects', JSON.stringify(projects));
                 renderProjects();
-                currentProject = trimmedName;
+                currentProject = name;
                 showToast('✅ Projeto criado', 'success');
             }
         });
@@ -1990,8 +2103,24 @@
                 showToast('Erro ao importar: ' + err.message, 'error');
             }
         });
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         function renderProjects() {
             projectsList.innerHTML = '';
+            if (Object.keys(projects).length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'projects-list-empty';
+                empty.textContent = 'Nenhum projeto ainda. Marque o primeiro.';
+                projectsList.appendChild(empty);
+                return;
+            }
             Object.entries(projects).forEach(([projectName, files]) => {
                 const projectGroup = document.createElement('div');
                 projectGroup.className = 'project-group';
@@ -1999,9 +2128,9 @@
                 const projectHeader = document.createElement('div');
                 projectHeader.className = 'project-header' + (currentProject === projectName ? ' active' : '');
                 projectHeader.innerHTML = `
-                    <span class="project-toggle expanded">▶</span>
-                    <span class="project-name">${projectName}</span>
-                    <button class="project-menu">⋮</button>
+                    <span class="project-toggle expanded" aria-hidden="true">▶</span>
+                    <span class="project-name">${escapeHtml(projectName)}</span>
+                    <button class="project-menu" aria-label="Mais opções do projeto ${escapeHtml(projectName)}" aria-haspopup="menu">⋮</button>
                 `;
 
                 const filesContainer = document.createElement('div');
@@ -2011,11 +2140,11 @@
                     const fileItem = document.createElement('div');
                     fileItem.className = 'file-item' + (currentProject === projectName && currentFile === fileName ? ' active' : '');
                     fileItem.innerHTML = `
-                        <input type="checkbox" class="file-checkbox" data-project="${projectName}" data-file="${fileName}">
-                        <span class="file-name">${fileName}</span>
+                        <input type="checkbox" class="file-checkbox" data-project="${escapeHtml(projectName)}" data-file="${escapeHtml(fileName)}" aria-label="Selecionar ${escapeHtml(fileName)} para download em lote">
+                        <span class="file-name">${escapeHtml(fileName)}</span>
                         <div class="file-actions">
-                            <button class="file-action-btn rename">✏️</button>
-                            <button class="file-action-btn delete">🗑</button>
+                            <button class="file-action-btn rename" aria-label="Renomear arquivo ${escapeHtml(fileName)}">✏️</button>
+                            <button class="file-action-btn delete" aria-label="Excluir arquivo ${escapeHtml(fileName)}">🗑</button>
                         </div>
                     `;
 
@@ -2043,17 +2172,21 @@
                     }, { passive: true });
 
                     // Rename button
-                    fileItem.querySelector('.file-action-btn.rename').addEventListener('click', (e) => {
+                    fileItem.querySelector('.file-action-btn.rename').addEventListener('click', async (e) => {
                         e.stopPropagation();
                         fileItem.classList.remove('swiped');
-                        const newName = prompt('Novo nome do arquivo:', fileName);
-                        if (!newName || !newName.trim()) return;
-                        const trimmed = newName.trim();
-                        if (trimmed === fileName) return;
-                        if (projects[projectName][trimmed]) {
-                            showToast('Arquivo já existe', 'warning');
-                            return;
-                        }
+                        const trimmed = await showPromptDialog({
+                            title: 'Renomear arquivo',
+                            label: 'Novo nome do arquivo',
+                            defaultValue: fileName,
+                            confirmLabel: 'Renomear',
+                            validate: (value) => {
+                                if (!value) return 'Digite um nome para o arquivo.';
+                                if (value !== fileName && projects[projectName][value]) return 'Já existe um arquivo com esse nome.';
+                                return '';
+                            }
+                        });
+                        if (!trimmed || trimmed === fileName) return;
                         projects[projectName][trimmed] = { ...projects[projectName][fileName], name: trimmed };
                         delete projects[projectName][fileName];
                         if (currentFile === fileName) currentFile = trimmed;
@@ -2076,7 +2209,7 @@
                             downloadBtn.disabled = true;
                         }
                         renderProjects();
-                        showToast('🗑 Arquivo deletado', 'success');
+                        showToast('🗑 Arquivo excluído', 'success');
                     });
 
                     const checkbox = fileItem.querySelector('.file-checkbox');
@@ -2112,38 +2245,48 @@
             e.stopPropagation();
             e.stopImmediatePropagation();
 
-            document.querySelectorAll('.dropdown-menu').forEach(m => m.remove());
+            document.querySelectorAll('.dropdown-menu').forEach(m => {
+                if (m._teardown) m._teardown();
+                else m.remove();
+            });
 
             const dropdown = document.createElement('div');
             dropdown.className = 'dropdown-menu visible';
+            dropdown.setAttribute('role', 'menu');
+            dropdown.setAttribute('aria-label', `Ações do projeto ${projectName}`);
             dropdown.innerHTML = `
-                <button class="dropdown-item" data-action="new">➕ Novo arquivo</button>
-                <button class="dropdown-item" data-action="upload">📤 Upload</button>
-                <button class="dropdown-item" data-action="rename-project">✏️ Renomear projeto</button>
-                <button class="dropdown-item" data-action="download-project">⬇️ Baixar projeto</button>
-                <button class="dropdown-item" data-action="delete" style="color: var(--danger);">🗑 Deletar projeto</button>
+                <button class="dropdown-item" role="menuitem" data-action="new">➕ Novo arquivo</button>
+                <button class="dropdown-item" role="menuitem" data-action="upload">📤 Upload</button>
+                <button class="dropdown-item" role="menuitem" data-action="rename-project">✏️ Renomear projeto</button>
+                <button class="dropdown-item" role="menuitem" data-action="download-project">⬇️ Baixar projeto</button>
+                <button class="dropdown-item" role="menuitem" data-action="delete" style="color: var(--danger);">🗑 Excluir projeto</button>
             `;
 
-            dropdown.querySelector('[data-action="new"]').addEventListener('click', (ev) => {
+            dropdown.querySelector('[data-action="new"]').addEventListener('click', async (ev) => {
                 ev.stopPropagation();
-                dropdown.remove();
+                teardown();
                 currentProject = projectName;
-                const name = prompt('Nome do arquivo:');
-                if (name && name.trim()) {
-                    const trimmedName = name.trim();
-                    if (projects[projectName][trimmedName]) {
-                        showToast('Arquivo já existe', 'warning');
-                        return;
+                const name = await showPromptDialog({
+                    title: 'Novo arquivo',
+                    label: 'Nome do arquivo',
+                    placeholder: 'Ex.: notas',
+                    confirmLabel: 'Criar',
+                    validate: (value) => {
+                        if (!value) return 'Digite um nome para o arquivo.';
+                        if (projects[projectName][value]) return 'Já existe um arquivo com esse nome.';
+                        return '';
                     }
-                    projects[projectName][trimmedName] = {
-                        name: trimmedName,
+                });
+                if (name) {
+                    projects[projectName][name] = {
+                        name: name,
                         content: '',
                         size: 0,
                         timestamp: new Date().toISOString()
                     };
                     localStorage.setItem('projects', JSON.stringify(projects));
                     renderProjects();
-                    selectFile(projectName, trimmedName);
+                    selectFile(projectName, name);
                     trackProjectsChange();
                     showToast('✅ Novo arquivo', 'success');
                 }
@@ -2151,22 +2294,26 @@
 
             dropdown.querySelector('[data-action="upload"]').addEventListener('click', (ev) => {
                 ev.stopPropagation();
-                dropdown.remove();
+                teardown();
                 currentProject = projectName;
                 fileInput.click();
             });
 
-            dropdown.querySelector('[data-action="rename-project"]').addEventListener('click', (ev) => {
+            dropdown.querySelector('[data-action="rename-project"]').addEventListener('click', async (ev) => {
                 ev.stopPropagation();
-                dropdown.remove();
-                const newName = prompt('Novo nome do projeto:', projectName);
-                if (!newName || !newName.trim()) return;
-                const trimmed = newName.trim();
-                if (trimmed === projectName) return;
-                if (projects[trimmed]) {
-                    showToast('Já existe um projeto com esse nome', 'warning');
-                    return;
-                }
+                teardown();
+                const trimmed = await showPromptDialog({
+                    title: 'Renomear projeto',
+                    label: 'Novo nome do projeto',
+                    defaultValue: projectName,
+                    confirmLabel: 'Renomear',
+                    validate: (value) => {
+                        if (!value) return 'Digite um nome para o projeto.';
+                        if (value !== projectName && projects[value]) return 'Já existe um projeto com esse nome.';
+                        return '';
+                    }
+                });
+                if (!trimmed || trimmed === projectName) return;
                 // Renomeia: copia para nova chave, remove antiga
                 projects[trimmed] = projects[projectName];
                 delete projects[projectName];
@@ -2179,7 +2326,7 @@
 
             dropdown.querySelector('[data-action="download-project"]').addEventListener('click', async (ev) => {
                 ev.stopPropagation();
-                dropdown.remove();
+                teardown();
                 const files = projects[projectName];
                 if (!files || Object.keys(files).length === 0) {
                     showToast('Projeto sem arquivos', 'warning');
@@ -2205,10 +2352,16 @@
                 }
             });
 
-            dropdown.querySelector('[data-action="delete"]').addEventListener('click', (ev) => {
+            dropdown.querySelector('[data-action="delete"]').addEventListener('click', async (ev) => {
                 ev.stopPropagation();
-                dropdown.remove();
-                if (confirm('Deletar projeto e todos os arquivos?')) {
+                teardown();
+                const confirmed = await showConfirmDialog({
+                    title: 'Excluir projeto',
+                    message: `Excluir o projeto "${projectName}" e todos os seus arquivos? Essa ação não pode ser desfeita.`,
+                    confirmLabel: 'Excluir',
+                    danger: true
+                });
+                if (confirmed) {
                     delete projects[projectName];
                     localStorage.setItem('projects', JSON.stringify(projects));
                     if (currentProject === projectName) {
@@ -2219,7 +2372,7 @@
                         downloadBtn.disabled = true;
                     }
                     renderProjects();
-                    showToast('🗑 Projeto deletado', 'success');
+                    showToast('🗑 Projeto excluído', 'success');
                 }
             });
 
@@ -2230,13 +2383,51 @@
 
             document.body.appendChild(dropdown);
 
+            const menuItems = Array.from(dropdown.querySelectorAll('[role="menuitem"]'));
+            if (menuItems.length) menuItems[0].focus();
+
+            // restoreFocus defaults to true (keyboard-driven closes always return
+            // focus to the trigger). Outside clicks pass false when the click
+            // landed on another focusable element, since the browser already
+            // moved focus there and forcing it back to `button` would steal it.
+            function teardown(restoreFocus = true) {
+                dropdown.remove();
+                document.removeEventListener('click', closeDropdown);
+                dropdown.removeEventListener('keydown', handleMenuKeydown);
+                if (restoreFocus) button.focus();
+            }
+            dropdown._teardown = teardown;
+
+            function isFocusableTarget(el) {
+                return !!el.closest('a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]');
+            }
+
             const closeDropdown = (ev) => {
-                if (!dropdown.contains(ev.target)) {
-                    dropdown.remove();
-                    document.removeEventListener('click', closeDropdown);
-                }
+                if (dropdown.contains(ev.target)) return;
+                teardown(!isFocusableTarget(ev.target));
             };
             setTimeout(() => document.addEventListener('click', closeDropdown), 150);
+
+            // Arrow-key navigation + Escape-to-close, returning focus to the trigger.
+            function handleMenuKeydown(ev) {
+                const currentIndex = menuItems.indexOf(document.activeElement);
+                if (ev.key === 'ArrowDown') {
+                    ev.preventDefault();
+                    menuItems[(currentIndex + 1) % menuItems.length].focus();
+                } else if (ev.key === 'ArrowUp') {
+                    ev.preventDefault();
+                    menuItems[(currentIndex - 1 + menuItems.length) % menuItems.length].focus();
+                } else if (ev.key === 'Escape') {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    teardown();
+                } else if (ev.key === 'Tab') {
+                    // Dropdown has no natural "outside" focus target besides the trigger; close on Tab.
+                    ev.preventDefault();
+                    teardown();
+                }
+            }
+            dropdown.addEventListener('keydown', handleMenuKeydown);
         }
 
         // ========== FILE SELECTION ==========
@@ -2344,7 +2535,7 @@
                     files.forEach(fileName => {
                         const item = document.createElement('div');
                         item.className = 'batch-file-item';
-                        item.innerHTML = `<div class="batch-file-project">${projectName}</div><div class="batch-file-name">📄 ${fileName}</div>`;
+                        item.innerHTML = `<div class="batch-file-project">${escapeHtml(projectName)}</div><div class="batch-file-name">📄 ${escapeHtml(fileName)}</div>`;
                         batchFilesList.appendChild(item);
                     });
                 });
@@ -2415,7 +2606,7 @@
             e.stopPropagation();
 
             if (!currentFile) {
-                showToast('Selecione arquivo', 'warning');
+                showToast('Selecione um arquivo', 'warning');
                 return;
             }
 
@@ -2440,7 +2631,7 @@
                 } catch (err) {
                     document.body.removeChild(ta);
                     console.error('execCommand error:', err);
-                    showToast('Erro: ' + err.message, 'error');
+                    showToast('Erro ao copiar: ' + err.message, 'error');
                 }
             }
 
@@ -2528,15 +2719,15 @@
         configBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             loadConfigUI();
-            configModalOverlay.classList.add('visible');
+            openModal(configModalOverlay, configModal, configBtn);
         });
 
         configModalClose.addEventListener('click', () => {
-            configModalOverlay.classList.remove('visible');
+            closeModal(configModalOverlay, configModal);
         });
 
         configModalOverlay.addEventListener('click', (e) => {
-            if (e.target === configModalOverlay) configModalOverlay.classList.remove('visible');
+            if (e.target === configModalOverlay) closeModal(configModalOverlay, configModal);
         });
 
         configClientId.addEventListener('input', updateConfigStatus);
@@ -2550,7 +2741,7 @@
             localStorage.setItem('driveClientId', id);
             DRIVE_CLIENT_ID = id;
             showToast('✅ Configuração salva', 'success');
-            configModalOverlay.classList.remove('visible');
+            closeModal(configModalOverlay, configModal);
         });
 
         configResetBtn.addEventListener('click', () => {
@@ -2589,8 +2780,12 @@
         driveBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             updateDriveBtnTitle();
-            driveModalOverlay.classList.toggle('visible');
             renderDriveModal();
+            if (driveModalOverlay.classList.contains('visible')) {
+                closeModal(driveModalOverlay, driveModal);
+            } else {
+                openModal(driveModalOverlay, driveModal, driveBtn);
+            }
         });
 
         function updateDriveBtnTitle() {
@@ -2618,11 +2813,11 @@
         }
 
         driveModalClose.addEventListener('click', () => {
-            driveModalOverlay.classList.remove('visible');
+            closeModal(driveModalOverlay, driveModal);
         });
 
         driveModalOverlay.addEventListener('click', (e) => {
-            if (e.target === driveModalOverlay) driveModalOverlay.classList.remove('visible');
+            if (e.target === driveModalOverlay) closeModal(driveModalOverlay, driveModal);
         });
 
         // Renderiza modal conforme estado
@@ -2827,7 +3022,7 @@
                 const result = await res.json();
                 driveFileId = result.id;
                 showToast('☁️ Salvo no Drive', 'success');
-                driveModalOverlay.classList.remove('visible');
+                closeModal(driveModalOverlay, driveModal);
             } catch (err) {
                 console.error('Drive export error:', err);
                 showToast('Erro ao salvar: ' + err.message, 'error');
@@ -2980,7 +3175,7 @@
 
                 const count = Object.keys(data.projects).length;
                 showToast(`📥 ${count} projeto(s) restaurado(s)`, 'success');
-                driveModalOverlay.classList.remove('visible');
+                closeModal(driveModalOverlay, driveModal);
             } catch (err) {
                 console.error('Drive import error:', err);
                 showToast('Erro ao restaurar: ' + err.message, 'error');
@@ -3008,6 +3203,7 @@
                 syncBtn.innerHTML = originalHTML;
                 syncBtn.disabled = false;
                 console.error('Sync error:', err);
+                showToast('Falha ao sincronizar com o Drive: ' + err.message, 'error');
             }
         }
 
@@ -3038,6 +3234,26 @@
             startAutoSync();
             updateSyncDot('connected');
         }
+    </script>
+
+    <!--
+        Shared dialog/a11y helpers, extracted as real ES modules (issue #16
+        follow-up: the inline versions weren't a genuinely "shared component").
+        The rest of the page is a classic (non-module) script, so this module
+        block attaches the functions to `window` explicitly rather than
+        converting the whole ~1600-line script to a module and risking
+        subtle global-scope breakage elsewhere.
+    -->
+    <script type="module">
+        import { trapFocus, openModal, closeModal } from './components/dialog-utils.js';
+        import { showPromptDialog } from './components/PromptDialog.js';
+        import { showConfirmDialog } from './components/ConfirmDialog.js';
+
+        window.trapFocus = trapFocus;
+        window.openModal = openModal;
+        window.closeModal = closeModal;
+        window.showPromptDialog = showPromptDialog;
+        window.showConfirmDialog = showConfirmDialog;
     </script>
 </body>
 </html>

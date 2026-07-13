@@ -1,0 +1,9 @@
+/**
+ * Re-exported from `src/lib/sanitize.ts`, where these helpers moved so
+ * `projects` (Drive-restore validation) could use them too without a
+ * cross-feature import — `import-export` -> `import-export` is a
+ * self-import the taxonomy allows, but `projects` -> `import-export`
+ * is not (see CONTRIBUTING.md "Feature taxonomy"). Kept as a re-export
+ * here so this feature's existing call sites don't need to change.
+ */
+export { escapeHtml, sanitizeNameSegment } from '@/lib/sanitize'

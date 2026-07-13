@@ -1,0 +1,1293 @@
+/**
+ * Global layout, chrome, and markdown-typography styles.
+ *
+ * Ported from the design system in `prototype/index.html` (the full
+ * `<style>` block, lines 18-1642), remapped onto the class names actually
+ * emitted by the Preact components under `src/`. Component-local styling
+ * (Button, Modal, Toast, Checkbox, DriveSyncPanel) stays in their own
+ * CSS Modules — this file only covers app-shell layout, the sidebar,
+ * editor/preview panes, footer, dropdown menu, and the rendered-markdown
+ * typography in `.preview-content`, none of which had a home before.
+ *
+ * Design tokens (colors, fonts, --transition) come from `tokens.css`,
+ * imported before this file in `main.tsx`.
+ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  background-color: var(--ground);
+  color: var(--cream);
+  font-family: var(--body);
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  overflow: hidden;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  position: relative;
+  z-index: 1;
+}
+
+/* ============================================================
+   APP SHELL
+   ============================================================ */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Header (Run-Head) */
+.app-toolbar {
+  flex: 0 0 auto;
+  padding: 0.85rem 1rem 0.95rem;
+  background-color: var(--ground);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  position: relative;
+  z-index: 50;
+}
+
+.app-toolbar::after {
+  content: '';
+  position: absolute;
+  left: 1rem;
+  right: 1rem;
+  bottom: 0;
+  height: 2px;
+  background: repeating-linear-gradient(90deg, var(--cream-soft) 0 7px, transparent 7px 12px);
+  opacity: 0.25;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.brand-chip {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: var(--accent);
+  transform: rotate(-6deg);
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.18) inset;
+  flex-shrink: 0;
+}
+
+.header-title {
+  font-family: var(--hand);
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--cream);
+  line-height: 1;
+  letter-spacing: 0.5px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.app-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* EditorFeature's own root element (issue: the prototype's equivalent
+   markup has no wrapping div between `.content-area` and its
+   `.toolbar`/`main` children at all — this component boundary is new to
+   the migration, and without its own flex-participation rules, the
+   unstyled div broke the flex chain that makes #editor/.preview-pane
+   fill the available height instead of leaving a dead gap above the
+   footer). Mirrors .app-main's own flex setup exactly. */
+.editor-feature {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* Import/export toolbar row (lives inside .app-toolbar) */
+.import-export-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* ============================================================
+   SIDEBAR (Project cards)
+   ============================================================ */
+.projects-sidebar {
+  width: 280px;
+  background-color: var(--ground-2);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: transform var(--transition);
+  position: relative;
+  z-index: 100;
+}
+
+/* Unconditional (issue: previously nested inside the mobile media query
+   below, so the hamburger toggle silently did nothing above 768px — the
+   prototype's own `.sidebar.hidden` rule applies at every viewport
+   width, including desktop, and is itself what turns the sidebar into
+   an absolute overlay when hidden). */
+.projects-sidebar.sidebar-hidden {
+  transform: translateX(-100%);
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.3);
+}
+
+/* Section header (title only) above the project list, matching the
+   prototype's .sidebar-header/.sidebar-content split — previously this
+   component had no visible "PROJETOS" heading at all (only an
+   aria-label on the <nav> for screen readers) and no .sidebar-content
+   wrapper, so .sidebar-footer had nowhere correct to sit flush at the
+   bottom with its own border-top. */
+.sidebar-header {
+  padding: 1rem 1rem 0.85rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-title {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--cream-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.28em;
+}
+
+.sidebar-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.projects-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.projects-list-empty {
+  padding: 1.5rem 0.5rem;
+  text-align: center;
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--cream-soft);
+  opacity: 0.7;
+  line-height: 1.5;
+}
+
+/* Project group cards */
+.project-group {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color var(--transition);
+}
+
+.project-group:hover {
+  border-color: rgba(255, 255, 255, 0.13);
+}
+
+.project-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 0.75rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.project-header.active .project-name {
+  color: var(--accent);
+}
+
+.project-toggle {
+  font-size: 0.7rem;
+  color: var(--cream-soft);
+  transition: transform var(--transition);
+  flex-shrink: 0;
+  transform: rotate(0deg);
+}
+
+.project-toggle.expanded {
+  transform: rotate(90deg);
+}
+
+.project-name {
+  flex: 1;
+  font-family: var(--body);
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--cream);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-files {
+  padding: 0 0.5rem 0.5rem;
+  display: none;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.project-files.expanded {
+  display: flex;
+}
+
+.project-files-empty {
+  padding: 0.5rem 0.7rem;
+  font-size: 0.75rem;
+  font-style: italic;
+  color: var(--cream-soft);
+  opacity: 0.7;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 7px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition:
+    background-color var(--transition),
+    transform var(--transition);
+}
+
+.file-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.file-item.active {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.file-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: var(--accent);
+  border-radius: 0 2px 2px 0;
+}
+
+.file-item.swiped {
+  transform: translateX(-72px);
+}
+
+.file-checkbox {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.file-name {
+  flex: 1;
+  font-family: var(--body);
+  font-size: 0.78rem;
+  color: var(--cream);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-actions {
+  display: flex;
+  gap: 0.25rem;
+  position: absolute;
+  right: -72px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.file-item.swiped .file-actions {
+  right: 0.4rem;
+}
+
+/* Desktop equivalent of swipe-to-reveal (issue: rename/delete were only
+   ever reachable via touch swipe — .swiped is exclusively toggled by
+   touchstart/touchmove in FileRow.tsx, so mouse/trackpad users on
+   desktop had no way to reveal these actions at all). Pure CSS, so it
+   doesn't interfere with the existing touch-swipe JS/state in any way —
+   both mechanisms independently reveal the same .file-actions element.
+   `:focus-within` covers keyboard users tabbing onto one of the action
+   buttons directly. */
+.file-item:hover .file-actions,
+.file-item:focus-within .file-actions {
+  right: 0.4rem;
+}
+
+/* Color-coded swipe-revealed action buttons (issue: rename/delete
+   previously rendered as bare, uncolored icon glyphs — the prototype
+   uses solid colored square chips so the two actions are visually
+   distinct at a glance, especially the destructive one). */
+.file-action-btn {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.file-action-btn.rename {
+  background: var(--c-sky);
+}
+
+.file-action-btn.delete {
+  background: var(--c-coral);
+}
+
+/* Sidebar footer (issue: "Novo projeto" had been promoted to a
+   full-width primary button at the top of the sidebar and the
+   Importar/Config/Instalar actions relocated elsewhere, replacing this
+   4-button row entirely — restored to match the prototype exactly). */
+.sidebar-footer {
+  padding: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  gap: 0.5rem;
+}
+
+.sidebar-footer-btn {
+  flex: 1;
+  padding: 0.65rem 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background-color: rgba(255, 255, 255, 0.02);
+  color: var(--cream);
+  cursor: pointer;
+  transition: all var(--transition);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 56px;
+}
+
+.sidebar-footer-btn:active {
+  background-color: rgba(255, 255, 255, 0.06);
+  border-color: var(--accent);
+}
+
+.sidebar-footer-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.sidebar-footer-icon {
+  font-size: 1.1rem;
+}
+
+.sidebar-footer-label {
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cream-soft);
+  text-align: center;
+  line-height: 1;
+}
+
+@media (max-width: 380px) {
+  .sidebar-footer-label {
+    display: none;
+  }
+
+  .sidebar-footer-btn {
+    min-height: 44px;
+  }
+}
+
+/* ============================================================
+   CONTENT AREA / TOOLBAR
+   ============================================================ */
+.toolbar {
+  flex: 0 0 auto;
+  padding: 0.6rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  color: var(--cream-soft);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.breadcrumb.empty {
+  font-style: italic;
+  opacity: 0.6;
+}
+
+.breadcrumb-sep {
+  opacity: 0.4;
+}
+
+.breadcrumb-current {
+  color: var(--cream);
+  font-weight: 700;
+}
+
+/* Main editor/preview area */
+main,
+.editor-preview-main {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+
+.pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.pane.hidden {
+  display: none;
+}
+
+/* ===== EDITOR PANE (Machine — full-bleed) ===== */
+.editor-pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-label {
+  position: absolute;
+  top: 0.75rem;
+  left: 1rem;
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cream-soft);
+  background: var(--ground-deep);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  padding: 2px 8px;
+  border-radius: 3px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.editor-textarea,
+#editor {
+  flex: 1;
+  width: 100%;
+  padding: 2.5rem 1.25rem 1.25rem;
+  border: none;
+  background-color: var(--ground-deep);
+  color: var(--cream);
+  font-family: var(--mono);
+  font-size: var(--editor-font-size);
+  line-height: 1.7;
+  resize: none;
+  overflow-y: auto;
+  tab-size: 2;
+}
+
+.editor-textarea:focus,
+#editor:focus {
+  outline: none;
+}
+
+.editor-textarea::placeholder,
+#editor::placeholder {
+  color: var(--cream-soft);
+  opacity: 0.5;
+  font-style: italic;
+}
+
+/* ===== PREVIEW PANE (Paper — folha sobre mesa) ===== */
+.preview-pane {
+  background: var(--ground);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.preview-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.preview-label {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  background: var(--accent);
+  color: var(--ground);
+  padding: 3px 10px;
+  border-radius: 3px 3px 0 0;
+  font-weight: 700;
+  align-self: flex-start;
+  margin-left: 12px;
+  flex-shrink: 0;
+}
+
+.preview-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem 1.5rem 2rem;
+  background-color: var(--paper);
+  color: var(--ink);
+  border-radius: 0 10px 10px 10px;
+  box-shadow:
+    0 6px 0 -2px rgba(0, 0, 0, 0.2),
+    0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+/* Rendered markdown typography (paper) */
+.preview-content h1 {
+  font-family: var(--hand);
+  font-weight: 700;
+  font-size: 2.2rem;
+  line-height: 0.95;
+  color: var(--ink);
+  margin: 0 0 0.5rem;
+}
+
+.preview-content h2 {
+  font-family: var(--serif-display);
+  font-weight: 600;
+  font-size: 1.4rem;
+  color: var(--ink);
+  margin: 1.2rem 0 0.5rem;
+}
+
+.preview-content h3 {
+  font-family: var(--serif-display);
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: var(--ink);
+  margin: 1rem 0 0.4rem;
+}
+
+.preview-content h4,
+.preview-content h5,
+.preview-content h6 {
+  font-family: var(--serif-display);
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0.8rem 0 0.3rem;
+}
+
+.preview-content p {
+  font-family: var(--body);
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: var(--ink);
+  margin: 0 0 0.75rem;
+}
+
+.preview-content a {
+  color: var(--link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.preview-content strong {
+  font-weight: 700;
+}
+
+.preview-content em {
+  font-style: italic;
+}
+
+.preview-content code {
+  font-family: var(--mono);
+  font-size: 0.85em;
+  background: var(--code-bg);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--ink);
+}
+
+.preview-content pre {
+  background: var(--ground-deep);
+  border-radius: 8px;
+  padding: 1rem;
+  overflow-x: auto;
+  margin: 0 0 0.75rem;
+}
+
+.preview-content pre code {
+  background: none;
+  color: var(--cream);
+  padding: 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.preview-content blockquote {
+  font-family: var(--serif-display);
+  font-style: italic;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--ink);
+  padding: 0.5rem 0 0.5rem 1rem;
+  border-left: 3px solid var(--accent);
+  margin: 0 0 0.75rem;
+}
+
+.preview-content ul,
+.preview-content ol {
+  margin: 0 0 0.75rem;
+  padding-left: 1.5rem;
+}
+
+.preview-content li {
+  font-family: var(--body);
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--ink);
+  margin: 0.25rem 0;
+}
+
+.preview-content hr {
+  border: none;
+  border-top: 2px dashed var(--paper-edge);
+  margin: 1.2rem 0;
+}
+
+.preview-content img {
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 0.5rem 0;
+}
+
+.preview-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 0.75rem;
+  font-size: 0.88rem;
+}
+
+.preview-content th,
+.preview-content td {
+  border: 1px solid var(--paper-edge);
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+  color: var(--ink);
+}
+
+.preview-content th {
+  background: var(--code-bg);
+  font-family: var(--serif-display);
+  font-weight: 600;
+}
+
+/* ============================================================
+   BATCH DOWNLOAD (third pane, replaces editor/preview when ≥2
+   files are checked for a multi-file ZIP export)
+   ============================================================ */
+.batch-download-area {
+  flex: 1;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+  gap: 0.5rem;
+}
+
+.batch-download-area.visible {
+  display: flex;
+}
+
+.batch-icon {
+  font-size: 3rem;
+  margin-bottom: 0.5rem;
+}
+
+.batch-title {
+  font-family: var(--hand);
+  font-size: 1.8rem;
+  color: var(--cream);
+}
+
+.batch-description {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cream-soft);
+  margin-bottom: 1rem;
+}
+
+.batch-files-list {
+  width: 100%;
+  max-width: 320px;
+  margin-bottom: 1rem;
+  text-align: left;
+}
+
+.batch-file-item {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--cream);
+  padding: 0.5rem 0.7rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 7px;
+  margin-bottom: 0.4rem;
+}
+
+.batch-file-project {
+  font-size: 8px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cream-soft);
+  margin-bottom: 0.15rem;
+}
+
+.batch-file-name {
+  color: var(--cream);
+}
+
+.btn-download-batch {
+  padding: 0.7rem 1.5rem;
+  background: var(--accent);
+  color: var(--ground);
+  border: none;
+  border-radius: 6px;
+  font-family: var(--body);
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.btn-download-batch:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn-download-batch:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ============================================================
+   FOOTER (Diptych Toggle: Machine <-> Paper)
+   ============================================================ */
+footer,
+.editor-footer {
+  flex: 0 0 auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--ground);
+}
+
+.footer-row {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+}
+
+.footer-row:first-child {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.footer-left {
+  display: flex;
+  gap: 1rem;
+  flex: 1;
+}
+
+.footer-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cream-soft);
+}
+
+.footer-stat-value {
+  color: var(--cream);
+  font-weight: 700;
+}
+
+.footer-tab-group {
+  display: flex;
+  gap: 0.3rem;
+  margin: 0 auto;
+  background: var(--ground-deep);
+  padding: 0.25rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.footer-btn {
+  padding: 0.45rem 1.1rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cream-soft);
+  cursor: pointer;
+  font-family: var(--body);
+  font-size: 0.82rem;
+  font-weight: 700;
+  transition: all var(--transition);
+}
+
+.footer-btn.active {
+  background: var(--accent);
+  color: var(--ground);
+}
+
+.footer-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ============================================================
+   PROJECT MENU DROPDOWN
+   ============================================================ */
+.dropdown-menu {
+  position: fixed;
+  background-color: var(--ground-2);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  z-index: 600;
+  min-width: 190px;
+  overflow: hidden;
+  padding: 0.3rem;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.7rem;
+  border: none;
+  background: transparent;
+  color: var(--cream);
+  cursor: pointer;
+  font-family: var(--body);
+  font-size: 0.85rem;
+  width: 100%;
+  text-align: left;
+  border-radius: 7px;
+  transition: background-color var(--transition);
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus-visible {
+  background-color: rgba(255, 255, 255, 0.06);
+  outline: none;
+}
+
+.dropdown-item.danger {
+  color: var(--c-coral);
+}
+
+/* ============================================================
+   DIALOG / CONFIG TEXT INPUTS
+   ============================================================
+   Used by both the create/rename prompt dialogs (dialogs.tsx) and the
+   Drive Client ID field (DriveSyncPanel.tsx) — same class the prototype
+   reused across its generic #dialogInput and #configClientId fields.
+   Previously entirely unstyled: every dialog's text input rendered as a
+   bare browser-default box (white background, default border), clashing
+   with the dark modal chrome around it, because nothing but the
+   conditional `.invalid` modifier was ever applied. */
+
+/* Wraps a dialog's label+input as a full-width block (issue: dialogs.tsx
+   never adopted this wrapper, so the label and input sat as bare,
+   unstyled siblings — cramped onto one line instead of the label
+   stacking above a full-width input). */
+.config-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.config-label {
+  font-family: var(--body);
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--cream);
+}
+
+.config-input {
+  padding: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 7px;
+  background-color: rgba(255, 255, 255, 0.04);
+  color: var(--cream);
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  transition: border-color var(--transition);
+}
+
+.config-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(255, 122, 107, 0.15);
+}
+
+.config-input::placeholder {
+  color: var(--cream-soft);
+  opacity: 0.5;
+}
+
+.config-input.invalid {
+  border-color: var(--c-coral);
+  box-shadow: 0 0 0 3px rgba(255, 122, 107, 0.15);
+}
+
+/* Configured/not-configured indicator row (Drive Client ID status).
+   Previously a bare <p>, indistinguishable from the surrounding
+   disclosure paragraphs. */
+.config-status {
+  padding: 0.7rem 0.85rem;
+  border-radius: 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.config-status.configured {
+  background-color: rgba(127, 207, 114, 0.12);
+  color: var(--c-green);
+}
+
+.config-status.not-configured {
+  background-color: rgba(255, 122, 107, 0.12);
+  color: var(--c-coral);
+}
+
+/* Drive connection-status row (connected/not-connected). Same "quiet
+   backgrounded card" treatment as .config-status, applied to the
+   connection state instead of the configuration state. */
+.drive-status {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem;
+  background-color: rgba(255, 255, 255, 0.03);
+  border-radius: 9px;
+  font-family: var(--body);
+  font-size: 0.85rem;
+  color: var(--cream-soft);
+}
+
+.drive-status-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.drive-status-text {
+  flex: 1;
+  line-height: 1.4;
+}
+
+.drive-status-name {
+  font-family: var(--body);
+  font-weight: 700;
+  color: var(--cream);
+  font-size: 0.85rem;
+}
+
+/* ============================================================
+   ACCESSIBILITY & MOTION
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================
+   MOBILE
+   ============================================================ */
+@media (max-width: 768px) {
+  .projects-sidebar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.3);
+    transition: transform var(--transition);
+  }
+}
+
+@media (max-width: 480px) {
+  .preview-content {
+    padding: 1.5rem 1rem;
+  }
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+  background-clip: padding-box;
+}
+
+/* ============================================================
+   PRINT
+   ============================================================ */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .preview-content,
+  .preview-content * {
+    visibility: visible;
+  }
+
+  .preview-content {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    box-shadow: none;
+    border-radius: 0;
+  }
+}
+
+/* ============================================================
+   SPLASH SCREEN
+   ============================================================ */
+.splash-screen {
+  position: fixed;
+  inset: 0;
+  background-color: var(--ground);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2.5rem;
+  z-index: 2000;
+  opacity: 1;
+  transition: opacity 0.5s var(--transition);
+  overflow: hidden;
+}
+
+.splash-screen.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.splash-screen .wash {
+  position: absolute;
+  opacity: 0.18;
+}
+
+.splash-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  text-align: center;
+  padding: 2rem;
+  position: relative;
+  z-index: 1;
+}
+
+.splash-mark {
+  width: 80px;
+  height: 80px;
+  background: var(--accent);
+  border-radius: 8px;
+  transform: rotate(-6deg);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.18) inset;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.splash-mark span {
+  font-family: var(--serif-display);
+  font-style: italic;
+  font-weight: 600;
+  font-size: 2.8rem;
+  color: var(--ground);
+  transform: rotate(6deg);
+}
+
+.splash-kicker {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--cream-soft);
+}
+
+.splash-title {
+  font-family: var(--hand);
+  font-size: 2.8rem;
+  font-weight: 700;
+  color: var(--cream);
+  line-height: 0.95;
+}
+
+.splash-subtitle {
+  font-family: var(--serif-display);
+  font-style: italic;
+  font-size: 0.95rem;
+  color: var(--cream);
+  opacity: 0.85;
+  max-width: 280px;
+}
+
+.splash-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  width: 100%;
+  max-width: 300px;
+  position: relative;
+  z-index: 1;
+}
+
+.splash-checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  color: var(--cream-soft);
+}
+
+.splash-checkbox-group input {
+  cursor: pointer;
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+}
+
+.splash-checkbox-group label {
+  cursor: pointer;
+}
+
+.btn-splash-dismiss {
+  padding: 0.75rem 2.5rem;
+  background-color: var(--accent);
+  color: var(--ground);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: var(--body);
+  font-size: 0.9rem;
+  font-weight: 700;
+  transition: all var(--transition);
+  box-shadow: 0 4px 0 -1px rgba(0, 0, 0, 0.25);
+}
+
+.btn-splash-dismiss:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 -1px rgba(0, 0, 0, 0.25);
+}

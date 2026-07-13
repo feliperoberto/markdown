@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Design Tokens — Visual Reference</title>
+    <link rel="stylesheet" href="./tokens.css" />
+    <style>
+      body {
+        margin: 0;
+        padding: 2rem;
+        background: var(--ground);
+        color: var(--cream);
+        font-family: var(--body);
+      }
+      h1 {
+        font-family: var(--serif-display);
+        font-size: 2rem;
+        margin-bottom: 0.25rem;
+      }
+      p.lede {
+        color: var(--cream-soft);
+        margin-top: 0;
+        margin-bottom: 2.5rem;
+      }
+      h2 {
+        font-family: var(--serif-display);
+        font-size: 1.25rem;
+        border-bottom: 1px solid var(--cream-soft);
+        padding-bottom: 0.4rem;
+        margin-top: 3rem;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 1rem;
+      }
+      .swatch {
+        border-radius: 6px;
+        overflow: hidden;
+        background: var(--ground-2);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .swatch-color {
+        height: 70px;
+      }
+      .swatch-label {
+        padding: 0.5rem 0.6rem;
+        font-family: var(--mono);
+        font-size: 0.75rem;
+        line-height: 1.4;
+      }
+      .swatch-label strong {
+        display: block;
+        font-size: 0.8rem;
+      }
+      .font-sample {
+        background: var(--ground-2);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 6px;
+        padding: 1rem 1.2rem;
+        margin-bottom: 0.75rem;
+      }
+      .font-sample .meta {
+        font-family: var(--mono);
+        font-size: 0.75rem;
+        color: var(--cream-soft);
+        margin-bottom: 0.4rem;
+      }
+      .font-sample .sample-text {
+        font-size: 1.6rem;
+      }
+      .space-row {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 0.6rem;
+        font-family: var(--mono);
+        font-size: 0.8rem;
+      }
+      .space-bar {
+        background: var(--accent);
+        height: 14px;
+        border-radius: 2px;
+      }
+      .radius-box {
+        width: 90px;
+        height: 90px;
+        background: var(--c-sky);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--mono);
+        font-size: 0.7rem;
+        color: var(--ink);
+      }
+      .shadow-box {
+        width: 140px;
+        height: 90px;
+        background: var(--paper);
+        color: var(--ink);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--mono);
+        font-size: 0.7rem;
+        border-radius: 6px;
+      }
+      .motion-box {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 120px;
+        height: 60px;
+        background: var(--accent);
+        color: var(--ink);
+        border-radius: 6px;
+        font-family: var(--mono);
+        font-size: 0.7rem;
+        transition: var(--transition);
+        cursor: pointer;
+      }
+      .motion-box:hover {
+        transform: scale(1.1);
+        background: var(--c-violet);
+      }
+      .row-flex {
+        display: flex;
+        gap: 1.5rem;
+        flex-wrap: wrap;
+      }
+      .note {
+        font-family: var(--mono);
+        font-size: 0.8rem;
+        color: var(--cream-soft);
+        background: var(--ground-2);
+        border-left: 3px solid var(--c-amber);
+        padding: 0.75rem 1rem;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Design Tokens — Visual Reference</h1>
+    <p class="lede">
+      Faithful swatch sheet for every custom property extracted from
+      <code>prototype/index.html</code> into <code>tokens.css</code>. See GitHub issue #13.
+    </p>
+
+    <h2>Color — Layer 1: Ground &amp; Paper</h2>
+    <div class="grid">
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--ground)"></div>
+        <div class="swatch-label"><strong>--ground</strong>#211a2b</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--ground-2)"></div>
+        <div class="swatch-label"><strong>--ground-2</strong>#2a2238</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--ground-deep)"></div>
+        <div class="swatch-label"><strong>--ground-deep</strong>#171221</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--paper)"></div>
+        <div class="swatch-label"><strong>--paper</strong>#f6eede</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--paper-edge)"></div>
+        <div class="swatch-label"><strong>--paper-edge</strong>#e9dcc2</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--ink)"></div>
+        <div class="swatch-label"><strong>--ink</strong>#2c2438</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--ink-soft)"></div>
+        <div class="swatch-label"><strong>--ink-soft</strong>#5c5168</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--cream)"></div>
+        <div class="swatch-label"><strong>--cream</strong>#f0e7d6</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--cream-soft)"></div>
+        <div class="swatch-label"><strong>--cream-soft</strong>#bcae9e</div>
+      </div>
+    </div>
+
+    <h2>Color — Layer 2: Rainbow accents</h2>
+    <div class="grid">
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--c-coral)"></div>
+        <div class="swatch-label"><strong>--c-coral</strong>#ff7a6b</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--c-orange)"></div>
+        <div class="swatch-label"><strong>--c-orange</strong>#ff9d52</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--c-amber)"></div>
+        <div class="swatch-label"><strong>--c-amber</strong>#f5c64f</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--c-green)"></div>
+        <div class="swatch-label"><strong>--c-green</strong>#7fcf72</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--c-teal)"></div>
+        <div class="swatch-label"><strong>--c-teal</strong>#3fc7b4</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--c-sky)"></div>
+        <div class="swatch-label"><strong>--c-sky</strong>#56b6ea</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--c-blue)"></div>
+        <div class="swatch-label"><strong>--c-blue</strong>#6f86f2</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--c-indigo)"></div>
+        <div class="swatch-label"><strong>--c-indigo</strong>#9079ee</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--c-violet)"></div>
+        <div class="swatch-label"><strong>--c-violet</strong>#b574e4</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--c-pink)"></div>
+        <div class="swatch-label"><strong>--c-pink</strong>#ee79b6</div>
+      </div>
+    </div>
+
+    <h2>Color — Semantic</h2>
+    <div class="grid">
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--accent)"></div>
+        <div class="swatch-label"><strong>--accent</strong>#ff7a6b (alias of --c-coral)</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--danger)"></div>
+        <div class="swatch-label"><strong>--danger</strong>#ff7a6b (alias of --c-coral)</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--success)"></div>
+        <div class="swatch-label"><strong>--success</strong>#7fcf72 (alias of --c-green)</div>
+      </div>
+    </div>
+
+    <h2>Typography — Font families</h2>
+    <div class="font-sample">
+      <div class="meta">--hand: "Caveat", cursive</div>
+      <div class="sample-text" style="font-family: var(--hand)">
+        The quick brown fox jumps over the lazy dog 0123456789
+      </div>
+    </div>
+    <div class="font-sample">
+      <div class="meta">--serif-display: "Fraunces", Georgia, serif</div>
+      <div class="sample-text" style="font-family: var(--serif-display)">
+        The quick brown fox jumps over the lazy dog 0123456789
+      </div>
+    </div>
+    <div class="font-sample">
+      <div class="meta">--body: "Lora", Georgia, serif</div>
+      <div class="sample-text" style="font-family: var(--body)">
+        The quick brown fox jumps over the lazy dog 0123456789
+      </div>
+    </div>
+    <div class="font-sample">
+      <div class="meta">--mono: "Courier Prime", "Courier New", monospace</div>
+      <div class="sample-text" style="font-family: var(--mono)">
+        The quick brown fox jumps over the lazy dog 0123456789
+      </div>
+    </div>
+
+    <h2>Typography — Font sizes / weights</h2>
+    <div class="font-sample">
+      <div class="meta">--editor-font-size: 13px</div>
+      <div class="sample-text" style="font-family: var(--mono); font-size: var(--editor-font-size)">
+        Editor text rendered at --editor-font-size
+      </div>
+    </div>
+
+    <h2>Spacing</h2>
+    <div class="note">
+      No dedicated spacing scale tokens exist in the source <code>:root</code> block — spacing in
+      <code>prototype/index.html</code> is authored with literal rem/px values. Nothing to render
+      here; flagged in the PR for the product owner.
+    </div>
+
+    <h2>Radius</h2>
+    <div class="note">
+      No dedicated radius tokens exist in the source <code>:root</code> block — border-radius values
+      are literal (e.g. 3px, 6px, 50%). Nothing to render here; flagged in the PR for the product
+      owner.
+    </div>
+
+    <h2>Shadow</h2>
+    <div class="note">
+      No dedicated shadow tokens exist in the source <code>:root</code> block — box-shadow values
+      are literal. Nothing to render here; flagged in the PR for the product owner.
+    </div>
+
+    <h2>Motion</h2>
+    <div class="row-flex">
+      <div>
+        <div class="motion-box">--transition</div>
+        <div class="meta" style="margin-top: 0.4rem">
+          0.25s cubic-bezier(0.4, 0, 0.2, 1) — hover to preview
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,127 @@
+/**
+ * Design Tokens
+ * -------------
+ * Faithful extraction of the `:root` custom properties defined in
+ * `prototype/index.html` (lines 30-71). Values are copied verbatim —
+ * this file does not introduce, rename, or redesign any token.
+ *
+ * Source of truth until the prototype is fully migrated: prototype/index.html
+ * See GitHub issue #13 for the audit notes.
+ */
+
+:root {
+  /* ============================================================
+     COLOR — Layer 1: Ground & Paper
+     ============================================================ */
+  --ground: #211a2b;
+  --ground-2: #2a2238;
+  --ground-deep: #171221;
+  --paper: #f6eede;
+  --paper-edge: #e9dcc2;
+  --ink: #2c2438;
+  --ink-soft: #5c5168;
+  --cream: #f0e7d6;
+  --cream-soft: #bcae9e;
+
+  /* ============================================================
+     COLOR — Layer 2: Rainbow accents
+     ============================================================ */
+  --c-coral: #ff7a6b;
+  --c-orange: #ff9d52;
+  --c-amber: #f5c64f;
+  --c-green: #7fcf72;
+  --c-teal: #3fc7b4;
+  --c-sky: #56b6ea;
+  --c-blue: #6f86f2;
+  --c-indigo: #9079ee;
+  --c-violet: #b574e4;
+  --c-pink: #ee79b6;
+
+  /* Default accent (coral — the opening color) */
+  --accent: #ff7a6b;
+
+  /* Semantic aliases (used by inline JS) */
+  --danger: #ff7a6b;
+  --success: #7fcf72;
+
+  /* Paper-surface accents (code chips, links) */
+  --code-bg: #ece2cd;
+  --link: #3a6ea5;
+
+  /* ============================================================
+     TYPOGRAPHY — Font families
+     ============================================================ */
+  --hand: 'Caveat', cursive;
+  --serif-display: 'Fraunces', Georgia, serif;
+  --body: 'Lora', Georgia, serif;
+  --mono: 'Courier Prime', 'Courier New', monospace;
+
+  /* ============================================================
+     TYPOGRAPHY — Font sizes / weights
+     ============================================================ */
+  /* Editor font size (toggle) */
+  --editor-font-size: 13px;
+
+  /* ============================================================
+     SPACING
+     ============================================================ */
+  /* No dedicated spacing scale tokens exist in the source :root block.
+     Spacing in prototype/index.html is authored with literal rem/px
+     values throughout the stylesheet (not tokenized). Flagged for the
+     product owner — see PR description. */
+
+  /* ============================================================
+     RADIUS
+     ============================================================ */
+  /* No dedicated radius tokens exist in the source :root block.
+     border-radius values in prototype/index.html are authored as
+     literal values (e.g. 3px, 50%) rather than custom properties. */
+
+  /* ============================================================
+     SHADOW
+     ============================================================ */
+  /* No dedicated shadow tokens exist in the source :root block.
+     box-shadow values in prototype/index.html are authored as
+     literal values rather than custom properties. */
+
+  /* ============================================================
+     MOTION
+     ============================================================ */
+  --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/**
+ * THEME — Dark palette
+ * --------------------
+ * Overrides for [data-theme="dark"]. `:root` above remains the light/
+ * default palette (also reachable explicitly via [data-theme="light"],
+ * which matches no rule here and simply falls back to `:root`).
+ *
+ * The app's "paper vs. machine" typographic metaphor is preserved:
+ * - `--ground-deep` (the machine/editor surface) goes near-black,
+ *   keeping the mono editor feeling cold and structural.
+ * - `--paper` becomes a warm, dim charcoal-brown (not pure grey/black)
+ *   so the preview pane still reads as paper — just paper under
+ *   lamplight instead of daylight — while remaining clearly distinct
+ *   from the machine surface.
+ *
+ * Rainbow accents (--c-*, --accent, --danger, --success) are left
+ * unchanged: they are vivid enough to keep working on the darker
+ * grounds and are a deliberate constant across themes.
+ *
+ * See GitHub issue #14.
+ */
+[data-theme='dark'] {
+  --ground: #100c17;
+  --ground-2: #19121f;
+  --ground-deep: #08060c;
+  --paper: #2a2420;
+  --paper-edge: #3d352c;
+  --ink: #ece3d1;
+  --ink-soft: #a89d8a;
+  --cream: #ece7db;
+  --cream-soft: #8c8579;
+
+  --code-bg: #1c1712;
+  --link: #8ab4e8;
+}

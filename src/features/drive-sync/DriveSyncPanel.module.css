@@ -1,0 +1,79 @@
+.iconWrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+/**
+ * Small, subtle offline badge anchored to the corner of the Drive-sync
+ * icon button (issue #25). Deliberately quiet: a muted amber dot, not a
+ * loud red alert — offline is an expected, non-broken state here.
+ */
+.offlineBadge {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: var(--c-amber);
+  border: 2px solid var(--ground);
+  pointer-events: none;
+}
+
+.offlineNotice {
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+/**
+ * Data-disclosure copy shown before the user connects (issue #30) —
+ * styled like a quiet, informative footnote rather than a warning, since
+ * this is routine disclosure, not an error state.
+ */
+.disclosureNote {
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+/**
+ * Visually-hidden but screen-reader-accessible text (finding #7). `title`
+ * attributes alone aren't reliably announced by all screen readers, so the
+ * offline badge also carries this hidden label as its accessible name.
+ */
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/**
+ * Gives every direct block inside the modal (offline notice, Client ID
+ * form, connection-status row, last-synced/disclosure text, action row)
+ * consistent vertical rhythm. Previously these were flat siblings with
+ * no margin between them, so blocks with their own internal padding
+ * (e.g. .config-status, .drive-status) sat flush against the next
+ * paragraph with no breathing room.
+ */
+.modalBody {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.clientIdForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.actionRow {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
