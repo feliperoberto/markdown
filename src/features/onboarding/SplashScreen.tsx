@@ -1,6 +1,7 @@
 import type { JSX } from 'preact'
 import { useState } from 'preact/hooks'
 import { useSplashScreen } from './useSplashScreen'
+import { BookDownloadCta } from './BookDownloadCta'
 import { PwaInstallPrompt } from '@/features/pwa-install'
 
 /**
@@ -49,6 +50,7 @@ export function SplashScreen(): JSX.Element | null {
         <div class="splash-title">Marcar para Existir</div>
         <div class="splash-subtitle">Você marca com a mão. A máquina lê a estrutura.</div>
       </div>
+      <BookDownloadCta />
       <div class="splash-footer">
         <div class="splash-checkbox-group">
           <input

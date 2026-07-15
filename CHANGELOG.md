@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Nothing yet.
+- Splash screen CTA linking to the companion book's PDF (`marcar-para-existir.pdf`).
 
 ## [0.1.0] - 2026-07-05
 

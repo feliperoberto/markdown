@@ -58,4 +58,13 @@ describe('SplashScreen', () => {
     expect(container.querySelector('.splash-screen')).toBeNull()
     expect(localStorage.getItem('splashDismissed')).toBe('true')
   })
+
+  it('renders a download link for the companion book', () => {
+    renderSplashScreen()
+
+    const link = screen.getByRole('link', { name: /Baixar o livro/ })
+
+    expect(link.getAttribute('href')).toBe('/marcar-para-existir.pdf')
+    expect(link.getAttribute('download')).not.toBeNull()
+  })
 })
