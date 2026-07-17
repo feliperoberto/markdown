@@ -2,7 +2,7 @@ import type { JSX } from 'preact'
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { Button, IconButton, Modal, useToast } from '@/components'
 import { useOnlineStatus } from '@/lib/useOnlineStatus'
-import { GoogleDriveSyncProvider } from './google-drive-provider'
+import { DriveSyncOfflineError, GoogleDriveSyncProvider } from './google-drive-provider'
 import type { DriveSyncDotStatus } from './google-drive-provider'
 import { driveSyncCopy } from './copy'
 import { formatLastSynced } from './formatLastSynced'
@@ -16,10 +16,18 @@ import type { ProjectsSnapshot } from './types'
 import styles from './DriveSyncPanel.module.css'
 
 export interface DriveSyncPanelProps {
-  /** Current projects snapshot to push whenever "Sincronizar agora" runs. */
+  /** Current local projects snapshot, read fresh at sync time. */
   getSnapshot: () => ProjectsSnapshot
-  /** Called with a Drive backup's `projects` payload after a successful restore. */
-  onImported: (projects: Record<string, unknown>) => void
+  /**
+   * Reconciles a just-pulled remote snapshot (`null` if nothing has been
+   * synced yet) with local state by per-file freshness — applies the
+   * merged result to local state and returns it, so it can also be pushed
+   * back to Drive. Injected from `src/app/`: this panel only ever sees the
+   * opaque `ProjectsSnapshot` shape, never the `projects`-feature's
+   * concrete types (see `SyncProvider`'s doc comment on why the merge
+   * logic itself can't live in this feature).
+   */
+  reconcile: (remote: ProjectsSnapshot | null) => ProjectsSnapshot
   /**
    * Lets a second entry point (the sidebar's prototype-matching "⚙️
    * Config" footer button) open the SAME modal instance instead of
@@ -34,13 +42,14 @@ const TITLE_ID = 'drive-sync-panel-title'
 
 /**
  * Toolbar entry point + panel for the Google Drive sync provider (#21).
- * Wires `GoogleDriveSyncProvider` (connect/sync/disconnect) into the
- * shared `Modal`/`Toast`/`Button` components — the sync algorithm itself
- * is untouched.
+ * Wires `GoogleDriveSyncProvider` (connect/pull/push/disconnect) into the
+ * shared `Modal`/`Toast`/`Button` components. A single "Sincronizar" button
+ * drives a full bidirectional, freshness-based reconcile — see
+ * `handleSync`'s doc comment.
  */
 export function DriveSyncPanel({
   getSnapshot,
-  onImported,
+  reconcile,
   openSignal,
 }: DriveSyncPanelProps): JSX.Element {
   const showToast = useToast()
@@ -80,6 +89,11 @@ export function DriveSyncPanel({
   // never frozen inside the provider's setInterval loop.
   const getSnapshotRef = useRef(getSnapshot)
   getSnapshotRef.current = getSnapshot
+
+  // Same reasoning as getSnapshotRef: auto-sync's setInterval loop must
+  // call the latest `reconcile`, not one frozen at connect time.
+  const reconcileRef = useRef(reconcile)
+  reconcileRef.current = reconcile
 
   // Stops the auto-sync polling loop (and revokes the token) if this
   // panel ever unmounts while connected. It never unmounts in the
@@ -137,7 +151,10 @@ export function DriveSyncPanel({
     setBusy(true)
     try {
       await providerRef.current.connect()
-      providerRef.current.startAutoSync(() => getSnapshotRef.current())
+      providerRef.current.startAutoSync(
+        () => getSnapshotRef.current(),
+        (remote) => reconcileRef.current(remote),
+      )
     } catch {
       // onNotify already surfaced the error as a toast.
     } finally {
@@ -150,7 +167,14 @@ export function DriveSyncPanel({
     setUser(null)
   }
 
-  async function handleSyncNow() {
+  // Single "Sincronizar" action, replacing the old two-button "Sincronizar
+  // Agora" (blind push, could clobber newer remote edits) / "Restaurar do
+  // Drive" (blind local-wins pull, could never actually receive a newer
+  // remote edit) pair. Always pulls first, reconciles by per-file
+  // freshness (see `reconcile`'s doc comment), then pushes the merged
+  // result back — so neither direction can silently overwrite the other's
+  // newer data.
+  async function handleSync() {
     if (!isOnline) {
       // Fail fast with the reassuring offline copy instead of letting the
       // request hit the network and surface a raw "Failed to fetch"
@@ -160,36 +184,27 @@ export function DriveSyncPanel({
     }
     setBusy(true)
     try {
-      await providerRef.current.sync(getSnapshot())
+      const remote = await providerRef.current.pull()
+      const merged = reconcile(remote)
+      await providerRef.current.push(merged)
       setLastSyncedAt(providerRef.current.getStatus().lastSyncedAt)
-    } catch {
-      // onNotify already surfaced the error as a toast.
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function handleRestore() {
-    if (!isOnline) {
-      showToast(driveSyncCopy.offlineSyncSkippedToast, 'warning')
-      return
-    }
-    setBusy(true)
-    try {
-      const projects = await providerRef.current.importFromDrive()
-      onImported(projects)
-      const count = Object.keys(projects).length
-      showToast(`📥 ${count} projeto(s) restaurado(s)`, 'success')
+      showToast(driveSyncCopy.syncCompleteToast, 'success')
     } catch (error) {
-      showToast(`Erro ao restaurar: ${(error as Error).message}`, 'error')
+      if (error instanceof DriveSyncOfflineError) {
+        // Distinct, reassuring copy — not a scary generic error (issue #24).
+        showToast(driveSyncCopy.offlineWillRetrySync, 'warning')
+      } else {
+        console.error('Sync error:', error)
+        showToast(`Erro ao sincronizar: ${(error as Error).message}`, 'error')
+      }
     } finally {
       setBusy(false)
     }
   }
 
   // 'connected-offline' means "authenticated but currently offline" — keep
-  // treating it as connected (Sync/Restore buttons stay visible) rather
-  // than falling back to the never-connected 'offline' state (finding #1).
+  // treating it as connected (the Sync button stays visible) rather than
+  // falling back to the never-connected 'offline' state (finding #1).
   // The offline badge/notice below is driven independently by
   // `useOnlineStatus()`, so it still shows regardless of this value.
   const connected = status === 'connected' || status === 'syncing' || status === 'connected-offline'
@@ -268,11 +283,8 @@ export function DriveSyncPanel({
                 {driveSyncCopy.connectButtonLabel}
               </Button>
             )}
-            <Button variant="default" disabled={busy || !connected} onClick={handleSyncNow}>
+            <Button variant="default" disabled={busy || !connected} onClick={handleSync}>
               {driveSyncCopy.syncButtonLabel}
-            </Button>
-            <Button variant="default" disabled={busy || !connected} onClick={handleRestore}>
-              {driveSyncCopy.importButtonLabel}
             </Button>
           </div>
         </div>

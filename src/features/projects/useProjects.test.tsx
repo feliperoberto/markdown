@@ -6,7 +6,7 @@ import { useProjects } from './useProjects'
 /** Exposes a few useProjects actions/state as clickable buttons + text so
  * tests can drive the hook the same way the real app shell does. */
 function Harness() {
-  const { projects, currentProject, currentFile, selectFile, createFile, restoreProjects } =
+  const { projects, currentProject, currentFile, selectFile, createFile, reconcileWithRemote } =
     useProjects()
 
   return (
@@ -14,14 +14,30 @@ function Harness() {
       <button onClick={() => createFile('Meu Projeto', 'notes', 'hello')}>create-file</button>
       <button
         onClick={() =>
-          restoreProjects({
+          reconcileWithRemote({
             'Meu Projeto': {
               backup: { name: 'backup', content: 'from drive', size: 0, timestamp: 't' },
             },
           })
         }
       >
-        restore
+        reconcile
+      </button>
+      <button
+        onClick={() =>
+          reconcileWithRemote({
+            'Meu Projeto': {
+              notes: {
+                name: 'notes',
+                content: 'newer from drive',
+                size: 0,
+                timestamp: '9999-01-01T00:00:00.000Z',
+              },
+            },
+          })
+        }
+      >
+        reconcile-newer-remote
       </button>
       <button onClick={() => selectFile('Meu Projeto', 'notes')}>select-notes</button>
       <pre>{JSON.stringify({ projects, currentProject, currentFile })}</pre>
@@ -49,21 +65,38 @@ describe('useProjects', () => {
   // Regression test: restore used to full-replace state, deleting any
   // local-only file/project not present in the backup. This exercises the
   // real hook (not just the pure model function) end-to-end: seed creates
-  // a local file, restore brings in an unrelated file from "Drive", and
-  // both must survive.
-  it('restoreProjects preserves local files alongside the restored ones', async () => {
+  // a local file, reconcile brings in an unrelated file from "Drive", and
+  // both must survive (union of files, per mergeProjectsByFreshness).
+  it('reconcileWithRemote preserves local files alongside the remote ones', async () => {
     const { container } = renderHarness()
     const stateText = () => container.querySelector('pre')?.textContent ?? ''
 
     fireEvent.click(screen.getByText('create-file'))
     await waitFor(() => expect(stateText()).toContain('"notes"'))
 
-    fireEvent.click(screen.getByText('restore'))
+    fireEvent.click(screen.getByText('reconcile'))
 
     await waitFor(() => {
       expect(stateText()).toContain('"notes"')
       expect(stateText()).toContain('"backup"')
     })
+  })
+
+  // Smart-sync freshness: a remote file with a newer timestamp than the
+  // local same-named file must overwrite it locally — this is the whole
+  // point of freshness-based merge, unlike the old local-always-wins
+  // restore behavior.
+  it('reconcileWithRemote applies a same-named remote file when it is newer', async () => {
+    const { container } = renderHarness()
+    const stateText = () => container.querySelector('pre')?.textContent ?? ''
+
+    fireEvent.click(screen.getByText('create-file'))
+    await waitFor(() => expect(stateText()).toContain('"hello"'))
+
+    fireEvent.click(screen.getByText('reconcile-newer-remote'))
+
+    await waitFor(() => expect(stateText()).toContain('"newer from drive"'))
+    expect(stateText()).not.toContain('"hello"')
   })
 
   // Regression test: saveProjects() failures (QuotaExceededError, Safari

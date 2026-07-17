@@ -2,6 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/preact'
 import { ToastProvider } from '@/components'
 import { DriveSyncPanel } from './DriveSyncPanel'
+import type { ProjectsSnapshot } from './types'
+
+// Passes the pulled remote snapshot straight through unchanged (or an
+// empty snapshot for "nothing synced yet") — good enough for tests that
+// don't care about the actual freshness-merge outcome, only that sync ran.
+function identityReconcile() {
+  return vi.fn((remote: ProjectsSnapshot | null): ProjectsSnapshot => remote ?? { projects: {} })
+}
 
 // Never hit real Google endpoints in tests: `google-identity.ts`'s GIS
 // script loader is mocked entirely, and the OAuth token client it exposes
@@ -49,7 +57,7 @@ describe('DriveSyncPanel', () => {
   it('connecting to Drive moves the panel from disconnected to connected sync state', async () => {
     render(
       <ToastProvider>
-        <DriveSyncPanel getSnapshot={() => ({ projects: {} })} onImported={vi.fn()} />
+        <DriveSyncPanel getSnapshot={() => ({ projects: {} })} reconcile={identityReconcile()} />
       </ToastProvider>,
     )
 
@@ -71,7 +79,7 @@ describe('DriveSyncPanel', () => {
   it('rejects an empty Client ID with a warning instead of saving it', async () => {
     render(
       <ToastProvider>
-        <DriveSyncPanel getSnapshot={() => ({ projects: {} })} onImported={vi.fn()} />
+        <DriveSyncPanel getSnapshot={() => ({ projects: {} })} reconcile={identityReconcile()} />
       </ToastProvider>,
     )
 
@@ -93,7 +101,7 @@ describe('DriveSyncPanel', () => {
   it('accepts a valid Client ID and shows a success toast', async () => {
     render(
       <ToastProvider>
-        <DriveSyncPanel getSnapshot={() => ({ projects: {} })} onImported={vi.fn()} />
+        <DriveSyncPanel getSnapshot={() => ({ projects: {} })} reconcile={identityReconcile()} />
       </ToastProvider>,
     )
 
@@ -106,6 +114,35 @@ describe('DriveSyncPanel', () => {
     expect(localStorage.getItem('driveClientId')).toBe('new-id.apps.googleusercontent.com')
   })
 
+  // The old two-button pair ("Sincronizar Agora" blind push / "Restaurar
+  // do Drive" blind local-wins pull) is gone — one "Sincronizar" button
+  // now drives a full pull → reconcile → push cycle.
+  it('the single "Sincronizar" button pulls, reconciles, and pushes', async () => {
+    const reconcile = vi.fn(
+      (remote: ProjectsSnapshot | null): ProjectsSnapshot => remote ?? { projects: {} },
+    )
+    render(
+      <ToastProvider>
+        <DriveSyncPanel getSnapshot={() => ({ projects: { A: {} } })} reconcile={reconcile} />
+      </ToastProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sincronização com Google Drive' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Conectar com Google' }))
+    await waitFor(() => expect(screen.queryByText('Conectado como Test User')).not.toBeNull())
+
+    expect(screen.queryByRole('button', { name: 'Restaurar do Drive' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Sincronizar Agora' })).toBeNull()
+    expect(screen.getByText('⚠️ Nunca sincronizado')).not.toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sincronizar' }))
+
+    // First-ever sync: nothing uploaded yet, so pull() resolves to null —
+    // reconcile still runs (and, in the real app, decides what to push).
+    await waitFor(() => expect(reconcile).toHaveBeenCalledWith(null))
+    await waitFor(() => expect(screen.queryByText(/Última sincronização/)).not.toBeNull())
+  })
+
   // Regression test: the auto-sync setInterval had no lifecycle tied to
   // the panel's mount/unmount — an unmount while connected left it
   // running forever. disconnect() (called on unmount) stops it.
@@ -114,7 +151,7 @@ describe('DriveSyncPanel', () => {
     try {
       const { unmount } = render(
         <ToastProvider>
-          <DriveSyncPanel getSnapshot={() => ({ projects: {} })} onImported={vi.fn()} />
+          <DriveSyncPanel getSnapshot={() => ({ projects: {} })} reconcile={identityReconcile()} />
         </ToastProvider>,
       )
 
