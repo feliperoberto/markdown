@@ -5,10 +5,25 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // GitHub Pages serves this project from a custom domain (see CNAME),
 // so assets are resolved from the domain root rather than a repo subpath.
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   base: '/',
   plugins: [
     preact(),
+    // Vite's dev server (HMR) injects component styles via inline <style>
+    // tags with no nonce, which the production CSP's strict `style-src
+    // 'self'` blocks — so the dev server renders completely unstyled. The
+    // production build extracts CSS to real files served under 'self', so
+    // it never needs this. Relax style-src only for `vite dev`, never for
+    // the build that ships to GitHub Pages.
+    command === 'serve' && {
+      name: 'dev-csp-allow-inline-styles',
+      transformIndexHtml(html) {
+        return html.replace(
+          "style-src 'self';",
+          "style-src 'self' 'unsafe-inline';"
+        )
+      },
+    },
     VitePWA({
       // Real precaching via Workbox, generated from Vite's build manifest
       // (issue #24) — replaces the old inlined no-op "service worker" that
@@ -58,4 +73,4 @@ export default defineConfig({
       '@/styles': fileURLToPath(new URL('./src/styles', import.meta.url)),
     },
   },
-})
+}))
