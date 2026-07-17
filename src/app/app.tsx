@@ -48,7 +48,7 @@ export function App(): JSX.Element {
     deleteProject,
     updateFileContent,
     importProjects,
-    restoreProjects,
+    reconcileWithRemote,
   } = useProjects()
 
   const [batchSelection, setBatchSelection] = useState<
@@ -245,7 +245,9 @@ export function App(): JSX.Element {
           <div className="header-right">
             <DriveSyncPanel
               getSnapshot={() => ({ projects })}
-              onImported={restoreProjects}
+              reconcile={(remote) => ({
+                projects: reconcileWithRemote(remote?.projects ?? null),
+              })}
               openSignal={driveConfigOpenSignal}
             />
             <FontSizeButton onCycle={cycleFontSize} />

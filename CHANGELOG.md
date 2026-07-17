@@ -10,6 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Splash screen CTA linking to the companion book's PDF (`marcar-para-existir.pdf`).
+- Per-file "last modified" timestamp shown in the sidebar file list.
+
+### Changed
+
+- Google Drive sync now reconciles local and remote data by per-file
+  freshness (newest edit wins, files unique to either side are always kept)
+  instead of blindly overwriting one side — this applies to both the manual
+  sync button and the background auto-sync loop, and removes the risk of a
+  sync accidentally destroying newer edits made on another device.
+- The Drive panel's separate "Sincronizar Agora" and "Restaurar do Drive"
+  buttons are now a single "Sincronizar" button that does a full,
+  safe, bidirectional sync.
 
 ## [0.1.0] - 2026-07-05
 

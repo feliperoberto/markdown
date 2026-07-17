@@ -1,10 +1,15 @@
 /**
  * Google Drive implementation of `SyncProvider` (issue #21).
  *
- * Extracted from the original `index.html` inline script. The OAuth flow,
- * appDataFolder export/import calls, and the naive hash + 60s polling
- * auto-sync loop are preserved exactly as they behaved before — this is a
- * structural extraction only, not a rewrite of the sync algorithm.
+ * Extracted from the original `index.html` inline script. The OAuth flow
+ * and the naive hash + 60s polling trigger for *when* auto-sync runs a
+ * tick are preserved as they behaved before. What each tick (and the
+ * manual "Sincronizar" button) actually *does* has since changed: instead
+ * of blindly overwriting one side with the other (push-only "Sincronizar
+ * Agora", local-always-wins "Restaurar do Drive"), `pull`/`push` are dumb
+ * download/upload primitives and the actual sync decision — a freshness
+ * merge keyed on each file's `timestamp` — is injected from `src/app/`
+ * (see `SyncProvider`'s doc comment for why that logic can't live here).
  * Token-expiry/refresh hardening (issue #30) tracks acquisition time +
  * `expires_in`, and proactively re-requests a token via silent re-auth when
  * near expiry, rather than letting a Drive API call fail opaquely mid-session.
@@ -59,7 +64,7 @@ function isOffline(): boolean {
 
 /**
  * Scope audit (issue #30): every Drive API call this provider makes
- * (`findDriveFile`, `uploadSnapshot`, `importFromDrive`) targets
+ * (`findDriveFile`, `uploadSnapshot`, `pull`) targets
  * `spaces=appDataFolder` / `parents: ['appDataFolder']` exclusively — there
  * is no code path that reads or writes files outside the app-private
  * appDataFolder. `drive.file` (which would grant access to arbitrary
@@ -312,7 +317,7 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     // auth failure) previously fell through as if "no file exists" —
     // uploadSnapshot then took the create branch and POSTed a duplicate
     // backup instead of PATCHing the real one. Mirrors the res.ok guard
-    // uploadSnapshot/importFromDrive already have; the error body may not
+    // uploadSnapshot/pull already have; the error body may not
     // be valid JSON, so parsing it is best-effort.
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
@@ -332,7 +337,7 @@ export class GoogleDriveSyncProvider implements SyncProvider {
    * bookkeeping (`lastDriveSync` + `projectsLastModified`) here — the one
    * place that actually knows the upload succeeded and already has the
    * hash inputs in scope. Previously only `runAutoSyncTick` wrote
-   * `projectsLastModified`; a manual sync via `exportToDrive`/`sync` left
+   * `projectsLastModified`; a manual sync via `push` left
    * it stale, so the *next* auto-sync tick saw a hash mismatch against
    * data that was already just uploaded and re-uploaded it redundantly.
    */
@@ -389,8 +394,15 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     localStorageAdapter.set(PROJECTS_LAST_MODIFIED_STORAGE_KEY, naiveHash(projectsJson))
   }
 
-  /** Manual, immediate export ("Salvar no Drive" button). */
-  async exportToDrive(snapshot: ProjectsSnapshot): Promise<void> {
+  /**
+   * Uploads `snapshot`, replacing whatever is currently remote. A pure
+   * primitive — no toasts here; the manual "Sincronizar" flow
+   * (`DriveSyncPanel.handleSync`) owns messaging for the whole
+   * pull→reconcile→push sequence as one outcome, and the background
+   * auto-sync tick stays silent on success/failure exactly as before (it
+   * calls `uploadSnapshot` directly, bypassing this method).
+   */
+  async push(snapshot: ProjectsSnapshot): Promise<void> {
     if (!this.accessToken) return
 
     // Offline: skip the network attempt entirely and surface a graceful
@@ -403,39 +415,27 @@ export class GoogleDriveSyncProvider implements SyncProvider {
       // the panel should keep showing this as "connected", not revert to
       // "Conectar".
       this.options.onStatusChange?.('connected-offline')
-      this.options.onNotify?.(driveSyncCopy.offlineWillRetrySync, 'warning')
       throw new DriveSyncOfflineError()
     }
 
-    try {
-      await this.ensureFreshAccessToken()
-      this.options.onNotify?.('Salvando no Drive…', 'success')
-      await this.uploadSnapshot(snapshot)
-      this.options.onNotify?.('☁️ Salvo no Drive', 'success')
-    } catch (err) {
-      console.error('Drive export error:', err)
-      this.options.onNotify?.('Erro ao salvar: ' + (err as Error).message, 'error')
-      throw err
-    }
+    await this.ensureFreshAccessToken()
+    await this.uploadSnapshot(snapshot)
   }
 
   /**
-   * Restores projects from the Drive appDataFolder backup. Not part of the
-   * `SyncProvider` interface (import/export UX is issue #20's concern) —
-   * exposed here as a Drive-specific capability the projects feature may
-   * opt into.
+   * Downloads the current remote snapshot from the Drive appDataFolder
+   * backup, or `null` if nothing has been uploaded yet (an expected
+   * first-sync state, not an error — the caller's reconcile+push resolves
+   * it). Callers no longer get a standalone "restore" toast here; the
+   * unified sync flow (`DriveSyncPanel.handleSync`) owns the user-facing
+   * messaging for the whole pull→reconcile→push sequence.
    */
-  async importFromDrive(): Promise<Record<string, unknown>> {
+  async pull(): Promise<ProjectsSnapshot | null> {
     if (!this.accessToken) throw new Error('Not connected to Drive')
 
     await this.ensureFreshAccessToken()
-    this.options.onNotify?.('Restaurando do Drive…', 'success')
     const existing = await this.findDriveFile()
-
-    if (!existing) {
-      this.options.onNotify?.('Nenhum backup encontrado', 'warning')
-      throw new Error('No Drive backup found')
-    }
+    if (!existing) return null
 
     const res = await fetch(
       `https://www.googleapis.com/drive/v3/files/${this.driveFileId}?alt=media`,
@@ -462,36 +462,7 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     }
     if (!data.projects) throw new Error('Formato de backup inválido')
 
-    return data.projects as Record<string, unknown>
-  }
-
-  /**
-   * Sync entrypoint required by `SyncProvider`. Performs an immediate,
-   * unconditional export — the same operation as the manual "Sincronizar
-   * Agora" button in the original UI. Use `startAutoSync` for the
-   * background polling behavior.
-   */
-  async sync(snapshot: ProjectsSnapshot): Promise<void> {
-    if (!this.accessToken) return
-
-    try {
-      // Bookkeeping (lastDriveSync + projectsLastModified) is recorded by
-      // uploadSnapshot itself on success — see its doc comment.
-      await this.exportToDrive(snapshot)
-    } catch (err) {
-      if (err instanceof DriveSyncOfflineError) {
-        // Already surfaced as a graceful "offline, will retry" toast by
-        // exportToDrive — avoid piling a second, more alarming error toast
-        // on top of it.
-        throw err
-      }
-      console.error('Sync error:', err)
-      this.options.onNotify?.(
-        'Falha ao sincronizar com o Drive: ' + (err as Error).message,
-        'error',
-      )
-      throw err
-    }
+    return { projects: data.projects as Record<string, unknown> }
   }
 
   /**
@@ -500,12 +471,24 @@ export class GoogleDriveSyncProvider implements SyncProvider {
    * - Checks every 60s.
    * - Forces a sync if it's been >10 min since the last one.
    * - Otherwise syncs if the content hash changed AND >5 min elapsed.
+   *
+   * `reconcile` is the same freshness-based merge callback the manual
+   * "Sincronizar" button uses (injected from `src/app/`, since it needs
+   * `projects`-feature knowledge this provider deliberately doesn't have —
+   * see `SyncProvider`'s doc comment). Threading it through here closes
+   * the same blind-overwrite hole in the background path: two
+   * auto-syncing devices can no longer clobber each other, since every
+   * tick pulls + merges by freshness before pushing, instead of blindly
+   * uploading whatever is local.
    */
-  startAutoSync(getSnapshot: () => ProjectsSnapshot): void {
+  startAutoSync(
+    getSnapshot: () => ProjectsSnapshot,
+    reconcile: (remote: ProjectsSnapshot | null) => ProjectsSnapshot,
+  ): void {
     this.stopAutoSync()
 
     this.autoSyncIntervalId = setInterval(() => {
-      void this.runAutoSyncTick(getSnapshot)
+      void this.runAutoSyncTick(getSnapshot, reconcile)
     }, AUTO_SYNC_POLL_INTERVAL_MS)
   }
 
@@ -516,7 +499,10 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     }
   }
 
-  private async runAutoSyncTick(getSnapshot: () => ProjectsSnapshot): Promise<void> {
+  private async runAutoSyncTick(
+    getSnapshot: () => ProjectsSnapshot,
+    reconcile: (remote: ProjectsSnapshot | null) => ProjectsSnapshot,
+  ): Promise<void> {
     if (!this.accessToken) return
 
     const snapshot = getSnapshot()
@@ -538,7 +524,7 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     // (issue #24). The interval keeps running, so the next tick after
     // connectivity returns will pick this back up automatically.
     if (isOffline()) {
-      // Same distinction as exportToDrive above (finding #1): still
+      // Same distinction as push() above (finding #1): still
       // authenticated, just no network right now.
       this.options.onStatusChange?.('connected-offline')
       return
@@ -546,9 +532,11 @@ export class GoogleDriveSyncProvider implements SyncProvider {
 
     try {
       await this.ensureFreshAccessToken()
+      const remote = await this.pull()
+      const merged = reconcile(remote)
       // Bookkeeping (lastDriveSync + projectsLastModified) is recorded by
       // uploadSnapshot itself on success — see its doc comment.
-      await this.uploadSnapshot(snapshot)
+      await this.uploadSnapshot(merged)
       this.options.onStatusChange?.('connected')
       // Silent success - no toast, matching the original behavior.
     } catch (err) {

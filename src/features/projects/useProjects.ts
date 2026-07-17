@@ -20,10 +20,12 @@ export interface UseProjectsResult {
   updateFileContent: (projectName: string, fileName: string, content: string) => void
   importProjects: (incoming: ProjectsState) => void
   // Accepts `unknown` (not `ProjectsState`) because the caller's source is
-  // untrusted external data (a Drive backup) — normalizeProjectsState
+  // untrusted external data (a Drive pull) — normalizeProjectsState
   // validates the shape internally rather than the caller casting past
-  // the type system before this even sees it.
-  restoreProjects: (incoming: unknown) => void
+  // the type system before this even sees it. Returns the merged result
+  // (always, even when only the remote side needed catching up) so the
+  // caller can push it straight back without a second round-trip.
+  reconcileWithRemote: (remote: unknown) => ProjectsState
 }
 
 // Owns the projects/files state for the app and persists every mutation
@@ -160,19 +162,26 @@ export function useProjects(): UseProjectsResult {
     [projects, persist],
   )
 
-  // Restore from a Drive backup: additive, LOCAL-WINS merge (matches the
-  // legacy prototype's `driveImport`), NOT a full-state replace. A full
-  // replace used to silently delete every local-only project/file that
-  // wasn't in the backup — recoverable via the pre-restore backup below,
-  // but a real behavior regression from the prototype. `incoming` is
-  // untrusted external data (a Drive backup, possibly hand-edited or
+  // Smart-sync reconciliation: merges a just-pulled remote snapshot into
+  // local state by per-file freshness (newer `timestamp` wins; files
+  // unique to either side are always kept) instead of blindly favoring
+  // one side — see `model.mergeProjectsByFreshness`. `remote` is
+  // untrusted external data (a Drive pull, possibly hand-edited or
   // written by a different schema version), so it's normalized first:
   // malformed projects/files are dropped, names are structurally
   // sanitized, and `file.name`/`size` are recomputed rather than trusted.
-  const restoreProjects = useCallback(
-    (incoming: unknown) => {
+  // Always returns the merged result — even when only the remote side
+  // needed catching up — so the caller (the Drive sync panel) can push it
+  // straight back without a second pull/merge round-trip.
+  const reconcileWithRemote = useCallback(
+    (remote: unknown) => {
       backupProjects(projects)
-      persist(model.mergeRestoredProjects(projects, normalizeProjectsState(incoming)))
+      const { merged, localChanged } = model.mergeProjectsByFreshness(
+        projects,
+        normalizeProjectsState(remote),
+      )
+      if (localChanged) persist(merged)
+      return merged
     },
     [projects, persist],
   )
@@ -191,6 +200,6 @@ export function useProjects(): UseProjectsResult {
     deleteFile,
     updateFileContent,
     importProjects,
-    restoreProjects,
+    reconcileWithRemote,
   }
 }

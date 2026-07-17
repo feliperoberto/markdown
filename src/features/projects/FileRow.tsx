@@ -4,6 +4,7 @@ import { useRef, useState } from 'preact/hooks'
 import type { ProjectFile } from './types'
 import { showPromptDialog } from './dialogs'
 import { Checkbox, IconButton } from '@/components'
+import { formatRelativeTime } from '@/lib/formatRelativeTime'
 
 export interface FileRowProps {
   projectName: string
@@ -105,7 +106,12 @@ export const FileRow = memo(function FileRow({
           onChange={(checked) => onToggleSelected(projectName, file.name, checked)}
         />
       </span>
-      <span className="file-name">{file.name}</span>
+      <span className="file-info">
+        <span className="file-name">{file.name}</span>
+        <span className="file-timestamp" title={new Date(file.timestamp).toLocaleString()}>
+          editado {formatRelativeTime(new Date(file.timestamp).getTime())}
+        </span>
+      </span>
       <div className="file-actions">
         <IconButton
           variant="compact"

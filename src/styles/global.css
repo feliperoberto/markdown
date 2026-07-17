@@ -341,11 +341,27 @@ body {
   flex-shrink: 0;
 }
 
-.file-name {
+.file-info {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.file-name {
   font-family: var(--body);
   font-size: 0.78rem;
   color: var(--cream);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-timestamp {
+  font-family: var(--body);
+  font-size: 0.68rem;
+  color: var(--cream);
+  opacity: 0.55;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

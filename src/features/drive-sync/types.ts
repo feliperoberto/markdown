@@ -31,6 +31,15 @@ export interface SyncStatus {
  * - Be safe to call `sync()` repeatedly/periodically (idempotent, cheap
  *   no-op when there is nothing new to push).
  */
+/**
+ * Deliberately just download/upload primitives — no merge/conflict logic
+ * here. Reconciling a pulled snapshot with local state needs to inspect
+ * per-file freshness (a `projects`-feature concept: `ProjectFile.timestamp`),
+ * and `src/features/*` may not import across features (see
+ * `CONTRIBUTING.md`'s "Feature taxonomy"). That composition — pull, merge
+ * by freshness, push — happens in `src/app/`, which is allowed to know
+ * about both `drive-sync` and `projects`.
+ */
 export interface SyncProvider {
   /** Whether the provider has enough configuration to attempt a connect. */
   isConfigured(): boolean
@@ -41,8 +50,14 @@ export interface SyncProvider {
   /** Starts the auth/connect flow (e.g. OAuth). Resolves once connected. */
   connect(): Promise<void>
 
-  /** Pushes the given snapshot to the remote backend, if due/needed. */
-  sync(snapshot: ProjectsSnapshot): Promise<void>
+  /**
+   * Downloads the current remote snapshot, or `null` if nothing has been
+   * synced yet (an expected first-sync state, not an error).
+   */
+  pull(): Promise<ProjectsSnapshot | null>
+
+  /** Uploads `snapshot`, replacing whatever is currently remote. */
+  push(snapshot: ProjectsSnapshot): Promise<void>
 
   /** Tears down the session (revokes tokens, stops polling, clears memory). */
   disconnect(): void

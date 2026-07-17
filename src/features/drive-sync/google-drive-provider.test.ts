@@ -81,7 +81,7 @@ describe('GoogleDriveSyncProvider', () => {
         },
       })
 
-      await expect(provider.sync({ projects: { A: {} } })).rejects.toThrow()
+      await expect(provider.push({ projects: { A: {} } })).rejects.toThrow()
 
       // Neither branch of uploadSnapshot should have run — the whole
       // upload must fail fast rather than silently creating a duplicate.
@@ -95,17 +95,17 @@ describe('GoogleDriveSyncProvider', () => {
           jsonResponse({ error: { message: 'quota exceeded' } }, { ok: false, status: 403 }),
       })
 
-      await expect(provider.sync({ projects: {} })).rejects.toThrow(/quota exceeded/)
+      await expect(provider.push({ projects: {} })).rejects.toThrow(/quota exceeded/)
     })
   })
 
   describe('uploadSnapshot bookkeeping', () => {
     // Regression test: projectsLastModified was previously written ONLY by
-    // the auto-sync tick, never by a manual sync — so after "Sincronizar
-    // agora" the next auto-sync tick saw a stale hash and redundantly
-    // re-uploaded identical data. Bookkeeping is now centralized in
-    // uploadSnapshot, so a manual sync() records both keys.
-    it('records lastDriveSync and projectsLastModified after a successful manual sync', async () => {
+    // the auto-sync tick, never by a manual sync — so after "Sincronizar"
+    // the next auto-sync tick saw a stale hash and redundantly re-uploaded
+    // identical data. Bookkeeping is now centralized in uploadSnapshot, so
+    // a manual push() records both keys.
+    it('records lastDriveSync and projectsLastModified after a successful manual push', async () => {
       const provider = await connectedProvider()
       stubFetch({
         [FILES_LIST_URL]: () => jsonResponse({ files: [] }),
@@ -115,7 +115,7 @@ describe('GoogleDriveSyncProvider', () => {
 
       expect(localStorage.getItem('projectsLastModified')).toBeNull()
 
-      await provider.sync({ projects: { A: {} } })
+      await provider.push({ projects: { A: {} } })
 
       expect(localStorage.getItem('lastDriveSync')).not.toBeNull()
       expect(localStorage.getItem('projectsLastModified')).not.toBeNull()
@@ -137,13 +137,23 @@ describe('GoogleDriveSyncProvider', () => {
         },
       })
 
-      await provider.sync({ projects: {} })
+      await provider.push({ projects: {} })
 
       expect(calls).toEqual(['PATCH'])
     })
   })
 
-  describe('importFromDrive', () => {
+  describe('pull', () => {
+    // A first-ever sync (nothing uploaded yet) is an expected state, not
+    // an error — the caller's reconcile+push resolves it, so pull()
+    // resolves to null rather than throwing/toasting a "not found" error.
+    it('resolves to null when no backup file exists yet', async () => {
+      const provider = await connectedProvider()
+      stubFetch({ [FILES_LIST_URL]: () => jsonResponse({ files: [] }) })
+
+      await expect(provider.pull()).resolves.toBeNull()
+    })
+
     // Regression test: res.json() on the backup download had no
     // try/catch, so a truncated/corrupted backup file raised a raw
     // SyntaxError ("Unexpected token…") instead of the clear
@@ -165,7 +175,7 @@ describe('GoogleDriveSyncProvider', () => {
           }) as unknown as Response,
       })
 
-      await expect(provider.importFromDrive()).rejects.toThrow('Formato de backup inválido')
+      await expect(provider.pull()).rejects.toThrow('Formato de backup inválido')
     })
 
     it('rejects with a clear message when the backup is missing a `projects` field', async () => {
@@ -176,7 +186,7 @@ describe('GoogleDriveSyncProvider', () => {
         'https://www.googleapis.com/drive/v3/files/file-id?alt=media': () => jsonResponse({}),
       })
 
-      await expect(provider.importFromDrive()).rejects.toThrow('Formato de backup inválido')
+      await expect(provider.pull()).rejects.toThrow('Formato de backup inválido')
     })
 
     it('resolves with the projects payload from a well-formed backup', async () => {
@@ -188,7 +198,42 @@ describe('GoogleDriveSyncProvider', () => {
           jsonResponse({ version: 1, projects: { A: { f: { name: 'f' } } } }),
       })
 
-      await expect(provider.importFromDrive()).resolves.toEqual({ A: { f: { name: 'f' } } })
+      await expect(provider.pull()).resolves.toEqual({ projects: { A: { f: { name: 'f' } } } })
+    })
+  })
+
+  describe('startAutoSync', () => {
+    // Regression-shaped test for the freshness-sync change: a background
+    // tick used to blindly re-upload whatever `getSnapshot()` returned,
+    // which could clobber a newer remote edit made by another device.
+    // It must now pull the remote snapshot and run it through the
+    // caller-supplied `reconcile` before pushing, exactly like the manual
+    // "Sincronizar" button.
+    it('pulls and reconciles the remote snapshot before pushing, instead of blindly uploading local state', async () => {
+      const provider = await connectedProvider()
+      stubFetch({
+        [FILES_LIST_URL]: () =>
+          jsonResponse({ files: [{ id: 'file-id', name: 'x', modifiedTime: 't' }] }),
+        'https://www.googleapis.com/drive/v3/files/file-id?alt=media': () =>
+          jsonResponse({ version: 1, projects: { Remote: {} } }),
+        'https://www.googleapis.com/upload/drive/v3/files/file-id?uploadType=media': () =>
+          jsonResponse({ id: 'file-id' }),
+      })
+
+      const reconcile = vi.fn((remote: { projects: Record<string, unknown> } | null) => ({
+        projects: { Merged: {}, ...(remote?.projects ?? {}) },
+      }))
+
+      vi.useFakeTimers()
+      try {
+        provider.startAutoSync(() => ({ projects: { Local: {} } }), reconcile)
+        await vi.advanceTimersByTimeAsync(60_000)
+      } finally {
+        provider.stopAutoSync()
+        vi.useRealTimers()
+      }
+
+      expect(reconcile).toHaveBeenCalledWith({ projects: { Remote: {} } })
     })
   })
 

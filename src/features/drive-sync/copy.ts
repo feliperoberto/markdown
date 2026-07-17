@@ -26,16 +26,16 @@ export const driveSyncCopy = {
   disconnectButtonLabel: 'Desconectar',
   disconnectButtonDescription: 'Remove acesso desta sessão',
 
-  syncButtonLabel: 'Sincronizar Agora',
-  syncButtonDescription: 'Força sincronização imediata',
+  // One button, replacing the old "Sincronizar Agora" (blind push) /
+  // "Restaurar do Drive" (blind local-wins pull) pair: always reconciles
+  // both directions by per-file freshness, so neither side can silently
+  // overwrite the other's newer edits.
+  syncButtonLabel: 'Sincronizar',
+  syncButtonDescription:
+    'Baixa e envia alterações, mantendo sempre a versão mais recente de cada arquivo',
+  syncCompleteToast: '🔄 Sincronizado',
 
-  exportButtonLabel: 'Salvar no Drive',
-  exportButtonDescription: 'Exporta todos os projetos como JSON',
-
-  importButtonLabel: 'Restaurar do Drive',
-  importButtonDescription: 'Importa e mescla projetos salvos',
-
-  notConnectedStatus: 'Conecte sua conta Google para salvar e restaurar projetos.',
+  notConnectedStatus: 'Conecte sua conta Google para sincronizar seus projetos.',
   neverSyncedStatus: '⚠️ Nunca sincronizado',
 
   /**

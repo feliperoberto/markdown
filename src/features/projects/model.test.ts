@@ -59,3 +59,73 @@ describe('mergeProjects (ZIP import)', () => {
     expect(result.A?.a?.content).toBe('new from zip')
   })
 })
+
+function fileAt(name: string, content: string, timestamp: string): ProjectsState[string][string] {
+  return { name, content, size: content.length, timestamp }
+}
+
+describe('mergeProjectsByFreshness (smart sync)', () => {
+  it('keeps the remote version when it has a newer timestamp', () => {
+    const local: ProjectsState = { A: { a: fileAt('a', 'old', '2026-01-01T00:00:00.000Z') } }
+    const remote: ProjectsState = { A: { a: fileAt('a', 'new', '2026-01-02T00:00:00.000Z') } }
+
+    const result = model.mergeProjectsByFreshness(local, remote)
+
+    expect(result.merged.A?.a?.content).toBe('new')
+    expect(result.localChanged).toBe(true)
+    expect(result.remoteChanged).toBe(false)
+  })
+
+  it('keeps the local version when it has a newer timestamp', () => {
+    const local: ProjectsState = { A: { a: fileAt('a', 'new', '2026-01-02T00:00:00.000Z') } }
+    const remote: ProjectsState = { A: { a: fileAt('a', 'old', '2026-01-01T00:00:00.000Z') } }
+
+    const result = model.mergeProjectsByFreshness(local, remote)
+
+    expect(result.merged.A?.a?.content).toBe('new')
+    expect(result.localChanged).toBe(false)
+    expect(result.remoteChanged).toBe(true)
+  })
+
+  it('keeps the local version on a timestamp tie, without flagging a remote change', () => {
+    const local: ProjectsState = { A: { a: fileAt('a', 'local', '2026-01-01T00:00:00.000Z') } }
+    const remote: ProjectsState = { A: { a: fileAt('a', 'remote', '2026-01-01T00:00:00.000Z') } }
+
+    const result = model.mergeProjectsByFreshness(local, remote)
+
+    expect(result.merged.A?.a?.content).toBe('local')
+    expect(result.localChanged).toBe(false)
+    expect(result.remoteChanged).toBe(false)
+  })
+
+  it('keeps files unique to either side (union), never silently dropping either', () => {
+    const local: ProjectsState = { A: { onlyLocal: fileAt('onlyLocal', 'x', 't') } }
+    const remote: ProjectsState = { A: { onlyRemote: fileAt('onlyRemote', 'y', 't') } }
+
+    const result = model.mergeProjectsByFreshness(local, remote)
+
+    expect(Object.keys(result.merged.A ?? {}).sort()).toEqual(['onlyLocal', 'onlyRemote'])
+    expect(result.localChanged).toBe(true)
+    expect(result.remoteChanged).toBe(true)
+  })
+
+  it('keeps projects unique to either side (union)', () => {
+    const local: ProjectsState = { LocalOnly: { a: fileAt('a', 'x', 't') } }
+    const remote: ProjectsState = { RemoteOnly: { b: fileAt('b', 'y', 't') } }
+
+    const result = model.mergeProjectsByFreshness(local, remote)
+
+    expect(result.merged.LocalOnly).toBeDefined()
+    expect(result.merged.RemoteOnly).toBeDefined()
+  })
+
+  it('reports no changes when local and remote are already identical', () => {
+    const local: ProjectsState = { A: { a: fileAt('a', 'same', '2026-01-01T00:00:00.000Z') } }
+    const remote: ProjectsState = { A: { a: fileAt('a', 'same', '2026-01-01T00:00:00.000Z') } }
+
+    const result = model.mergeProjectsByFreshness(local, remote)
+
+    expect(result.localChanged).toBe(false)
+    expect(result.remoteChanged).toBe(false)
+  })
+})
