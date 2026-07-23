@@ -9,10 +9,9 @@ export function projectExists(state: ProjectsState, projectName: string): boolea
 
 /**
  * First file in the first project that has one, in insertion order (issue
- * #92: focus a real file on init so typing edits something). Skips empty
- * projects so "the first project with the first file" resolves to the
- * first project that actually contains a file. Returns `null` only when no
- * project holds any file.
+ * #92). Used as the fallback when the remembered last-edited file no longer
+ * exists (and to focus a real file on init so typing edits something).
+ * Skips empty projects; returns `null` only when no project holds any file.
  */
 export function firstFileOf(state: ProjectsState): { project: string; file: string } | null {
   for (const project of Object.keys(state)) {

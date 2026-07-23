@@ -38,6 +38,18 @@ function seedDefaultProjects(): ProjectsState {
 const BACKUP_KEY_PREFIX = 'projects_backup_'
 const MAX_BACKUPS = 5
 
+// UI-state persistence (issue #92: "memory"). Kept in localStorage next to
+// the projects data but deliberately separate keys — losing/ignoring these
+// never risks the actual documents, so reads are all best-effort and fall
+// back to a neutral default rather than throwing.
+const LAST_EDITED_FILE_KEY = 'lastEditedFile'
+const COLLAPSED_PROJECTS_KEY = 'collapsedProjects'
+
+export interface LastEditedFile {
+  project: string
+  file: string
+}
+
 export function loadProjects(adapter: StorageAdapter = localStorageAdapter): ProjectsState {
   const raw = adapter.get(PROJECTS_STORAGE_KEY)
   if (!raw) {
@@ -122,5 +134,81 @@ function rotateBackups(adapter: StorageAdapter): void {
     } else {
       adapter.set(`${BACKUP_KEY_PREFIX}${index + 1}`, value)
     }
+  }
+}
+
+/**
+ * Reads the last file the user had open (issue #92: reopen where you left
+ * off). Returns `null` when nothing valid is stored — the shape is
+ * validated defensively because a hand-edited or corrupt value must never
+ * crash startup; the caller additionally checks the file still exists
+ * before selecting it.
+ */
+export function loadLastEditedFile(
+  adapter: StorageAdapter = localStorageAdapter,
+): LastEditedFile | null {
+  const raw = adapter.get(LAST_EDITED_FILE_KEY)
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      typeof (parsed as LastEditedFile).project === 'string' &&
+      typeof (parsed as LastEditedFile).file === 'string'
+    ) {
+      return { project: (parsed as LastEditedFile).project, file: (parsed as LastEditedFile).file }
+    }
+  } catch (error) {
+    console.error('Failed to parse last-edited-file pointer; ignoring it.', error)
+  }
+  return null
+}
+
+/** Persists the currently open file so a later visit can reopen it. Best-effort. */
+export function saveLastEditedFile(
+  selection: LastEditedFile | null,
+  adapter: StorageAdapter = localStorageAdapter,
+): void {
+  try {
+    if (selection === null) {
+      adapter.remove(LAST_EDITED_FILE_KEY)
+    } else {
+      adapter.set(LAST_EDITED_FILE_KEY, JSON.stringify(selection))
+    }
+  } catch (error) {
+    console.error('Failed to persist last-edited-file pointer; continuing.', error)
+  }
+}
+
+/**
+ * Reads the set of project names the user has collapsed (issue #92:
+ * remember collapsed/expanded state). Returns an empty set on anything
+ * malformed — a missing entry means "nothing collapsed", i.e. every
+ * project expanded, matching the previous always-expanded default.
+ */
+export function loadCollapsedProjects(adapter: StorageAdapter = localStorageAdapter): Set<string> {
+  const raw = adapter.get(COLLAPSED_PROJECTS_KEY)
+  if (!raw) return new Set()
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (Array.isArray(parsed)) {
+      return new Set(parsed.filter((name): name is string => typeof name === 'string'))
+    }
+  } catch (error) {
+    console.error('Failed to parse collapsed-projects set; ignoring it.', error)
+  }
+  return new Set()
+}
+
+/** Persists the collapsed-project name set. Best-effort. */
+export function saveCollapsedProjects(
+  names: Iterable<string>,
+  adapter: StorageAdapter = localStorageAdapter,
+): void {
+  try {
+    adapter.set(COLLAPSED_PROJECTS_KEY, JSON.stringify(Array.from(names)))
+  } catch (error) {
+    console.error('Failed to persist collapsed-projects set; continuing.', error)
   }
 }

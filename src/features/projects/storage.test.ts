@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { loadProjects, saveProjects } from './storage'
+import {
+  loadCollapsedProjects,
+  loadLastEditedFile,
+  loadProjects,
+  saveCollapsedProjects,
+  saveLastEditedFile,
+  saveProjects,
+} from './storage'
 import { localStorageAdapter } from '@/lib/storage-adapter'
 import type { StorageAdapter } from '@/lib/storage-adapter'
 
@@ -45,6 +52,52 @@ describe('loadProjects — first-run seeding', () => {
     const result = loadProjects()
 
     expect(Object.keys(result)).toEqual(['My Project'])
+  })
+})
+
+describe('last-edited-file memory (issue #92)', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('round-trips a saved selection', () => {
+    saveLastEditedFile({ project: 'P', file: 'notes' })
+    expect(loadLastEditedFile()).toEqual({ project: 'P', file: 'notes' })
+  })
+
+  it('returns null when nothing is stored', () => {
+    expect(loadLastEditedFile()).toBeNull()
+  })
+
+  it('clears the pointer when saved with null', () => {
+    saveLastEditedFile({ project: 'P', file: 'notes' })
+    saveLastEditedFile(null)
+    expect(loadLastEditedFile()).toBeNull()
+  })
+
+  it('ignores a malformed stored value', () => {
+    localStorage.setItem('lastEditedFile', '{"project":123}')
+    expect(loadLastEditedFile()).toBeNull()
+    localStorage.setItem('lastEditedFile', 'not json')
+    expect(loadLastEditedFile()).toBeNull()
+  })
+})
+
+describe('collapsed-projects memory (issue #92)', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('round-trips a saved set of names', () => {
+    saveCollapsedProjects(new Set(['A', 'B']))
+    expect([...loadCollapsedProjects()].sort()).toEqual(['A', 'B'])
+  })
+
+  it('returns an empty set when nothing is stored (all expanded)', () => {
+    expect(loadCollapsedProjects().size).toBe(0)
+  })
+
+  it('ignores non-string entries and malformed values', () => {
+    localStorage.setItem('collapsedProjects', '["A", 1, null, "B"]')
+    expect([...loadCollapsedProjects()].sort()).toEqual(['A', 'B'])
+    localStorage.setItem('collapsedProjects', '{"not":"an array"}')
+    expect(loadCollapsedProjects().size).toBe(0)
   })
 })
 
