@@ -275,9 +275,12 @@
 
     <h2>Typography — Font sizes / weights</h2>
     <div class="font-sample">
-      <div class="meta">--editor-font-size: 13px</div>
-      <div class="sample-text" style="font-family: var(--mono); font-size: var(--editor-font-size)">
-        Editor text rendered at --editor-font-size
+      <div class="meta">--font-scale: 1 (editor 13px × scale, preview 1rem × scale)</div>
+      <div
+        class="sample-text"
+        style="font-family: var(--mono); font-size: calc(13px * var(--font-scale))"
+      >
+        Editor text rendered at calc(13px × var(--font-scale))
       </div>
     </div>
 

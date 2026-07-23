@@ -1,9 +1,21 @@
-import { useCallback, useState } from 'preact/hooks'
+import { useCallback, useRef, useState } from 'preact/hooks'
 import * as model from './model'
 import { backupProjects, loadProjects, saveProjects } from './storage'
 import { normalizeProjectsState } from './validate'
 import type { ProjectsState } from './types'
 import { useToast } from '@/components'
+
+// Resolves which file to focus on mount (issue #92): the first available
+// file, so a first-time (seeded) or returning user lands on a real file and
+// typing edits something instead of a phantom selection. `null` only when
+// there are no files at all.
+function resolveInitialSelection(projects: ProjectsState): {
+  project: string | null
+  file: string | null
+} {
+  const first = model.firstFileOf(projects)
+  return { project: first?.project ?? null, file: first?.file ?? null }
+}
 
 export interface UseProjectsResult {
   projects: ProjectsState
@@ -43,9 +55,23 @@ export interface UseProjectsResult {
 // directly). Consumers (sidebar rendering, editor, import/export, drive-sync)
 // should drive all reads/writes through this hook.
 export function useProjects(): UseProjectsResult {
-  const [projects, setProjects] = useState<ProjectsState>(() => loadProjects())
-  const [currentProject, setCurrentProject] = useState<string | null>(null)
-  const [currentFile, setCurrentFile] = useState<string | null>(null)
+  // Load projects and resolve the initial selection together, exactly once,
+  // so both derive from the same first read (loadProjects() seeds a default
+  // project on genuine first run — see storage.ts).
+  const initialRef = useRef<{
+    projects: ProjectsState
+    selection: { project: string | null; file: string | null }
+  } | null>(null)
+  if (initialRef.current === null) {
+    const loaded = loadProjects()
+    initialRef.current = { projects: loaded, selection: resolveInitialSelection(loaded) }
+  }
+
+  const [projects, setProjects] = useState<ProjectsState>(initialRef.current.projects)
+  const [currentProject, setCurrentProject] = useState<string | null>(
+    initialRef.current.selection.project,
+  )
+  const [currentFile, setCurrentFile] = useState<string | null>(initialRef.current.selection.file)
   const showToast = useToast()
 
   // Persists first, then updates in-memory state only on success. Previously
@@ -94,6 +120,12 @@ export function useProjects(): UseProjectsResult {
     (name: string) => {
       persist(model.createProject(projects, name))
       setCurrentProject(name)
+      // A brand-new project has no files, so clear any previously-selected
+      // file — otherwise `currentFile` keeps pointing at the old project's
+      // file and the breadcrumb renders a mismatched "NewProject / oldFile"
+      // pair. Harmless when nothing was selected; only matters now that a
+      // file can be pre-selected on init (issue #92).
+      setCurrentFile(null)
       showToast('✅ Projeto criado', 'success')
     },
     [projects, persist, showToast],

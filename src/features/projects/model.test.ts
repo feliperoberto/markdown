@@ -49,6 +49,26 @@ describe('mergeRestoredProjects', () => {
   })
 })
 
+describe('firstFileOf', () => {
+  it('returns the first file of the first project that has one, in order', () => {
+    const state: ProjectsState = {
+      A: { a1: file('a1', ''), a2: file('a2', '') },
+      B: { b1: file('b1', '') },
+    }
+    expect(model.firstFileOf(state)).toEqual({ project: 'A', file: 'a1' })
+  })
+
+  it('skips leading empty projects', () => {
+    const state: ProjectsState = { Empty: {}, B: { b1: file('b1', '') } }
+    expect(model.firstFileOf(state)).toEqual({ project: 'B', file: 'b1' })
+  })
+
+  it('returns null when no project holds any file', () => {
+    expect(model.firstFileOf({ Empty: {} })).toBeNull()
+    expect(model.firstFileOf({})).toBeNull()
+  })
+})
+
 describe('moveFile', () => {
   it('reorders a file within its project, inserting before the target', () => {
     const state: ProjectsState = { A: { a: file('a', ''), b: file('b', ''), c: file('c', '') } }
