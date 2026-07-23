@@ -206,6 +206,12 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* Without an explicit min-height, this flex item's automatic minimum
+     size is its content height, so a tall project list pushes the footer
+     off-screen and the list itself never scrolls — the clipped-overflow
+     bug (issue #92). min-height:0 lets it shrink so the inner
+     .projects-list scroll container actually engages. */
+  min-height: 0;
 }
 
 .projects-list {
@@ -215,6 +221,10 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
+  /* Same flexbox min-size rule as .sidebar-content above: required so the
+     list scrolls past ~3–4 files instead of overflowing its fixed-height
+     sidebar (issue #92). */
+  min-height: 0;
 }
 
 .projects-list-empty {
@@ -234,6 +244,13 @@ body {
   border-radius: 10px;
   overflow: hidden;
   transition: border-color var(--transition);
+  /* Don't let a group shrink inside the flex-column list (issue #92): its
+     own `overflow: hidden` sets an automatic min-size of 0, so with the
+     default flex-shrink:1 the groups collapsed to fit and clipped their
+     file rows — the reported "files past the 3rd/4th are hidden" bug —
+     instead of the list scrolling. Keeping natural height forces the
+     overflow onto .projects-list, which scrolls. */
+  flex-shrink: 0;
 }
 
 .project-group:hover {
