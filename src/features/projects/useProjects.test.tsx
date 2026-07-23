@@ -22,6 +22,7 @@ function Harness() {
     <div>
       <button onClick={() => createFile('Meu Projeto', 'notes', 'hello')}>create-file</button>
       <button onClick={() => createProject('Segundo')}>create-project</button>
+      <button onClick={() => createFile('Segundo', 'notes', 'other')}>create-file-segundo</button>
       <button onClick={() => moveFile('Meu Projeto', 'notes', 'Segundo', null)}>move-file</button>
       <button onClick={() => moveProject('Segundo', 'Meu Projeto')}>move-project</button>
       <button
@@ -126,6 +127,25 @@ describe('useProjects', () => {
       expect(stateText()).toContain('"Segundo":{"notes"')
       expect(stateText()).toContain('"currentProject":"Segundo"')
     })
+  })
+
+  it('moveFile into a project with a same-named file is rejected with a warning toast', async () => {
+    const { container } = renderHarness()
+    const stateText = () => container.querySelector('pre')?.textContent ?? ''
+
+    fireEvent.click(screen.getByText('create-file')) // Meu Projeto/notes
+    fireEvent.click(screen.getByText('create-project')) // Segundo
+    fireEvent.click(screen.getByText('create-file-segundo')) // Segundo/notes
+    await waitFor(() => expect(stateText()).toContain('"Segundo":{"notes"'))
+
+    fireEvent.click(screen.getByText('move-file'))
+
+    // Warning toast (role="status") explaining the rejected move.
+    await waitFor(() => expect(screen.getByText(/Já existe um arquivo/)).not.toBeNull())
+    // Both files survive untouched: the source file kept its content and the
+    // target's same-named file was not overwritten (nothing moved).
+    expect(stateText()).toContain('"content":"hello"')
+    expect(stateText()).toContain('"content":"other"')
   })
 
   it('moveProject reorders the project list', async () => {

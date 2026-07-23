@@ -141,7 +141,9 @@ export function DriveSyncPanel({ reconcile, openSignal }: DriveSyncPanelProps): 
       // top of the "Drive conectado" one; errors still surface.
       await performSync({ silentSuccess: true })
     } catch {
-      // onNotify already surfaced the error as a toast.
+      // Only connect() can throw here (performSync handles its own errors);
+      // its failure was already surfaced as a toast via the provider's
+      // onNotify callback.
     } finally {
       setBusy(false)
     }
@@ -159,16 +161,34 @@ export function DriveSyncPanel({ reconcile, openSignal }: DriveSyncPanelProps): 
   // comment), then pushes the merged result back — so neither direction
   // can silently overwrite the other's newer data. Runs both on connect
   // and from the manual button; never on a background timer (issue #92).
+  //
+  // Owns its own error messaging (rather than throwing to each caller) so a
+  // connect-time sync failure surfaces to the user just like a manual one —
+  // reconcile/push errors don't flow through the provider's onNotify, so a
+  // caller that swallowed the throw would leave the user thinking they'd
+  // synced when nothing was pushed. `silentSuccess` suppresses only the
+  // success toast (used on connect, to avoid stacking it on "Drive
+  // conectado"); errors always show.
   async function performSync({ silentSuccess = false } = {}) {
-    const remote = await providerRef.current.pull()
-    const merged = reconcile(remote)
-    await providerRef.current.push(merged)
-    setLastSyncedAt(providerRef.current.getStatus().lastSyncedAt)
-    if (!silentSuccess) showToast(driveSyncCopy.syncCompleteToast, 'success')
+    try {
+      const remote = await providerRef.current.pull()
+      const merged = reconcile(remote)
+      await providerRef.current.push(merged)
+      setLastSyncedAt(providerRef.current.getStatus().lastSyncedAt)
+      if (!silentSuccess) showToast(driveSyncCopy.syncCompleteToast, 'success')
+    } catch (error) {
+      if (error instanceof DriveSyncOfflineError) {
+        // Distinct, reassuring copy — not a scary generic error (issue #24).
+        showToast(driveSyncCopy.offlineWillRetrySync, 'warning')
+      } else {
+        console.error('Sync error:', error)
+        showToast(`Erro ao sincronizar: ${(error as Error).message}`, 'error')
+      }
+    }
   }
 
   // Manual "Sincronizar" button handler: wraps performSync with the
-  // online-precheck, busy state, and user-facing error messaging.
+  // online-precheck and busy state.
   async function handleSync() {
     if (!isOnline) {
       // Fail fast with the reassuring offline copy instead of letting the
@@ -180,14 +200,6 @@ export function DriveSyncPanel({ reconcile, openSignal }: DriveSyncPanelProps): 
     setBusy(true)
     try {
       await performSync()
-    } catch (error) {
-      if (error instanceof DriveSyncOfflineError) {
-        // Distinct, reassuring copy — not a scary generic error (issue #24).
-        showToast(driveSyncCopy.offlineWillRetrySync, 'warning')
-      } else {
-        console.error('Sync error:', error)
-        showToast(`Erro ao sincronizar: ${(error as Error).message}`, 'error')
-      }
     } finally {
       setBusy(false)
     }

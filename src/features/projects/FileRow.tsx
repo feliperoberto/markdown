@@ -3,7 +3,7 @@ import { memo } from 'preact/compat'
 import { useRef, useState } from 'preact/hooks'
 import type { ProjectFile } from './types'
 import { showPromptDialog } from './dialogs'
-import { DND_MIME, readDrag, serializeDrag } from './dnd'
+import { DND_MIME, getActiveDragKind, readDrag, serializeDrag, setActiveDrag } from './dnd'
 import { Checkbox, IconButton } from '@/components'
 import { formatRelativeTime } from '@/lib/formatRelativeTime'
 
@@ -55,15 +55,22 @@ export const FileRow = memo(function FileRow({
   // --- Drag & drop (issue #92) ---
   function handleDragStart(e: DragEvent) {
     if (!onMoveFile) return
-    e.dataTransfer?.setData(
-      DND_MIME,
-      serializeDrag({ kind: 'file', project: projectName, file: file.name }),
-    )
+    const payload = { kind: 'file' as const, project: projectName, file: file.name }
+    e.dataTransfer?.setData(DND_MIME, serializeDrag(payload))
     if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
+    setActiveDrag(payload)
+  }
+
+  function handleDragEnd() {
+    setActiveDrag(null)
   }
 
   function handleDragOver(e: DragEvent) {
-    if (!onMoveFile) return
+    // Only a file drag can land on a row (insert-before-me). Ignoring every
+    // other drag — a project drag, or a foreign OS-file/text drag — means
+    // this row never opts in as a drop target for them, so it neither shows
+    // a misleading indicator nor swallows/derails the drop.
+    if (!onMoveFile || getActiveDragKind() !== 'file') return
     e.preventDefault()
     // Stop the parent project group from also claiming this as a plain
     // "append to project" drop — a row means "insert before me".
@@ -144,6 +151,7 @@ export const FileRow = memo(function FileRow({
       aria-current={isActive ? 'true' : undefined}
       draggable={Boolean(onMoveFile)}
       onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}

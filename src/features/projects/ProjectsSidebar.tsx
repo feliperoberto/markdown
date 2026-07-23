@@ -91,7 +91,12 @@ export function ProjectsSidebar({
   // persisted set doesn't accumulate stale names forever.
   useEffect(() => {
     setCollapsedProjects((prev) => {
-      const next = new Set([...prev].filter((name) => name in projects))
+      // Own-property check (not `name in projects`) so a project named like
+      // an Object.prototype member — 'constructor', 'toString', … — is
+      // pruned correctly after deletion, matching model.projectExists.
+      const next = new Set(
+        [...prev].filter((name) => Object.prototype.hasOwnProperty.call(projects, name)),
+      )
       return next.size === prev.size ? prev : next
     })
   }, [projects])

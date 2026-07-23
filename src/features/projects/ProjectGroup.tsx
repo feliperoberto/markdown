@@ -3,7 +3,7 @@ import { memo } from 'preact/compat'
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { FileRow } from './FileRow'
 import { showConfirmDialog, showPromptDialog } from './dialogs'
-import { DND_MIME, readDrag, serializeDrag } from './dnd'
+import { DND_MIME, getActiveDragKind, readDrag, serializeDrag, setActiveDrag } from './dnd'
 import type { ProjectFiles } from './types'
 import { IconButton } from '@/components'
 
@@ -105,14 +105,23 @@ export const ProjectGroup = memo(function ProjectGroup({
   // dropping before this one) or a file (move into this project, appended).
   function handleHeaderDragStart(e: DragEvent) {
     if (!onMoveProject) return
-    e.dataTransfer?.setData(DND_MIME, serializeDrag({ kind: 'project', project: projectName }))
+    const payload = { kind: 'project' as const, project: projectName }
+    e.dataTransfer?.setData(DND_MIME, serializeDrag(payload))
     if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
+    setActiveDrag(payload)
+  }
+
+  function handleHeaderDragEnd() {
+    setActiveDrag(null)
   }
 
   function handleGroupDragOver(e: DragEvent) {
-    if (!dragEnabled) return
-    // Opt this element in as a drop target (getData is unreadable here, so
-    // we can't yet filter by kind — the drop handler validates instead).
+    // Opt in only for one of our own drags (a file to move in, or a project
+    // to reorder). getData is unreadable here, so the drop handler still
+    // re-validates by kind — but consulting the active-drag flag first keeps
+    // foreign OS-file/text drags from highlighting the group or triggering a
+    // navigating drop.
+    if (!dragEnabled || getActiveDragKind() === null) return
     e.preventDefault()
     if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
     if (!isDropTarget) setIsDropTarget(true)
@@ -301,6 +310,7 @@ export const ProjectGroup = memo(function ProjectGroup({
         aria-expanded={isExpanded}
         draggable={Boolean(onMoveProject)}
         onDragStart={handleHeaderDragStart}
+        onDragEnd={handleHeaderDragEnd}
         onClick={toggleExpanded}
         onDblClick={handleHeaderDoubleClick}
         onKeyDown={handleHeaderKeyDown}

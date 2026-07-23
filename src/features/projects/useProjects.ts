@@ -104,16 +104,21 @@ export function useProjects(): UseProjectsResult {
   // state means the editor never displays content that didn't actually
   // reach storage; the previous, genuinely-saved state stays visible
   // instead, alongside the error toast.
+  // Returns whether the write succeeded, so a caller that also updates
+  // selection state (e.g. `moveFile` following the active file into its new
+  // project) can skip that update when the persist failed — otherwise the
+  // selection would point at state that never reached storage.
   const persist = useCallback(
-    (next: ProjectsState) => {
+    (next: ProjectsState): boolean => {
       try {
         saveProjects(next)
       } catch (error) {
         console.error('Failed to save projects.', error)
         showToast(`Erro ao salvar: ${(error as Error)?.message ?? 'armazenamento cheio'}`, 'error')
-        return
+        return false
       }
       setProjects(next)
+      return true
     },
     [showToast],
   )
@@ -216,18 +221,30 @@ export function useProjects(): UseProjectsResult {
       toProject: string,
       beforeFile: string | null = null,
     ) => {
+      // Explain the one rejection a user can trigger but not see: moving a
+      // file into another project that already has a same-named file. The
+      // model refuses it (never overwrites), and without this the drop just
+      // silently does nothing.
+      if (fromProject !== toProject && model.fileExists(projects, toProject, fileName)) {
+        showToast(`Já existe um arquivo "${fileName}" em "${toProject}".`, 'warning')
+        return
+      }
       const next = model.moveFile(projects, fromProject, fileName, toProject, beforeFile)
-      // Same reference back means the move was a no-op or invalid (e.g. a
-      // name collision in the target project) — skip the persist/toast.
+      // Same reference back means the move was a no-op (e.g. dropping a file
+      // onto itself) — nothing to persist.
       if (next === projects) return
-      persist(next)
-      // Keep the moved file selected if it was the active one, following it
-      // into its new project.
-      setCurrentProject((current) =>
-        current === fromProject && currentFile === fileName ? toProject : current,
-      )
+      // Only follow the active file into its new project if the write
+      // actually reached storage; on a persist failure the file is still in
+      // its old project, so moving the selection would point the editor at a
+      // file that isn't there.
+      const saved = persist(next)
+      if (saved) {
+        setCurrentProject((current) =>
+          current === fromProject && currentFile === fileName ? toProject : current,
+        )
+      }
     },
-    [projects, persist, currentFile],
+    [projects, persist, currentFile, showToast],
   )
 
   const moveProject = useCallback(
