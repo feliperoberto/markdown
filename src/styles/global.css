@@ -257,6 +257,27 @@ body {
   border-color: rgba(255, 255, 255, 0.13);
 }
 
+/* Drag & drop feedback (issue #92): highlight the project group or file
+   row currently under a compatible drag. */
+.project-group.drop-target {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
+.file-item.drop-target {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 -2px 0 -1px var(--accent) inset;
+}
+
+/* The project header doubles as the drag handle for reordering projects. */
+.project-header[draggable='true'] {
+  cursor: grab;
+}
+
+.project-header[draggable='true']:active {
+  cursor: grabbing;
+}
+
 .project-header {
   display: flex;
   align-items: center;

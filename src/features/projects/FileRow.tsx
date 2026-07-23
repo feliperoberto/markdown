@@ -3,6 +3,7 @@ import { memo } from 'preact/compat'
 import { useRef, useState } from 'preact/hooks'
 import type { ProjectFile } from './types'
 import { showPromptDialog } from './dialogs'
+import { DND_MIME, getActiveDragKind, readDrag, serializeDrag, setActiveDrag } from './dnd'
 import { Checkbox, IconButton } from '@/components'
 import { formatRelativeTime } from '@/lib/formatRelativeTime'
 
@@ -16,6 +17,17 @@ export interface FileRowProps {
   onToggleSelected: (projectName: string, fileName: string, selected: boolean) => void
   onRenameFile: (projectName: string, oldFileName: string, newFileName: string) => void
   onDeleteFile: (projectName: string, fileName: string) => void
+  /**
+   * Drag & drop (issue #92). When provided, the row becomes draggable and
+   * a drop target: dropping a file here inserts the dragged file directly
+   * before this one (moving it across projects if needed).
+   */
+  onMoveFile?: (
+    fromProject: string,
+    fileName: string,
+    toProject: string,
+    beforeFile?: string | null,
+  ) => void
 }
 
 // Renders one file row in the sidebar tree, including swipe-to-reveal
@@ -34,9 +46,52 @@ export const FileRow = memo(function FileRow({
   onToggleSelected,
   onRenameFile,
   onDeleteFile,
+  onMoveFile,
 }: FileRowProps): JSX.Element {
   const [isSwiped, setIsSwiped] = useState(false)
+  const [isDropTarget, setIsDropTarget] = useState(false)
   const touchStartX = useRef(0)
+
+  // --- Drag & drop (issue #92) ---
+  function handleDragStart(e: DragEvent) {
+    if (!onMoveFile) return
+    const payload = { kind: 'file' as const, project: projectName, file: file.name }
+    e.dataTransfer?.setData(DND_MIME, serializeDrag(payload))
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
+    setActiveDrag(payload)
+  }
+
+  function handleDragEnd() {
+    setActiveDrag(null)
+  }
+
+  function handleDragOver(e: DragEvent) {
+    // Only a file drag can land on a row (insert-before-me). Ignoring every
+    // other drag — a project drag, or a foreign OS-file/text drag — means
+    // this row never opts in as a drop target for them, so it neither shows
+    // a misleading indicator nor swallows/derails the drop.
+    if (!onMoveFile || getActiveDragKind() !== 'file') return
+    e.preventDefault()
+    // Stop the parent project group from also claiming this as a plain
+    // "append to project" drop — a row means "insert before me".
+    e.stopPropagation()
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+    if (!isDropTarget) setIsDropTarget(true)
+  }
+
+  function handleDragLeave() {
+    setIsDropTarget(false)
+  }
+
+  function handleDrop(e: DragEvent) {
+    if (!onMoveFile) return
+    setIsDropTarget(false)
+    const payload = readDrag(e)
+    if (!payload || payload.kind !== 'file') return
+    e.preventDefault()
+    e.stopPropagation()
+    onMoveFile(payload.project, payload.file, projectName, file.name)
+  }
 
   function handleTouchStart(e: TouchEvent) {
     touchStartX.current = e.touches[0]?.clientX ?? 0
@@ -90,10 +145,16 @@ export const FileRow = memo(function FileRow({
 
   return (
     <div
-      className={`file-item${isActive ? ' active' : ''}${isSwiped ? ' swiped' : ''}`}
+      className={`file-item${isActive ? ' active' : ''}${isSwiped ? ' swiped' : ''}${isDropTarget ? ' drop-target' : ''}`}
       role="button"
       tabIndex={0}
       aria-current={isActive ? 'true' : undefined}
+      draggable={Boolean(onMoveFile)}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
       onClick={handleRowClick}
       onKeyDown={handleRowKeyDown}
       onTouchStart={handleTouchStart}
