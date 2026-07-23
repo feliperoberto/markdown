@@ -7,6 +7,21 @@ export function projectExists(state: ProjectsState, projectName: string): boolea
   return Object.prototype.hasOwnProperty.call(state, projectName)
 }
 
+/**
+ * First file in the first project that has one, in insertion order (issue
+ * #92: focus a real file on init so typing edits something). Skips empty
+ * projects so "the first project with the first file" resolves to the
+ * first project that actually contains a file. Returns `null` only when no
+ * project holds any file.
+ */
+export function firstFileOf(state: ProjectsState): { project: string; file: string } | null {
+  for (const project of Object.keys(state)) {
+    const files = Object.keys(state[project] ?? {})
+    if (files.length > 0) return { project, file: files[0]! }
+  }
+  return null
+}
+
 export function fileExists(state: ProjectsState, projectName: string, fileName: string): boolean {
   return Boolean(
     state[projectName] && Object.prototype.hasOwnProperty.call(state[projectName], fileName),
