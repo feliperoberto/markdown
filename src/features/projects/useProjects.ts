@@ -105,6 +105,12 @@ export function useProjects(): UseProjectsResult {
     (name: string) => {
       persist(model.createProject(projects, name))
       setCurrentProject(name)
+      // A brand-new project has no files, so clear any previously-selected
+      // file — otherwise `currentFile` keeps pointing at the old project's
+      // file and the breadcrumb renders a mismatched "NewProject / oldFile"
+      // pair. Harmless when nothing was selected; only matters now that a
+      // file can be pre-selected on init (issue #92).
+      setCurrentFile(null)
       showToast('✅ Projeto criado', 'success')
     },
     [projects, persist, showToast],
