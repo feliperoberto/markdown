@@ -35,6 +35,16 @@ export interface ProjectsSidebarProps {
   onImportZip?: (file: File) => void
   /** Sidebar-footer "⚙️ Config" — opens the Drive/Config modal (app.tsx owns it). */
   onOpenConfig?: () => void
+  // Drag & drop (issue #92): reorder files within a project / move them
+  // across projects, and reorder the projects themselves. Optional so the
+  // tree still renders (without DnD) when a caller doesn't wire them.
+  onMoveFile?: (
+    fromProject: string,
+    fileName: string,
+    toProject: string,
+    beforeFile?: string | null,
+  ) => void
+  onMoveProject?: (projectName: string, beforeProject?: string | null) => void
 }
 
 // Renders the full project/file sidebar tree. Owns only tree
@@ -59,6 +69,8 @@ export function ProjectsSidebar({
   onUploadMultipleFiles,
   onImportZip,
   onOpenConfig,
+  onMoveFile,
+  onMoveProject,
 }: ProjectsSidebarProps): JSX.Element {
   const [selectedByProject, setSelectedByProject] = useState<Record<string, Set<string>>>({})
   const projectNames = Object.keys(projects)
@@ -219,6 +231,8 @@ export function ProjectsSidebar({
                 onExportProject={onExportProject}
                 onUploadFile={onUploadFile}
                 onUploadMultipleFiles={onUploadMultipleFiles}
+                onMoveFile={onMoveFile}
+                onMoveProject={onMoveProject}
               />
             ))
           )}

@@ -206,6 +206,12 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* Without an explicit min-height, this flex item's automatic minimum
+     size is its content height, so a tall project list pushes the footer
+     off-screen and the list itself never scrolls — the clipped-overflow
+     bug (issue #92). min-height:0 lets it shrink so the inner
+     .projects-list scroll container actually engages. */
+  min-height: 0;
 }
 
 .projects-list {
@@ -215,6 +221,10 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
+  /* Same flexbox min-size rule as .sidebar-content above: required so the
+     list scrolls past ~3–4 files instead of overflowing its fixed-height
+     sidebar (issue #92). */
+  min-height: 0;
 }
 
 .projects-list-empty {
@@ -234,10 +244,38 @@ body {
   border-radius: 10px;
   overflow: hidden;
   transition: border-color var(--transition);
+  /* Don't let a group shrink inside the flex-column list (issue #92): its
+     own `overflow: hidden` sets an automatic min-size of 0, so with the
+     default flex-shrink:1 the groups collapsed to fit and clipped their
+     file rows — the reported "files past the 3rd/4th are hidden" bug —
+     instead of the list scrolling. Keeping natural height forces the
+     overflow onto .projects-list, which scrolls. */
+  flex-shrink: 0;
 }
 
 .project-group:hover {
   border-color: rgba(255, 255, 255, 0.13);
+}
+
+/* Drag & drop feedback (issue #92): highlight the project group or file
+   row currently under a compatible drag. */
+.project-group.drop-target {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
+.file-item.drop-target {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 -2px 0 -1px var(--accent) inset;
+}
+
+/* The project header doubles as the drag handle for reordering projects. */
+.project-header[draggable='true'] {
+  cursor: grab;
+}
+
+.project-header[draggable='true']:active {
+  cursor: grabbing;
 }
 
 .project-header {
@@ -573,7 +611,10 @@ main,
   background-color: var(--ground-deep);
   color: var(--cream);
   font-family: var(--mono);
-  font-size: var(--editor-font-size);
+  /* Derived from the shared --font-scale multiplier (issue #92) so the "Aa"
+     toggle resizes the editor and preview together. 13px base preserves
+     the previous default at scale 1. */
+  font-size: calc(13px * var(--font-scale));
   line-height: 1.7;
   resize: none;
   overflow-y: auto;
@@ -633,13 +674,21 @@ main,
   box-shadow:
     0 6px 0 -2px rgba(0, 0, 0, 0.2),
     0 4px 20px rgba(0, 0, 0, 0.25);
+  /* Base font-size for the rendered preview, derived from the shared
+     --font-scale multiplier (issue #92): the "Aa" toggle now scales the
+     preview too, not only the editor. Every child below keeps its original
+     `rem` size but multiplies it by --font-scale, so the whole document
+     grows proportionally without `em` compounding. */
+  font-size: calc(1rem * var(--font-scale));
 }
 
-/* Rendered markdown typography (paper) */
+/* Rendered markdown typography (paper). Each size is its original `rem`
+   value multiplied by --font-scale, so the whole document scales
+   proportionally with the font-size toggle. */
 .preview-content h1 {
   font-family: var(--hand);
   font-weight: 700;
-  font-size: 2.2rem;
+  font-size: calc(2.2rem * var(--font-scale));
   line-height: 0.95;
   color: var(--ink);
   margin: 0 0 0.5rem;
@@ -648,7 +697,7 @@ main,
 .preview-content h2 {
   font-family: var(--serif-display);
   font-weight: 600;
-  font-size: 1.4rem;
+  font-size: calc(1.4rem * var(--font-scale));
   color: var(--ink);
   margin: 1.2rem 0 0.5rem;
 }
@@ -656,7 +705,7 @@ main,
 .preview-content h3 {
   font-family: var(--serif-display);
   font-weight: 600;
-  font-size: 1.1rem;
+  font-size: calc(1.1rem * var(--font-scale));
   color: var(--ink);
   margin: 1rem 0 0.4rem;
 }
@@ -672,7 +721,7 @@ main,
 
 .preview-content p {
   font-family: var(--body);
-  font-size: 0.95rem;
+  font-size: calc(0.95rem * var(--font-scale));
   line-height: 1.7;
   color: var(--ink);
   margin: 0 0 0.75rem;
@@ -713,14 +762,14 @@ main,
   background: none;
   color: var(--cream);
   padding: 0;
-  font-size: 0.8rem;
+  font-size: calc(0.8rem * var(--font-scale));
   line-height: 1.5;
 }
 
 .preview-content blockquote {
   font-family: var(--serif-display);
   font-style: italic;
-  font-size: 1rem;
+  font-size: calc(1rem * var(--font-scale));
   line-height: 1.5;
   color: var(--ink);
   padding: 0.5rem 0 0.5rem 1rem;
@@ -736,7 +785,7 @@ main,
 
 .preview-content li {
   font-family: var(--body);
-  font-size: 0.92rem;
+  font-size: calc(0.92rem * var(--font-scale));
   line-height: 1.55;
   color: var(--ink);
   margin: 0.25rem 0;
@@ -758,7 +807,7 @@ main,
   width: 100%;
   border-collapse: collapse;
   margin: 0 0 0.75rem;
-  font-size: 0.88rem;
+  font-size: calc(0.88rem * var(--font-scale));
 }
 
 .preview-content th,

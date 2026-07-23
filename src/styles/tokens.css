@@ -59,8 +59,11 @@
   /* ============================================================
      TYPOGRAPHY — Font sizes / weights
      ============================================================ */
-  /* Editor font size (toggle) */
-  --editor-font-size: 13px;
+  /* Font-size toggle (issue #92): a unitless multiplier applied to BOTH
+     the editor textarea and the rendered preview. Cycles 1 → 1.5 → 2 (see
+     FONT_SCALES / useEditorFontSize). The concrete per-pane sizes are
+     derived from this via calc() in global.css. */
+  --font-scale: 1;
 
   /* ============================================================
      SPACING

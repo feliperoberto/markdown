@@ -10,8 +10,8 @@ export function projectExists(state: ProjectsState, projectName: string): boolea
 /**
  * First file in the first project that has one, in insertion order (issue
  * #92). Used as the fallback when the remembered last-edited file no longer
- * exists. Skips empty projects; returns `null` only when no project holds
- * any file.
+ * exists (and to focus a real file on init so typing edits something).
+ * Skips empty projects; returns `null` only when no project holds any file.
  */
 export function firstFileOf(state: ProjectsState): { project: string; file: string } | null {
   for (const project of Object.keys(state)) {
@@ -126,6 +126,77 @@ export function updateFileContent(
       [fileName]: { ...file, content, size: content.length, timestamp: new Date().toISOString() },
     },
   }
+}
+
+/**
+ * Moves a file (issue #92: drag & drop). Handles three cases with one
+ * order-preserving rebuild:
+ *  - reorder within a project (`fromProject === toProject`): the file is
+ *    lifted out and reinserted before `beforeFile` (or appended when
+ *    `beforeFile` is null/unknown);
+ *  - move to another project: removed from the source, inserted into the
+ *    target at the same before/append position.
+ *
+ * A no-op-returning guard (identical reference back) protects every invalid
+ * request — unknown source file, unknown target project, or a name
+ * collision in a *different* target project (which would otherwise
+ * overwrite an existing file). `ProjectFile` references are preserved
+ * as-is; only object key ordering changes.
+ */
+export function moveFile(
+  state: ProjectsState,
+  fromProject: string,
+  fileName: string,
+  toProject: string,
+  beforeFile: string | null = null,
+): ProjectsState {
+  if (!fileExists(state, fromProject, fileName)) return state
+  if (!projectExists(state, toProject)) return state
+  if (fromProject !== toProject && fileExists(state, toProject, fileName)) return state
+  // Reordering a file relative to itself is a no-op.
+  if (fromProject === toProject && beforeFile === fileName) return state
+
+  const moving = state[fromProject]![fileName] as ProjectFile
+
+  function insert(entries: Array<[string, ProjectFile]>): ProjectFiles {
+    const index = beforeFile ? entries.findIndex(([key]) => key === beforeFile) : -1
+    const at = index < 0 ? entries.length : index
+    entries.splice(at, 0, [fileName, moving])
+    return Object.fromEntries(entries)
+  }
+
+  if (fromProject === toProject) {
+    const entries = Object.entries(state[fromProject]!).filter(([key]) => key !== fileName)
+    return { ...state, [fromProject]: insert(entries) }
+  }
+
+  const sourceFiles = Object.fromEntries(
+    Object.entries(state[fromProject]!).filter(([key]) => key !== fileName),
+  )
+  const targetFiles = insert(Object.entries(state[toProject]!))
+  return { ...state, [fromProject]: sourceFiles, [toProject]: targetFiles }
+}
+
+/**
+ * Reorders a project (issue #92: sort projects). The project is lifted out
+ * and reinserted before `beforeProject` (or appended when it's
+ * null/unknown). Returns the same reference on an invalid/no-op request
+ * (unknown project, or dropping a project onto itself). File contents are
+ * untouched; only the top-level project key ordering changes.
+ */
+export function moveProject(
+  state: ProjectsState,
+  projectName: string,
+  beforeProject: string | null = null,
+): ProjectsState {
+  if (!projectExists(state, projectName)) return state
+  if (beforeProject === projectName) return state
+
+  const entries = Object.entries(state).filter(([key]) => key !== projectName)
+  const index = beforeProject ? entries.findIndex(([key]) => key === beforeProject) : -1
+  const at = index < 0 ? entries.length : index
+  entries.splice(at, 0, [projectName, state[projectName] as ProjectFiles])
+  return Object.fromEntries(entries)
 }
 
 /**
