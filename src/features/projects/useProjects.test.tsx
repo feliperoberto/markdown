@@ -62,6 +62,18 @@ describe('useProjects', () => {
     cleanup()
   })
 
+  // Issue #92: on first (seeded) load the first project's first file must
+  // be focused, so typing edits a real file instead of nothing.
+  it('focuses the seeded default file on first load', async () => {
+    const { container } = renderHarness()
+    const stateText = () => container.querySelector('pre')?.textContent ?? ''
+
+    await waitFor(() => {
+      expect(stateText()).toContain('"currentProject":"Meu Projeto"')
+      expect(stateText()).toContain('"currentFile":"Sem título"')
+    })
+  })
+
   // Regression test: restore used to full-replace state, deleting any
   // local-only file/project not present in the backup. This exercises the
   // real hook (not just the pure model function) end-to-end: seed creates
