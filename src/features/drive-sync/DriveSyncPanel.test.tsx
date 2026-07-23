@@ -57,7 +57,7 @@ describe('DriveSyncPanel', () => {
   it('connecting to Drive moves the panel from disconnected to connected sync state', async () => {
     render(
       <ToastProvider>
-        <DriveSyncPanel getSnapshot={() => ({ projects: {} })} reconcile={identityReconcile()} />
+        <DriveSyncPanel reconcile={identityReconcile()} />
       </ToastProvider>,
     )
 
@@ -79,7 +79,7 @@ describe('DriveSyncPanel', () => {
   it('rejects an empty Client ID with a warning instead of saving it', async () => {
     render(
       <ToastProvider>
-        <DriveSyncPanel getSnapshot={() => ({ projects: {} })} reconcile={identityReconcile()} />
+        <DriveSyncPanel reconcile={identityReconcile()} />
       </ToastProvider>,
     )
 
@@ -101,7 +101,7 @@ describe('DriveSyncPanel', () => {
   it('accepts a valid Client ID and shows a success toast', async () => {
     render(
       <ToastProvider>
-        <DriveSyncPanel getSnapshot={() => ({ projects: {} })} reconcile={identityReconcile()} />
+        <DriveSyncPanel reconcile={identityReconcile()} />
       </ToastProvider>,
     )
 
@@ -117,13 +117,13 @@ describe('DriveSyncPanel', () => {
   // The old two-button pair ("Sincronizar Agora" blind push / "Restaurar
   // do Drive" blind local-wins pull) is gone — one "Sincronizar" button
   // now drives a full pull → reconcile → push cycle.
-  it('the single "Sincronizar" button pulls, reconciles, and pushes', async () => {
+  it('connecting runs one sync, and the "Sincronizar" button runs another', async () => {
     const reconcile = vi.fn(
       (remote: ProjectsSnapshot | null): ProjectsSnapshot => remote ?? { projects: {} },
     )
     render(
       <ToastProvider>
-        <DriveSyncPanel getSnapshot={() => ({ projects: { A: {} } })} reconcile={reconcile} />
+        <DriveSyncPanel reconcile={reconcile} />
       </ToastProvider>,
     )
 
@@ -133,40 +133,41 @@ describe('DriveSyncPanel', () => {
 
     expect(screen.queryByRole('button', { name: 'Restaurar do Drive' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Sincronizar Agora' })).toBeNull()
-    expect(screen.getByText('⚠️ Nunca sincronizado')).not.toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sincronizar' }))
-
-    // First-ever sync: nothing uploaded yet, so pull() resolves to null —
-    // reconcile still runs (and, in the real app, decides what to push).
+    // Connecting syncs once on its own (issue #92: sync on connect, not on
+    // a background timer). First-ever sync: nothing uploaded yet, so
+    // pull() resolves to null — reconcile still runs.
     await waitFor(() => expect(reconcile).toHaveBeenCalledWith(null))
     await waitFor(() => expect(screen.queryByText(/Última sincronização/)).not.toBeNull())
+
+    reconcile.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: 'Sincronizar' }))
+    await waitFor(() => expect(reconcile).toHaveBeenCalledWith(null))
   })
 
-  // Regression test: the auto-sync setInterval had no lifecycle tied to
-  // the panel's mount/unmount — an unmount while connected left it
-  // running forever. disconnect() (called on unmount) stops it.
-  it('stops the auto-sync polling loop when the panel unmounts while connected', async () => {
+  // Regression test for issue #92: connecting must NOT start a background
+  // polling loop (the loop's periodic token re-request popped a Google
+  // auth window that stole editor focus). After the one connect-time sync
+  // settles, no further network calls should happen on a timer.
+  it('does not start a background auto-sync polling loop after connecting', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
-      const { unmount } = render(
+      render(
         <ToastProvider>
-          <DriveSyncPanel getSnapshot={() => ({ projects: {} })} reconcile={identityReconcile()} />
+          <DriveSyncPanel reconcile={identityReconcile()} />
         </ToastProvider>,
       )
 
       fireEvent.click(screen.getByRole('button', { name: 'Sincronização com Google Drive' }))
       fireEvent.click(screen.getByRole('button', { name: 'Conectar com Google' }))
-      await vi.waitFor(() => expect(screen.queryByText('Conectado como Test User')).not.toBeNull())
+      await vi.waitFor(() => expect(screen.queryByText(/Última sincronização/)).not.toBeNull())
 
-      const fetchCallsBeforeUnmount = (fetch as ReturnType<typeof vi.fn>).mock.calls.length
-      unmount()
+      const fetchCallsAfterConnectSync = (fetch as ReturnType<typeof vi.fn>).mock.calls.length
 
-      // Advance well past several 60s auto-sync poll intervals; a
-      // still-running interval would keep calling fetch (uploadSnapshot)
-      // after unmount.
-      await vi.advanceTimersByTimeAsync(5 * 60 * 1000)
-      expect((fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBe(fetchCallsBeforeUnmount)
+      // Advance well past several 60s intervals: with the polling loop
+      // removed, nothing should fire on a timer.
+      await vi.advanceTimersByTimeAsync(10 * 60 * 1000)
+      expect((fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBe(fetchCallsAfterConnectSync)
     } finally {
       vi.useRealTimers()
     }
