@@ -244,7 +244,6 @@ export function App(): JSX.Element {
           </div>
           <div className="header-right">
             <DriveSyncPanel
-              getSnapshot={() => ({ projects })}
               reconcile={(remote) => ({
                 projects: reconcileWithRemote(remote?.projects ?? null),
               })}
