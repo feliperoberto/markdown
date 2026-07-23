@@ -62,6 +62,42 @@ describe('useProjects', () => {
     cleanup()
   })
 
+  // Issue #92: on first (seeded) load the first project's first file must
+  // be focused (the fallback when nothing is remembered yet).
+  it('focuses the seeded default file on first load', async () => {
+    const { container } = renderHarness()
+    const stateText = () => container.querySelector('pre')?.textContent ?? ''
+
+    await waitFor(() => {
+      expect(stateText()).toContain('"currentProject":"Meu Projeto"')
+      expect(stateText()).toContain('"currentFile":"Sem título"')
+    })
+  })
+
+  // Issue #92: a remembered last-edited file is reopened on the next visit
+  // when it still exists.
+  it('restores the last-edited file from storage when it still exists', async () => {
+    localStorage.setItem(
+      'projects',
+      JSON.stringify({
+        schemaVersion: 1,
+        projects: {
+          A: { one: { name: 'one', content: '', size: 0, timestamp: 't' } },
+          B: { two: { name: 'two', content: '', size: 0, timestamp: 't' } },
+        },
+      }),
+    )
+    localStorage.setItem('lastEditedFile', JSON.stringify({ project: 'B', file: 'two' }))
+
+    const { container } = renderHarness()
+    const stateText = () => container.querySelector('pre')?.textContent ?? ''
+
+    await waitFor(() => {
+      expect(stateText()).toContain('"currentProject":"B"')
+      expect(stateText()).toContain('"currentFile":"two"')
+    })
+  })
+
   // Regression test: restore used to full-replace state, deleting any
   // local-only file/project not present in the backup. This exercises the
   // real hook (not just the pure model function) end-to-end: seed creates

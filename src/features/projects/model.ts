@@ -7,6 +7,20 @@ export function projectExists(state: ProjectsState, projectName: string): boolea
   return Object.prototype.hasOwnProperty.call(state, projectName)
 }
 
+/**
+ * First file in the first project that has one, in insertion order (issue
+ * #92). Used as the fallback when the remembered last-edited file no longer
+ * exists. Skips empty projects; returns `null` only when no project holds
+ * any file.
+ */
+export function firstFileOf(state: ProjectsState): { project: string; file: string } | null {
+  for (const project of Object.keys(state)) {
+    const files = Object.keys(state[project] ?? {})
+    if (files.length > 0) return { project, file: files[0]! }
+  }
+  return null
+}
+
 export function fileExists(state: ProjectsState, projectName: string, fileName: string): boolean {
   return Boolean(
     state[projectName] && Object.prototype.hasOwnProperty.call(state[projectName], fileName),

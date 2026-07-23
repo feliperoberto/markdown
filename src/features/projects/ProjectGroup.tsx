@@ -10,10 +10,14 @@ export interface ProjectGroupProps {
   projectName: string
   files: ProjectFiles
   isActiveProject: boolean
+  /** Expanded/collapsed state, owned by the sidebar so it can be persisted (issue #92). */
+  isExpanded: boolean
   currentFile: string | null
   selectedFiles: ReadonlySet<string>
   projectNames: string[]
   onSelectFile: (projectName: string, fileName: string) => void
+  /** Toggles this project's expanded state; takes the name so the callback stays memo-stable. */
+  onToggleExpanded: (projectName: string) => void
   onToggleSelected: (projectName: string, fileName: string, selected: boolean) => void
   onCreateFile: (projectName: string, fileName: string) => void
   onRenameFile: (projectName: string, oldFileName: string, newFileName: string) => void
@@ -40,10 +44,12 @@ export const ProjectGroup = memo(function ProjectGroup({
   projectName,
   files,
   isActiveProject,
+  isExpanded,
   currentFile,
   selectedFiles,
   projectNames,
   onSelectFile,
+  onToggleExpanded,
   onToggleSelected,
   onCreateFile,
   onRenameFile,
@@ -54,7 +60,6 @@ export const ProjectGroup = memo(function ProjectGroup({
   onUploadFile,
   onUploadMultipleFiles,
 }: ProjectGroupProps): JSX.Element {
-  const [isExpanded, setIsExpanded] = useState(true)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 })
   // Memoized so FileRow's memo() isn't defeated by a fresh array every
@@ -68,7 +73,7 @@ export const ProjectGroup = memo(function ProjectGroup({
   const multiFileInputRef = useRef<HTMLInputElement>(null)
 
   function toggleExpanded() {
-    setIsExpanded((expanded) => !expanded)
+    onToggleExpanded(projectName)
   }
 
   function handleHeaderKeyDown(e: KeyboardEvent) {

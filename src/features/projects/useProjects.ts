@@ -1,9 +1,32 @@
-import { useCallback, useState } from 'preact/hooks'
+import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import * as model from './model'
-import { backupProjects, loadProjects, saveProjects } from './storage'
+import {
+  backupProjects,
+  loadLastEditedFile,
+  loadProjects,
+  saveLastEditedFile,
+  saveProjects,
+} from './storage'
 import { normalizeProjectsState } from './validate'
 import type { ProjectsState } from './types'
 import { useToast } from '@/components'
+
+// Resolves which file to open on mount (issue #92): the last-edited file if
+// it's still present, otherwise the first available file. `null` only when
+// there are no files at all. Reads the persisted pointer once and validates
+// it against live state, so a stale pointer (file since deleted or renamed)
+// falls back gracefully instead of selecting nothing.
+function resolveInitialSelection(projects: ProjectsState): {
+  project: string | null
+  file: string | null
+} {
+  const last = loadLastEditedFile()
+  if (last && projects[last.project]?.[last.file]) {
+    return { project: last.project, file: last.file }
+  }
+  const first = model.firstFileOf(projects)
+  return { project: first?.project ?? null, file: first?.file ?? null }
+}
 
 export interface UseProjectsResult {
   projects: ProjectsState
@@ -33,10 +56,34 @@ export interface UseProjectsResult {
 // directly). Consumers (sidebar rendering, editor, import/export, drive-sync)
 // should drive all reads/writes through this hook.
 export function useProjects(): UseProjectsResult {
-  const [projects, setProjects] = useState<ProjectsState>(() => loadProjects())
-  const [currentProject, setCurrentProject] = useState<string | null>(null)
-  const [currentFile, setCurrentFile] = useState<string | null>(null)
+  // Load projects and resolve the initial selection together, exactly once,
+  // so both derive from the same first read (loadProjects() seeds a default
+  // project on genuine first run — see storage.ts).
+  const initialRef = useRef<{
+    projects: ProjectsState
+    selection: { project: string | null; file: string | null }
+  } | null>(null)
+  if (initialRef.current === null) {
+    const loaded = loadProjects()
+    initialRef.current = { projects: loaded, selection: resolveInitialSelection(loaded) }
+  }
+
+  const [projects, setProjects] = useState<ProjectsState>(initialRef.current.projects)
+  const [currentProject, setCurrentProject] = useState<string | null>(
+    initialRef.current.selection.project,
+  )
+  const [currentFile, setCurrentFile] = useState<string | null>(initialRef.current.selection.file)
   const showToast = useToast()
+
+  // Remember the open file across visits (issue #92). Runs on every
+  // selection change — including the setCurrentFile updates that rename/
+  // delete trigger — so the persisted pointer always tracks live state
+  // (cleared when nothing is selected).
+  useEffect(() => {
+    saveLastEditedFile(
+      currentProject && currentFile ? { project: currentProject, file: currentFile } : null,
+    )
+  }, [currentProject, currentFile])
 
   // Persists first, then updates in-memory state only on success. Previously
   // `setProjects` ran unconditionally and `saveProjects` was never guarded,
