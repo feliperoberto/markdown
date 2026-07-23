@@ -590,7 +590,10 @@ main,
   background-color: var(--ground-deep);
   color: var(--cream);
   font-family: var(--mono);
-  font-size: var(--editor-font-size);
+  /* Derived from the shared --font-scale multiplier (issue #92) so the "Aa"
+     toggle resizes the editor and preview together. 13px base preserves
+     the previous default at scale 1. */
+  font-size: calc(13px * var(--font-scale));
   line-height: 1.7;
   resize: none;
   overflow-y: auto;
@@ -650,13 +653,21 @@ main,
   box-shadow:
     0 6px 0 -2px rgba(0, 0, 0, 0.2),
     0 4px 20px rgba(0, 0, 0, 0.25);
+  /* Base font-size for the rendered preview, derived from the shared
+     --font-scale multiplier (issue #92): the "Aa" toggle now scales the
+     preview too, not only the editor. Every child below keeps its original
+     `rem` size but multiplies it by --font-scale, so the whole document
+     grows proportionally without `em` compounding. */
+  font-size: calc(1rem * var(--font-scale));
 }
 
-/* Rendered markdown typography (paper) */
+/* Rendered markdown typography (paper). Each size is its original `rem`
+   value multiplied by --font-scale, so the whole document scales
+   proportionally with the font-size toggle. */
 .preview-content h1 {
   font-family: var(--hand);
   font-weight: 700;
-  font-size: 2.2rem;
+  font-size: calc(2.2rem * var(--font-scale));
   line-height: 0.95;
   color: var(--ink);
   margin: 0 0 0.5rem;
@@ -665,7 +676,7 @@ main,
 .preview-content h2 {
   font-family: var(--serif-display);
   font-weight: 600;
-  font-size: 1.4rem;
+  font-size: calc(1.4rem * var(--font-scale));
   color: var(--ink);
   margin: 1.2rem 0 0.5rem;
 }
@@ -673,7 +684,7 @@ main,
 .preview-content h3 {
   font-family: var(--serif-display);
   font-weight: 600;
-  font-size: 1.1rem;
+  font-size: calc(1.1rem * var(--font-scale));
   color: var(--ink);
   margin: 1rem 0 0.4rem;
 }
@@ -689,7 +700,7 @@ main,
 
 .preview-content p {
   font-family: var(--body);
-  font-size: 0.95rem;
+  font-size: calc(0.95rem * var(--font-scale));
   line-height: 1.7;
   color: var(--ink);
   margin: 0 0 0.75rem;
@@ -730,14 +741,14 @@ main,
   background: none;
   color: var(--cream);
   padding: 0;
-  font-size: 0.8rem;
+  font-size: calc(0.8rem * var(--font-scale));
   line-height: 1.5;
 }
 
 .preview-content blockquote {
   font-family: var(--serif-display);
   font-style: italic;
-  font-size: 1rem;
+  font-size: calc(1rem * var(--font-scale));
   line-height: 1.5;
   color: var(--ink);
   padding: 0.5rem 0 0.5rem 1rem;
@@ -753,7 +764,7 @@ main,
 
 .preview-content li {
   font-family: var(--body);
-  font-size: 0.92rem;
+  font-size: calc(0.92rem * var(--font-scale));
   line-height: 1.55;
   color: var(--ink);
   margin: 0.25rem 0;
@@ -775,7 +786,7 @@ main,
   width: 100%;
   border-collapse: collapse;
   margin: 0 0 0.75rem;
-  font-size: 0.88rem;
+  font-size: calc(0.88rem * var(--font-scale));
 }
 
 .preview-content th,
