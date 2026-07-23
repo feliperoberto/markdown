@@ -3,6 +3,7 @@ import { memo } from 'preact/compat'
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { FileRow } from './FileRow'
 import { showConfirmDialog, showPromptDialog } from './dialogs'
+import { DND_MIME, readDrag, serializeDrag } from './dnd'
 import type { ProjectFiles } from './types'
 import { IconButton } from '@/components'
 
@@ -10,10 +11,14 @@ export interface ProjectGroupProps {
   projectName: string
   files: ProjectFiles
   isActiveProject: boolean
+  /** Expanded/collapsed state, owned by the sidebar so it can be persisted (issue #92). */
+  isExpanded: boolean
   currentFile: string | null
   selectedFiles: ReadonlySet<string>
   projectNames: string[]
   onSelectFile: (projectName: string, fileName: string) => void
+  /** Toggles this project's expanded state; takes the name so the callback stays memo-stable. */
+  onToggleExpanded: (projectName: string) => void
   onToggleSelected: (projectName: string, fileName: string, selected: boolean) => void
   onCreateFile: (projectName: string, fileName: string) => void
   onRenameFile: (projectName: string, oldFileName: string, newFileName: string) => void
@@ -30,6 +35,14 @@ export interface ProjectGroupProps {
    * capability regression, not a fix.
    */
   onUploadMultipleFiles?: (projectName: string, files: File[]) => void
+  // Drag & drop (issue #92): reorder/move files and reorder projects.
+  onMoveFile?: (
+    fromProject: string,
+    fileName: string,
+    toProject: string,
+    beforeFile?: string | null,
+  ) => void
+  onMoveProject?: (projectName: string, beforeProject?: string | null) => void
 }
 
 // One collapsible project entry in the sidebar tree: header (name, expand
@@ -40,10 +53,12 @@ export const ProjectGroup = memo(function ProjectGroup({
   projectName,
   files,
   isActiveProject,
+  isExpanded,
   currentFile,
   selectedFiles,
   projectNames,
   onSelectFile,
+  onToggleExpanded,
   onToggleSelected,
   onCreateFile,
   onRenameFile,
@@ -53,10 +68,14 @@ export const ProjectGroup = memo(function ProjectGroup({
   onExportProject,
   onUploadFile,
   onUploadMultipleFiles,
+  onMoveFile,
+  onMoveProject,
 }: ProjectGroupProps): JSX.Element {
-  const [isExpanded, setIsExpanded] = useState(true)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 })
+  // True while a compatible drag hovers this project — drives the drop
+  // highlight without touching global state.
+  const [isDropTarget, setIsDropTarget] = useState(false)
   // Memoized so FileRow's memo() isn't defeated by a fresh array every
   // render (Object.keys always returns a new array reference).
   const fileNames = useMemo(() => Object.keys(files), [files])
@@ -67,14 +86,58 @@ export const ProjectGroup = memo(function ProjectGroup({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const multiFileInputRef = useRef<HTMLInputElement>(null)
 
+  const dragEnabled = Boolean(onMoveFile || onMoveProject)
+
   function toggleExpanded() {
-    setIsExpanded((expanded) => !expanded)
+    onToggleExpanded(projectName)
   }
 
   function handleHeaderKeyDown(e: KeyboardEvent) {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
       toggleExpanded()
+    }
+  }
+
+  // --- Drag & drop (issue #92) ---
+  // The project header is the drag handle for reordering projects; the
+  // whole group is a drop zone that accepts either a project (reorder,
+  // dropping before this one) or a file (move into this project, appended).
+  function handleHeaderDragStart(e: DragEvent) {
+    if (!onMoveProject) return
+    e.dataTransfer?.setData(DND_MIME, serializeDrag({ kind: 'project', project: projectName }))
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
+  }
+
+  function handleGroupDragOver(e: DragEvent) {
+    if (!dragEnabled) return
+    // Opt this element in as a drop target (getData is unreadable here, so
+    // we can't yet filter by kind — the drop handler validates instead).
+    e.preventDefault()
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+    if (!isDropTarget) setIsDropTarget(true)
+  }
+
+  function handleGroupDragLeave(e: DragEvent) {
+    // Ignore leaves fired while moving between this group's own children.
+    if (e.currentTarget instanceof Node && e.relatedTarget instanceof Node) {
+      if ((e.currentTarget as Node).contains(e.relatedTarget as Node)) return
+    }
+    setIsDropTarget(false)
+  }
+
+  function handleGroupDrop(e: DragEvent) {
+    if (!dragEnabled) return
+    setIsDropTarget(false)
+    const payload = readDrag(e)
+    if (!payload) return
+    e.preventDefault()
+    if (payload.kind === 'project') {
+      onMoveProject?.(payload.project, projectName)
+    } else {
+      // Append into this project (no specific before-file when dropping on
+      // the group itself rather than a row).
+      onMoveFile?.(payload.project, payload.file, projectName, null)
     }
   }
 
@@ -225,12 +288,19 @@ export const ProjectGroup = memo(function ProjectGroup({
   }
 
   return (
-    <div className="project-group">
+    <div
+      className={`project-group${isDropTarget ? ' drop-target' : ''}`}
+      onDragOver={handleGroupDragOver}
+      onDragLeave={handleGroupDragLeave}
+      onDrop={handleGroupDrop}
+    >
       <div
         className={`project-header${isActiveProject ? ' active' : ''}`}
         role="button"
         tabIndex={0}
         aria-expanded={isExpanded}
+        draggable={Boolean(onMoveProject)}
+        onDragStart={handleHeaderDragStart}
         onClick={toggleExpanded}
         onDblClick={handleHeaderDoubleClick}
         onKeyDown={handleHeaderKeyDown}
@@ -349,6 +419,7 @@ export const ProjectGroup = memo(function ProjectGroup({
               onToggleSelected={onToggleSelected}
               onRenameFile={onRenameFile}
               onDeleteFile={onDeleteFile}
+              onMoveFile={onMoveFile}
             />
           ))
         )}

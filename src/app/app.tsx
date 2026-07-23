@@ -47,6 +47,8 @@ export function App(): JSX.Element {
     renameProject,
     deleteProject,
     updateFileContent,
+    moveFile,
+    moveProject,
     importProjects,
     reconcileWithRemote,
   } = useProjects()
@@ -244,7 +246,6 @@ export function App(): JSX.Element {
           </div>
           <div className="header-right">
             <DriveSyncPanel
-              getSnapshot={() => ({ projects })}
               reconcile={(remote) => ({
                 projects: reconcileWithRemote(remote?.projects ?? null),
               })}
@@ -275,6 +276,8 @@ export function App(): JSX.Element {
             onUploadMultipleFiles={handleUploadMultipleFilesToProject}
             onImportZip={handleImportZip}
             onOpenConfig={() => setDriveConfigOpenSignal((n) => (n ?? 0) + 1)}
+            onMoveFile={moveFile}
+            onMoveProject={moveProject}
           />
           <main className="app-main">
             <div className="toolbar">

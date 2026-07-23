@@ -1,7 +1,8 @@
 import type { JSX } from 'preact'
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import { ProjectGroup } from './ProjectGroup'
 import { showPromptDialog } from './dialogs'
+import { loadCollapsedProjects, saveCollapsedProjects } from './storage'
 import type { ProjectsState } from './types'
 
 export interface ProjectsSidebarProps {
@@ -34,6 +35,16 @@ export interface ProjectsSidebarProps {
   onImportZip?: (file: File) => void
   /** Sidebar-footer "⚙️ Config" — opens the Drive/Config modal (app.tsx owns it). */
   onOpenConfig?: () => void
+  // Drag & drop (issue #92): reorder files within a project / move them
+  // across projects, and reorder the projects themselves. Optional so the
+  // tree still renders (without DnD) when a caller doesn't wire them.
+  onMoveFile?: (
+    fromProject: string,
+    fileName: string,
+    toProject: string,
+    beforeFile?: string | null,
+  ) => void
+  onMoveProject?: (projectName: string, beforeProject?: string | null) => void
 }
 
 // Renders the full project/file sidebar tree. Owns only tree
@@ -58,10 +69,43 @@ export function ProjectsSidebar({
   onUploadMultipleFiles,
   onImportZip,
   onOpenConfig,
+  onMoveFile,
+  onMoveProject,
 }: ProjectsSidebarProps): JSX.Element {
   const [selectedByProject, setSelectedByProject] = useState<Record<string, Set<string>>>({})
   const projectNames = Object.keys(projects)
   const importZipInputRef = useRef<HTMLInputElement>(null)
+
+  // Remembered collapsed/expanded state per project (issue #92). Seeded
+  // from localStorage so a returning user sees the same projects folded as
+  // when they left; persisted on every change.
+  const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(() =>
+    loadCollapsedProjects(),
+  )
+
+  useEffect(() => {
+    saveCollapsedProjects(collapsedProjects)
+  }, [collapsedProjects])
+
+  // Drop entries for projects that no longer exist (deleted/renamed) so the
+  // persisted set doesn't accumulate stale names forever.
+  useEffect(() => {
+    setCollapsedProjects((prev) => {
+      const next = new Set([...prev].filter((name) => name in projects))
+      return next.size === prev.size ? prev : next
+    })
+  }, [projects])
+
+  // Stable across renders (functional setState) so it doesn't defeat
+  // ProjectGroup's memo() — only the toggled project re-renders.
+  const toggleProjectCollapsed = useCallback((projectName: string) => {
+    setCollapsedProjects((prev) => {
+      const next = new Set(prev)
+      if (next.has(projectName)) next.delete(projectName)
+      else next.add(projectName)
+      return next
+    })
+  }, [])
 
   // Prunes stale selection entries whenever the project/file set changes
   // (rename, delete, import, restore). Previously a renamed/deleted file
@@ -167,10 +211,12 @@ export function ProjectsSidebar({
                 projectName={projectName}
                 files={projects[projectName]!}
                 isActiveProject={currentProject === projectName}
+                isExpanded={!collapsedProjects.has(projectName)}
                 currentFile={currentProject === projectName ? currentFile : null}
                 selectedFiles={selectedByProject[projectName] ?? new Set()}
                 projectNames={projectNames}
                 onSelectFile={onSelectFile}
+                onToggleExpanded={toggleProjectCollapsed}
                 onToggleSelected={toggleSelected}
                 onCreateFile={onCreateFile}
                 onRenameFile={onRenameFile}
@@ -180,6 +226,8 @@ export function ProjectsSidebar({
                 onExportProject={onExportProject}
                 onUploadFile={onUploadFile}
                 onUploadMultipleFiles={onUploadMultipleFiles}
+                onMoveFile={onMoveFile}
+                onMoveProject={onMoveProject}
               />
             ))
           )}

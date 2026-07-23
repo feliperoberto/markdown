@@ -49,6 +49,80 @@ describe('mergeRestoredProjects', () => {
   })
 })
 
+describe('firstFileOf', () => {
+  it('returns the first file of the first project that has one, in order', () => {
+    const state: ProjectsState = {
+      A: { a1: file('a1', ''), a2: file('a2', '') },
+      B: { b1: file('b1', '') },
+    }
+    expect(model.firstFileOf(state)).toEqual({ project: 'A', file: 'a1' })
+  })
+
+  it('skips leading empty projects', () => {
+    const state: ProjectsState = { Empty: {}, B: { b1: file('b1', '') } }
+    expect(model.firstFileOf(state)).toEqual({ project: 'B', file: 'b1' })
+  })
+
+  it('returns null when no project holds any file', () => {
+    expect(model.firstFileOf({ Empty: {} })).toBeNull()
+    expect(model.firstFileOf({})).toBeNull()
+  })
+})
+
+describe('moveFile', () => {
+  it('reorders a file within its project, inserting before the target', () => {
+    const state: ProjectsState = { A: { a: file('a', ''), b: file('b', ''), c: file('c', '') } }
+    const result = model.moveFile(state, 'A', 'c', 'A', 'a')
+    expect(Object.keys(result.A ?? {})).toEqual(['c', 'a', 'b'])
+  })
+
+  it('appends within a project when beforeFile is null', () => {
+    const state: ProjectsState = { A: { a: file('a', ''), b: file('b', '') } }
+    const result = model.moveFile(state, 'A', 'a', 'A', null)
+    expect(Object.keys(result.A ?? {})).toEqual(['b', 'a'])
+  })
+
+  it('moves a file to another project, inserting before the target', () => {
+    const state: ProjectsState = { A: { a: file('a', 'x') }, B: { b: file('b', '') } }
+    const result = model.moveFile(state, 'A', 'a', 'B', 'b')
+    expect(Object.keys(result.A ?? {})).toEqual([])
+    expect(Object.keys(result.B ?? {})).toEqual(['a', 'b'])
+    expect(result.B?.a?.content).toBe('x')
+  })
+
+  it('refuses a move that would overwrite a same-named file in the target project', () => {
+    const state: ProjectsState = { A: { dup: file('dup', 'a') }, B: { dup: file('dup', 'b') } }
+    expect(model.moveFile(state, 'A', 'dup', 'B')).toBe(state)
+  })
+
+  it('returns the same reference for unknown file/project or a self-reorder', () => {
+    const state: ProjectsState = { A: { a: file('a', '') } }
+    expect(model.moveFile(state, 'A', 'missing', 'A')).toBe(state)
+    expect(model.moveFile(state, 'A', 'a', 'Nope')).toBe(state)
+    expect(model.moveFile(state, 'A', 'a', 'A', 'a')).toBe(state)
+  })
+})
+
+describe('moveProject', () => {
+  it('reorders a project before the target project', () => {
+    const state: ProjectsState = { A: {}, B: {}, C: {} }
+    const result = model.moveProject(state, 'C', 'A')
+    expect(Object.keys(result)).toEqual(['C', 'A', 'B'])
+  })
+
+  it('appends the project when beforeProject is null', () => {
+    const state: ProjectsState = { A: {}, B: {}, C: {} }
+    const result = model.moveProject(state, 'A', null)
+    expect(Object.keys(result)).toEqual(['B', 'C', 'A'])
+  })
+
+  it('returns the same reference for an unknown project or a self-drop', () => {
+    const state: ProjectsState = { A: {}, B: {} }
+    expect(model.moveProject(state, 'Nope')).toBe(state)
+    expect(model.moveProject(state, 'A', 'A')).toBe(state)
+  })
+})
+
 describe('mergeProjects (ZIP import)', () => {
   it('lets the incoming file win on a same-key collision (unchanged from before)', () => {
     const base: ProjectsState = { A: { a: file('a', 'old') } }

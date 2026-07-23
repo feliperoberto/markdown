@@ -6,12 +6,24 @@ import { useProjects } from './useProjects'
 /** Exposes a few useProjects actions/state as clickable buttons + text so
  * tests can drive the hook the same way the real app shell does. */
 function Harness() {
-  const { projects, currentProject, currentFile, selectFile, createFile, reconcileWithRemote } =
-    useProjects()
+  const {
+    projects,
+    currentProject,
+    currentFile,
+    selectFile,
+    createFile,
+    createProject,
+    moveFile,
+    moveProject,
+    reconcileWithRemote,
+  } = useProjects()
 
   return (
     <div>
       <button onClick={() => createFile('Meu Projeto', 'notes', 'hello')}>create-file</button>
+      <button onClick={() => createProject('Segundo')}>create-project</button>
+      <button onClick={() => moveFile('Meu Projeto', 'notes', 'Segundo', null)}>move-file</button>
+      <button onClick={() => moveProject('Segundo', 'Meu Projeto')}>move-project</button>
       <button
         onClick={() =>
           reconcileWithRemote({
@@ -60,6 +72,76 @@ describe('useProjects', () => {
 
   afterEach(() => {
     cleanup()
+  })
+
+  // Issue #92: on first (seeded) load the first project's first file must
+  // be focused, so typing edits a real file instead of nothing.
+  it('focuses the seeded default file on first load', async () => {
+    const { container } = renderHarness()
+    const stateText = () => container.querySelector('pre')?.textContent ?? ''
+
+    await waitFor(() => {
+      expect(stateText()).toContain('"currentProject":"Meu Projeto"')
+      expect(stateText()).toContain('"currentFile":"Sem título"')
+    })
+  })
+
+  // Issue #92: a remembered last-edited file is reopened on the next visit
+  // when it still exists.
+  it('restores the last-edited file from storage when it still exists', async () => {
+    localStorage.setItem(
+      'projects',
+      JSON.stringify({
+        schemaVersion: 1,
+        projects: {
+          A: { one: { name: 'one', content: '', size: 0, timestamp: 't' } },
+          B: { two: { name: 'two', content: '', size: 0, timestamp: 't' } },
+        },
+      }),
+    )
+    localStorage.setItem('lastEditedFile', JSON.stringify({ project: 'B', file: 'two' }))
+
+    const { container } = renderHarness()
+    const stateText = () => container.querySelector('pre')?.textContent ?? ''
+
+    await waitFor(() => {
+      expect(stateText()).toContain('"currentProject":"B"')
+      expect(stateText()).toContain('"currentFile":"two"')
+    })
+  })
+
+  it('moveFile moves a file across projects and keeps the active selection following it', async () => {
+    const { container } = renderHarness()
+    const stateText = () => container.querySelector('pre')?.textContent ?? ''
+
+    fireEvent.click(screen.getByText('create-file'))
+    fireEvent.click(screen.getByText('create-project'))
+    fireEvent.click(screen.getByText('select-notes'))
+    await waitFor(() => expect(stateText()).toContain('"currentFile":"notes"'))
+
+    fireEvent.click(screen.getByText('move-file'))
+
+    await waitFor(() => {
+      // The file now lives under "Segundo" and the selection followed it.
+      expect(stateText()).toContain('"Segundo":{"notes"')
+      expect(stateText()).toContain('"currentProject":"Segundo"')
+    })
+  })
+
+  it('moveProject reorders the project list', async () => {
+    const { container } = renderHarness()
+    const stateText = () => container.querySelector('pre')?.textContent ?? ''
+
+    fireEvent.click(screen.getByText('create-project'))
+    await waitFor(() => expect(stateText()).toContain('"Segundo"'))
+
+    fireEvent.click(screen.getByText('move-project'))
+
+    await waitFor(() => {
+      const text = stateText()
+      // "Segundo" now precedes "Meu Projeto" in the projects object.
+      expect(text.indexOf('Segundo')).toBeLessThan(text.indexOf('Meu Projeto'))
+    })
   })
 
   // Regression test: restore used to full-replace state, deleting any

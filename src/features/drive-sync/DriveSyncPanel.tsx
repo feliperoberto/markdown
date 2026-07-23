@@ -16,8 +16,6 @@ import type { ProjectsSnapshot } from './types'
 import styles from './DriveSyncPanel.module.css'
 
 export interface DriveSyncPanelProps {
-  /** Current local projects snapshot, read fresh at sync time. */
-  getSnapshot: () => ProjectsSnapshot
   /**
    * Reconciles a just-pulled remote snapshot (`null` if nothing has been
    * synced yet) with local state by per-file freshness — applies the
@@ -47,11 +45,7 @@ const TITLE_ID = 'drive-sync-panel-title'
  * drives a full bidirectional, freshness-based reconcile — see
  * `handleSync`'s doc comment.
  */
-export function DriveSyncPanel({
-  getSnapshot,
-  reconcile,
-  openSignal,
-}: DriveSyncPanelProps): JSX.Element {
+export function DriveSyncPanel({ reconcile, openSignal }: DriveSyncPanelProps): JSX.Element {
   const showToast = useToast()
   const [open, setOpen] = useState(false)
   const [status, setStatus] = useState<DriveSyncDotStatus>('offline')
@@ -84,22 +78,9 @@ export function DriveSyncPanel({
   const providerRef = useRef(provider)
   providerRef.current = provider
 
-  // Always dereferenced fresh on every auto-sync tick (see Fix 1): keeps
-  // the latest `getSnapshot` in a ref so a stale, connect-time closure is
-  // never frozen inside the provider's setInterval loop.
-  const getSnapshotRef = useRef(getSnapshot)
-  getSnapshotRef.current = getSnapshot
-
-  // Same reasoning as getSnapshotRef: auto-sync's setInterval loop must
-  // call the latest `reconcile`, not one frozen at connect time.
-  const reconcileRef = useRef(reconcile)
-  reconcileRef.current = reconcile
-
-  // Stops the auto-sync polling loop (and revokes the token) if this
-  // panel ever unmounts while connected. It never unmounts in the
-  // current app shell (always rendered in the header), so this was
-  // previously a latent-only gap — but the interval otherwise runs
-  // forever with no lifecycle tied to the component that started it.
+  // Revokes the token if this panel ever unmounts while connected. It
+  // never unmounts in the current app shell (always rendered in the
+  // header), so this is a latent-only safety net.
   useEffect(() => {
     return () => providerRef.current.disconnect()
   }, [])
@@ -151,10 +132,14 @@ export function DriveSyncPanel({
     setBusy(true)
     try {
       await providerRef.current.connect()
-      providerRef.current.startAutoSync(
-        () => getSnapshotRef.current(),
-        (remote) => reconcileRef.current(remote),
-      )
+      // Sync once, right after connecting (issue #92): the old behavior
+      // started a background setInterval polling loop that periodically
+      // re-requested a Drive token — the OAuth popup that loop triggered
+      // stole focus from the editor mid-typing. Sync now runs only here
+      // (on connect) and from the explicit "Sincronizar" button, never on
+      // a timer. Silent on success so it doesn't stack a second toast on
+      // top of the "Drive conectado" one; errors still surface.
+      await performSync({ silentSuccess: true })
     } catch {
       // onNotify already surfaced the error as a toast.
     } finally {
@@ -167,13 +152,23 @@ export function DriveSyncPanel({
     setUser(null)
   }
 
-  // Single "Sincronizar" action, replacing the old two-button "Sincronizar
-  // Agora" (blind push, could clobber newer remote edits) / "Restaurar do
-  // Drive" (blind local-wins pull, could never actually receive a newer
-  // remote edit) pair. Always pulls first, reconciles by per-file
-  // freshness (see `reconcile`'s doc comment), then pushes the merged
-  // result back — so neither direction can silently overwrite the other's
-  // newer data.
+  // The shared pull → reconcile → push sequence, replacing the old
+  // two-button "Sincronizar Agora" (blind push, could clobber newer remote
+  // edits) / "Restaurar do Drive" (blind local-wins pull) pair. Always
+  // pulls first, reconciles by per-file freshness (see `reconcile`'s doc
+  // comment), then pushes the merged result back — so neither direction
+  // can silently overwrite the other's newer data. Runs both on connect
+  // and from the manual button; never on a background timer (issue #92).
+  async function performSync({ silentSuccess = false } = {}) {
+    const remote = await providerRef.current.pull()
+    const merged = reconcile(remote)
+    await providerRef.current.push(merged)
+    setLastSyncedAt(providerRef.current.getStatus().lastSyncedAt)
+    if (!silentSuccess) showToast(driveSyncCopy.syncCompleteToast, 'success')
+  }
+
+  // Manual "Sincronizar" button handler: wraps performSync with the
+  // online-precheck, busy state, and user-facing error messaging.
   async function handleSync() {
     if (!isOnline) {
       // Fail fast with the reassuring offline copy instead of letting the
@@ -184,11 +179,7 @@ export function DriveSyncPanel({
     }
     setBusy(true)
     try {
-      const remote = await providerRef.current.pull()
-      const merged = reconcile(remote)
-      await providerRef.current.push(merged)
-      setLastSyncedAt(providerRef.current.getStatus().lastSyncedAt)
-      showToast(driveSyncCopy.syncCompleteToast, 'success')
+      await performSync()
     } catch (error) {
       if (error instanceof DriveSyncOfflineError) {
         // Distinct, reassuring copy — not a scary generic error (issue #24).
