@@ -34,11 +34,15 @@
       - style-src/font-src: 'self' only — fonts are bundled locally
         (src/styles/fonts.css, self-hosted via @fontsource) rather than
         loaded from Google Fonts, so no external font-src grant is needed.
-      - No inline <script>/<style> tags exist in this file. The service
-        worker registration the build injects (vite-plugin-pwa,
-        injectRegister: 'auto') is an EXTERNAL script (registerSW.js),
-        allowed by script-src 'self' — not inline — so 'unsafe-inline' is
-        still intentionally omitted.
+      - No inline <script>/<style> tags exist in this file. Service worker
+        registration (src/lib/pwa-register.ts, imported from
+        src/main.tsx) is bundled into the app's own module graph rather
+        than injected by the build — vite-plugin-pwa's injectRegister is
+        pinned to `null` in vite.config.ts precisely so it can never fall
+        back to emitting its own inline/external registration script.
+        Either way the registration code ends up inside /assets/*.js,
+        already covered by script-src 'self', so 'unsafe-inline' is still
+        intentionally omitted.
         (User markdown is rendered via DOMPurify-sanitized HTML; any
         `style="..."` attribute it might let through will simply be
         ignored by the browser under this policy rather than tightened

@@ -16,6 +16,14 @@
 // Adding a future schema change means: bump `CURRENT_SCHEMA_VERSION` and
 // append one more `{ from, migrate }` entry to `migrations` below — never
 // mutate an existing migration once it has shipped.
+//
+// INVARIANT (ADR-0003): migrations must be purely additive. With the
+// service-worker update prompt, a tab can keep running an old build
+// indefinitely — the user can dismiss the "Atualizar" banner, or simply
+// never trigger the re-check. So a shipped release may never remove or
+// repurpose a field the immediately preceding release still reads/writes;
+// an un-updated tab has no bounded lifetime in which to catch up. See
+// `isFutureSchema` below for the corresponding read-side guard.
 import type { ProjectsState } from '@/features/projects/types'
 
 export const CURRENT_SCHEMA_VERSION = 1
@@ -40,6 +48,17 @@ export function isEnvelope(value: unknown): value is StorageEnvelope {
   return (
     isPlainObject(value) && typeof value.schemaVersion === 'number' && isPlainObject(value.projects)
   )
+}
+
+/**
+ * True when `raw` was written by a NEWER build than this one — the mirror
+ * case of the legacy-blob migration above, and the one a long-lived,
+ * un-updated tab can now actually hit (see the INVARIANT note at the top
+ * of this file). Callers should treat this as "do not migrate, do not
+ * downgrade the stamp" rather than attempt to interpret the data.
+ */
+export function isFutureSchema(raw: unknown): raw is StorageEnvelope {
+  return isEnvelope(raw) && raw.schemaVersion > CURRENT_SCHEMA_VERSION
 }
 
 const migrations: Migration[] = [

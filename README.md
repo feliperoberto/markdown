@@ -10,10 +10,11 @@ Live site: https://feliperoberto.com.br/
 
 ## Status
 
-The app currently ships as a single static prototype (`prototype/index.html`),
-still served on GitHub Pages. It is being migrated, one task at a time, to a
-Vite + Preact + TypeScript project (`src/`, entry point `app.html`). See
-[`docs/architecture.md`](./docs/architecture.md) for details.
+The app ships as a Vite + Preact + TypeScript PWA (`src/`, entry point
+`app.html`). `prototype/index.html`, the original single-file, CDN-loaded
+prototype the app was migrated from, is kept in the repo for reference only
+and is no longer deployed. See [`docs/architecture.md`](./docs/architecture.md)
+for details.
 
 ## Local development
 

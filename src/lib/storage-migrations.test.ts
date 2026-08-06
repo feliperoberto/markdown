@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { CURRENT_SCHEMA_VERSION, isEnvelope, migrateStoredProjects } from './storage-migrations'
+import {
+  CURRENT_SCHEMA_VERSION,
+  isEnvelope,
+  isFutureSchema,
+  migrateStoredProjects,
+} from './storage-migrations'
 import type { ProjectsState } from '@/features/projects/types'
 
 describe('isEnvelope', () => {
@@ -83,5 +88,28 @@ describe('migrateStoredProjects', () => {
 
     expect(envelope.schemaVersion).toBe(99)
     expect(envelope.projects).toEqual({})
+  })
+})
+
+describe('isFutureSchema (ADR-0003: an old tab reading data a newer tab wrote)', () => {
+  it('returns true for an envelope stamped with a version newer than this build knows', () => {
+    expect(isFutureSchema({ schemaVersion: CURRENT_SCHEMA_VERSION + 1, projects: {} })).toBe(true)
+  })
+
+  it('returns false for the current version', () => {
+    expect(isFutureSchema({ schemaVersion: CURRENT_SCHEMA_VERSION, projects: {} })).toBe(false)
+  })
+
+  it('returns false for an older/legacy version', () => {
+    expect(isFutureSchema({ schemaVersion: 0, projects: {} })).toBe(false)
+  })
+
+  it('returns false for a legacy raw blob with no envelope at all', () => {
+    expect(isFutureSchema({ 'My Project': {} })).toBe(false)
+  })
+
+  it('returns false for null/non-objects', () => {
+    expect(isFutureSchema(null)).toBe(false)
+    expect(isFutureSchema('not-an-object')).toBe(false)
   })
 })

@@ -1,10 +1,10 @@
 # Architecture
 
-> Status: migration in progress. The app currently ships as a single static
-> `index.html` prototype (with CDN-loaded `marked`, `DOMPurify`, `JSZip`, and
-> the Google OAuth/Drive JS client). It is being migrated to a Vite + Preact +
-> TypeScript project, one task at a time. The prototype `index.html` remains
-> live on GitHub Pages until the migration replaces it.
+> Status: the migration is complete. The app that ships to
+> `feliperoberto.com.br` is the Vite + Preact + TypeScript project described
+> below — `prototype/index.html`, the original single-file, CDN-loaded
+> monolith, is kept in the repo for reference only and is no longer
+> deployed.
 
 ## Stack decision
 
@@ -23,7 +23,10 @@ that ADR is the single source of truth for this decision.
   `CNAME` (`feliperoberto.com.br`), since the site is not served from a
   GitHub Pages repo subpath.
 
-Later tasks own: styling, business logic migration, and PWA configuration.
+Styling, business logic migration, and PWA configuration have all since
+landed — see the folder taxonomy below for where each lives, and
+[ADR-0003](./adr/0003-user-prompted-service-worker-updates.md) for the PWA
+update strategy specifically.
 
 ## Folder taxonomy
 
@@ -40,7 +43,12 @@ folder below and know what belongs there without reading code first.
   (e.g. zip download/upload) at the UI/feature level.
 - `src/features/drive-sync/` — Google Drive authentication and sync UI/state.
 - `src/features/theme/` — light/dark theme toggle and preference state.
+- `src/features/fullscreen/` — fullscreen toggle and its browser-API state.
 - `src/features/onboarding/` — first-run help/tutorial UI.
+- `src/features/pwa-install/` — Chromium `beforeinstallprompt` button plus
+  the iOS "Add to Home Screen" instructional card.
+- `src/features/pwa-update/` — notices a waiting service worker and shows
+  the user-facing "Atualizar" prompt (ADR-0003).
 - `src/components/` — shared, framework-level "dumb" UI components with no
   feature-specific business logic (buttons, modals, layout primitives).
 - `src/lib/` — framework-agnostic logic usable outside Preact: the
@@ -59,6 +67,5 @@ from the feature's own index, wired together in `src/app/`), not a direct
 import of one feature's internals from another. This keeps each feature
 independently understandable and replaceable.
 
-This task defines and documents the shape only; no logic has been moved out
-of the legacy `index.html` yet. Extracting feature logic into these folders
-is the scope of the later Feature Modularization tasks (Story #3).
+Feature logic has since been fully extracted out of the legacy
+`prototype/index.html` into these folders (Story #3 and later).

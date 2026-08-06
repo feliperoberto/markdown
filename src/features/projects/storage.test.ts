@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
+  backupProjects,
   loadArchivedProjects,
   loadCollapsedProjects,
   loadLastEditedFile,
@@ -11,6 +12,7 @@ import {
 } from './storage'
 import { localStorageAdapter } from '@/lib/storage-adapter'
 import type { StorageAdapter } from '@/lib/storage-adapter'
+import { CURRENT_SCHEMA_VERSION } from '@/lib/storage-migrations'
 
 describe('loadProjects — first-run seeding', () => {
   beforeEach(() => {
@@ -161,5 +163,53 @@ describe('saveProjects — write failure propagation', () => {
         localStorageAdapter,
       ),
     ).not.toThrow()
+  })
+})
+
+describe('future-schema handling (ADR-0003: an old tab reading/writing after a newer tab updated)', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('reads a future-schema envelope as-is, without migrating or re-persisting it', () => {
+    const future = {
+      schemaVersion: CURRENT_SCHEMA_VERSION + 1,
+      projects: { P: { f: { name: 'f', content: 'from the future', size: 1, timestamp: 't' } } },
+    }
+    localStorage.setItem('projects', JSON.stringify(future))
+
+    const result = loadProjects()
+
+    expect(result).toEqual(future.projects)
+    // Untouched: still the exact envelope this tab found, not silently
+    // downgraded or rewritten.
+    expect(JSON.parse(localStorage.getItem('projects') ?? '')).toEqual(future)
+  })
+
+  it('preserves the higher on-disk schemaVersion when this tab saves its own edit afterward', () => {
+    const future = { schemaVersion: CURRENT_SCHEMA_VERSION + 1, projects: { P: {} } }
+    localStorage.setItem('projects', JSON.stringify(future))
+    loadProjects() // as a real caller would, before editing
+
+    saveProjects({ P: {}, Q: {} })
+
+    const stored = JSON.parse(localStorage.getItem('projects') ?? '')
+    expect(stored.schemaVersion).toBe(CURRENT_SCHEMA_VERSION + 1)
+    expect(stored.projects).toEqual({ P: {}, Q: {} })
+  })
+
+  it('preserves the higher on-disk schemaVersion in a backup snapshot too', () => {
+    const future = { schemaVersion: CURRENT_SCHEMA_VERSION + 1, projects: { P: {} } }
+    localStorage.setItem('projects', JSON.stringify(future))
+
+    backupProjects({ P: {} })
+
+    const backup = JSON.parse(localStorage.getItem('projects_backup_1') ?? '')
+    expect(backup.schemaVersion).toBe(CURRENT_SCHEMA_VERSION + 1)
+  })
+
+  it('stamps CURRENT_SCHEMA_VERSION as usual when nothing future is on disk', () => {
+    saveProjects({ P: {} })
+
+    const stored = JSON.parse(localStorage.getItem('projects') ?? '')
+    expect(stored.schemaVersion).toBe(CURRENT_SCHEMA_VERSION)
   })
 })

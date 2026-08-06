@@ -15,6 +15,7 @@ import {
 import type { BatchSelectionEntry } from '@/features/import-export'
 import { DriveSyncPanel } from '@/features/drive-sync'
 import { PwaInstallPrompt } from '@/features/pwa-install'
+import { PwaUpdatePrompt } from '@/features/pwa-update'
 import { ThemeToggle } from '@/features/theme'
 import { FullscreenToggle } from '@/features/fullscreen'
 import { SplashScreen } from '@/features/onboarding'
@@ -32,8 +33,9 @@ function downloadBlob(blob: Blob, fileName: string): void {
 
 // Shell wiring together the extracted projects/files sidebar (#19), the
 // editor/preview pane (#18), the import/export toolbar (#20), the
-// Google Drive sync panel (#21), and the PWA install experience (#26) —
-// all composed with the shared component library (#22).
+// Google Drive sync panel (#21), the PWA install experience (#26), and the
+// PWA update prompt (ADR-0003) — all composed with the shared component
+// library (#22).
 export function App(): JSX.Element {
   const {
     projects,
@@ -230,6 +232,7 @@ export function App(): JSX.Element {
   return (
     <>
       <SplashScreen />
+      <PwaUpdatePrompt />
       <div className="app-shell">
         <header className="app-toolbar">
           <div className="header-left">
