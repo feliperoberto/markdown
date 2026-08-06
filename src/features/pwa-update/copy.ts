@@ -17,6 +17,11 @@ export const pwaUpdateCopy = {
   updateButtonLabel: 'Atualizar',
   updateButtonAriaLabel: 'Atualizar o aplicativo',
 
+  // No separate aria-label: unlike "Atualizar" (ambiguous out of context
+  // — update WHAT?), "Agora não" is a self-evident dismiss/decline label
+  // on its own. Adding one here previously read "Adiar a atualização",
+  // which doesn't contain the visible text and broke WCAG 2.5.3 (Label in
+  // Name) — voice-control users saying "Agora não" would not have matched
+  // the accessible name.
   dismissButtonLabel: 'Agora não',
-  dismissButtonAriaLabel: 'Adiar a atualização',
 } as const

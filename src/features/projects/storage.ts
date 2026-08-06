@@ -88,9 +88,15 @@ export function loadProjects(adapter: StorageAdapter = localStorageAdapter): Pro
     // that already accepted an app update while this one is still running
     // stale JS (ADR-0003: the update prompt lets that window stay open
     // indefinitely). Read the data as-is rather than attempt to migrate
-    // it or downgrade its stamp; `stampedSchemaVersion` below independently
-    // re-checks what's on disk before every write, so this tab's own
-    // future edits still preserve the higher version.
+    // it — this build's migration list has no entry for a version ahead
+    // of what it knows. Any later save from THIS tab stamps its own
+    // honest CURRENT_SCHEMA_VERSION (see saveProjects) rather than
+    // preserving the higher number: this build cannot promise the data
+    // it writes is actually still shaped like that newer version, and a
+    // down-stamp is safe precisely because migrations must stay purely
+    // additive (see the INVARIANT note above) — the newer build simply
+    // re-runs its migration next time it sees this data, which is a
+    // no-op-or-repair, never a loss.
     console.warn(
       `Stored projects are stamped schemaVersion ${parsed.schemaVersion}, newer than this build's ${CURRENT_SCHEMA_VERSION}. Reading as-is without migrating.`,
     )
@@ -114,35 +120,11 @@ export function saveProjects(
   projects: ProjectsState,
   adapter: StorageAdapter = localStorageAdapter,
 ): void {
-  writeEnvelope({ schemaVersion: stampedSchemaVersion(adapter), projects }, adapter)
+  writeEnvelope({ schemaVersion: CURRENT_SCHEMA_VERSION, projects }, adapter)
 }
 
 function writeEnvelope(envelope: StorageEnvelope, adapter: StorageAdapter): void {
   adapter.set(PROJECTS_STORAGE_KEY, JSON.stringify(envelope))
-}
-
-/**
- * The schemaVersion to stamp on a write from THIS build: normally
- * `CURRENT_SCHEMA_VERSION`, but never lower than whatever is already on
- * disk (ADR-0003) — a tab that outlives a deploy and keeps running an old
- * build must not downgrade a newer tab's stamp back down when it persists
- * its own edits. Re-derives from the adapter on every call rather than
- * caching the observed version in module state, so it stays correct
- * across concurrent tabs (and across unit tests reusing the same module)
- * without needing an explicit reset hook.
- */
-function stampedSchemaVersion(adapter: StorageAdapter): number {
-  const raw = adapter.get(PROJECTS_STORAGE_KEY)
-  if (!raw) return CURRENT_SCHEMA_VERSION
-  try {
-    const parsed: unknown = JSON.parse(raw)
-    if (isFutureSchema(parsed)) return parsed.schemaVersion
-  } catch {
-    // Malformed on-disk value — fall through. This is a best-effort read
-    // for stamping purposes only; the real parse/error-handling for the
-    // stored value happens in loadProjects.
-  }
-  return CURRENT_SCHEMA_VERSION
 }
 
 /**
@@ -169,7 +151,7 @@ export function backupProjects(
     rotateBackups(adapter)
     adapter.set(
       `${BACKUP_KEY_PREFIX}1`,
-      JSON.stringify({ schemaVersion: stampedSchemaVersion(adapter), projects: current }),
+      JSON.stringify({ schemaVersion: CURRENT_SCHEMA_VERSION, projects: current }),
     )
   } catch (error) {
     console.error('Failed to write projects backup; continuing without it.', error)

@@ -62,12 +62,20 @@ export function useServiceWorkerUpdate({
     if (document.visibilityState !== 'visible') return
     // Skip a guaranteed-failing fetch.
     if (typeof navigator !== 'undefined' && !navigator.onLine) return
+    // No registration yet (still in flight, or unsupported) — nothing to
+    // probe. Checked BEFORE the throttle timestamp is touched: a
+    // focus/visibilitychange racing ahead of registration completing must
+    // not consume the throttle budget, or it silently cancels the "on
+    // load" probe that fires from onRegistered below for the next
+    // minCheckIntervalMs.
+    const registration = registrationRef.current
+    if (!registration) return
     const elapsed = now() - lastCheckedAtRef.current
     if (elapsed < minCheckIntervalMs) return
     lastCheckedAtRef.current = now()
     // update() rejects on a network failure — swallow it deliberately so
     // alt-tabbing on an offline tab never logs an unhandled rejection.
-    registrationRef.current?.update().catch(() => {})
+    registration.update().catch(() => {})
   }, [minCheckIntervalMs, now])
 
   // Register exactly once for the component's lifetime — deliberately NOT

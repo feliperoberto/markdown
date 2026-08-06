@@ -184,7 +184,14 @@ describe('future-schema handling (ADR-0003: an old tab reading/writing after a n
     expect(JSON.parse(localStorage.getItem('projects') ?? '')).toEqual(future)
   })
 
-  it('preserves the higher on-disk schemaVersion when this tab saves its own edit afterward', () => {
+  it('stamps its own CURRENT_SCHEMA_VERSION when saving after reading future-schema data, rather than preserving the higher number', () => {
+    // Deliberate down-stamp, not a bug: this build cannot promise the
+    // data it just wrote is still shaped like the newer version it found
+    // on disk, so claiming otherwise would let a future build skip a
+    // migration it actually still needs to run (see the INVARIANT note in
+    // storage-migrations.ts). The next newer-build load simply re-runs
+    // that migration — safe, because migrations are required to be
+    // purely additive.
     const future = { schemaVersion: CURRENT_SCHEMA_VERSION + 1, projects: { P: {} } }
     localStorage.setItem('projects', JSON.stringify(future))
     loadProjects() // as a real caller would, before editing
@@ -192,24 +199,17 @@ describe('future-schema handling (ADR-0003: an old tab reading/writing after a n
     saveProjects({ P: {}, Q: {} })
 
     const stored = JSON.parse(localStorage.getItem('projects') ?? '')
-    expect(stored.schemaVersion).toBe(CURRENT_SCHEMA_VERSION + 1)
+    expect(stored.schemaVersion).toBe(CURRENT_SCHEMA_VERSION)
     expect(stored.projects).toEqual({ P: {}, Q: {} })
   })
 
-  it('preserves the higher on-disk schemaVersion in a backup snapshot too', () => {
+  it('stamps its own CURRENT_SCHEMA_VERSION in a backup snapshot too, even with future-schema data on disk', () => {
     const future = { schemaVersion: CURRENT_SCHEMA_VERSION + 1, projects: { P: {} } }
     localStorage.setItem('projects', JSON.stringify(future))
 
     backupProjects({ P: {} })
 
     const backup = JSON.parse(localStorage.getItem('projects_backup_1') ?? '')
-    expect(backup.schemaVersion).toBe(CURRENT_SCHEMA_VERSION + 1)
-  })
-
-  it('stamps CURRENT_SCHEMA_VERSION as usual when nothing future is on disk', () => {
-    saveProjects({ P: {} })
-
-    const stored = JSON.parse(localStorage.getItem('projects') ?? '')
-    expect(stored.schemaVersion).toBe(CURRENT_SCHEMA_VERSION)
+    expect(backup.schemaVersion).toBe(CURRENT_SCHEMA_VERSION)
   })
 })

@@ -15,34 +15,43 @@ export interface UpdateBannerProps {
  * contract, auto-dismisses — see src/components/Toast.tsx) or `Modal`
  * (steals focus, blocks the editor): an update must never interrupt
  * someone mid-sentence, so this stays out of the way until acted on.
- * `role="status"`/`aria-live="polite"`, not `"alert"` — this is not an
- * error and should never interrupt a screen-reader user either.
+ *
+ * Renders TWO things, not one: a visually-hidden `role="status"`/
+ * `aria-live="polite"` region that is ALWAYS mounted (empty when
+ * `!open`), and the actual visible banner box, which mounts/unmounts
+ * freely with `open`. Screen readers only reliably announce a MUTATION to
+ * an EXISTING live region — a whole new subtree that appears already
+ * containing text (i.e. putting `aria-live` directly on the visible box
+ * and conditionally mounting/unmounting it) is not guaranteed to be
+ * announced by AT. Keeping one small, permanent, invisible announcer
+ * decouples "will this be announced" from "how does this look".
  */
-export function UpdateBanner({ open, onUpdate, onDismiss }: UpdateBannerProps): JSX.Element | null {
-  if (!open) return null
-
+export function UpdateBanner({ open, onUpdate, onDismiss }: UpdateBannerProps): JSX.Element {
   return (
-    <div class={styles.banner} role="status" aria-live="polite">
-      <div class={styles.text}>
-        <p class={styles.title}>{pwaUpdateCopy.bannerTitle}</p>
-        <p class={styles.body}>{pwaUpdateCopy.bannerBody}</p>
+    <>
+      <div class={styles.visuallyHidden} role="status" aria-live="polite">
+        {open ? pwaUpdateCopy.bannerTitle : ''}
       </div>
-      <div class={styles.actions}>
-        <Button
-          variant="primary"
-          ariaLabel={pwaUpdateCopy.updateButtonAriaLabel}
-          onClick={onUpdate}
-        >
-          {pwaUpdateCopy.updateButtonLabel}
-        </Button>
-        <Button
-          variant="default"
-          ariaLabel={pwaUpdateCopy.dismissButtonAriaLabel}
-          onClick={onDismiss}
-        >
-          {pwaUpdateCopy.dismissButtonLabel}
-        </Button>
-      </div>
-    </div>
+      {open && (
+        <div class={styles.banner}>
+          <div class={styles.text}>
+            <p class={styles.title}>{pwaUpdateCopy.bannerTitle}</p>
+            <p class={styles.body}>{pwaUpdateCopy.bannerBody}</p>
+          </div>
+          <div class={styles.actions}>
+            <Button
+              variant="primary"
+              ariaLabel={pwaUpdateCopy.updateButtonAriaLabel}
+              onClick={onUpdate}
+            >
+              {pwaUpdateCopy.updateButtonLabel}
+            </Button>
+            <Button variant="default" onClick={onDismiss}>
+              {pwaUpdateCopy.dismissButtonLabel}
+            </Button>
+          </div>
+        </div>
+      )}
+    </>
   )
 }

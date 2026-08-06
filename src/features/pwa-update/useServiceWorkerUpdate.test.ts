@@ -108,6 +108,26 @@ describe('useServiceWorkerUpdate', () => {
     expect(fake.updateMock).toHaveBeenCalledOnce()
   })
 
+  it('does not burn the throttle budget on a focus event that races ahead of registration completing', () => {
+    const fake = createFakeRegistrar()
+    renderHook(() =>
+      useServiceWorkerUpdate({ register: fake.register, now, minCheckIntervalMs: 1000 }),
+    )
+
+    // Registration hasn't completed yet (onRegistered not called) — this
+    // must be a no-op, and critically must NOT consume the throttle
+    // window that the real "on load" probe below still needs.
+    act(() => {
+      window.dispatchEvent(new Event('focus'))
+    })
+    expect(fake.updateMock).not.toHaveBeenCalled()
+
+    // Registration completes immediately after (same tick, same `now()`)
+    // — the on-load probe must still fire.
+    act(() => fake.getHandlers().onRegistered(fake.registration))
+    expect(fake.updateMock).toHaveBeenCalledOnce()
+  })
+
   it('re-checks on window focus once past the throttle window', () => {
     const fake = createFakeRegistrar()
     renderHook(() =>

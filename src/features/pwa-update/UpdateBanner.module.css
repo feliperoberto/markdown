@@ -55,3 +55,19 @@
     width: auto;
   }
 }
+
+/**
+ * Permanently-mounted announcer for screen readers (see UpdateBanner.tsx's
+ * header comment) — visible content lives in .banner instead.
+ */
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
