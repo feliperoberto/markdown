@@ -46,6 +46,10 @@ What this actually does, technically:
   current page session, and is never written to `localStorage`,
   `sessionStorage`, or any other persistent store. Closing or reloading the
   tab requires reconnecting (see `src/features/drive-sync/google-drive-provider.ts`).
+  This is also why app updates ask before reloading: accepting the
+  "Atualizar" prompt reloads the page, which disconnects Drive the same way
+  any other reload does — see
+  [ADR-0003](./adr/0003-user-prompted-service-worker-updates.md).
 - **Your notes are stored in Google's `appDataFolder`**, a special, hidden
   Drive space that only this app can see and use
   (`spaces=appDataFolder` / `parents: ['appDataFolder']`, requested with the

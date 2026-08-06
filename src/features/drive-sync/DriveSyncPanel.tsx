@@ -2,6 +2,7 @@ import type { JSX } from 'preact'
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { Button, IconButton, Modal, useToast } from '@/components'
 import { useOnlineStatus } from '@/lib/useOnlineStatus'
+import { appVersion } from '@/lib/app-version'
 import { DriveSyncOfflineError, GoogleDriveSyncProvider } from './google-drive-provider'
 import type { DriveSyncDotStatus } from './google-drive-provider'
 import { driveSyncCopy } from './copy'
@@ -290,6 +291,7 @@ export function DriveSyncPanel({ reconcile, openSignal }: DriveSyncPanelProps): 
               {driveSyncCopy.syncButtonLabel}
             </Button>
           </div>
+          <p class={styles.appVersion}>{`Versão ${appVersion}`}</p>
         </div>
       </Modal>
     </>

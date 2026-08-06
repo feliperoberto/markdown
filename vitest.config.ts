@@ -32,7 +32,19 @@ export default defineConfig({
       // pipeline, storage schema versioning). Project-wide coverage,
       // including components/UI, is out of scope here (see issue #32).
       include: ['src/lib/**/*.{ts,tsx}'],
-      exclude: ['src/lib/useOnlineStatus.ts'],
+      // useOnlineStatus.ts: a thin browser-API hook, same reasoning as
+      // pwa-register.ts below.
+      // pwa-register.ts: imports the build-time `virtual:pwa-register`
+      // module (ADR-0003), which only exists under the real Vite/PWA
+      // build — this config deliberately doesn't load VitePWA (see the
+      // header comment above), so this file can't be transformed here at
+      // all, let alone covered. Its own branching is minimal (register,
+      // adapt callbacks, orchestrate a reload); the two pieces of real
+      // logic it depends on — the actual reload/re-check decisions, and
+      // the wait-for-event-or-timeout primitive it uses — are extracted
+      // into useServiceWorkerUpdate.ts and waitForEvent.ts respectively,
+      // both fully covered.
+      exclude: ['src/lib/useOnlineStatus.ts', 'src/lib/pwa-register.ts'],
       thresholds: {
         lines: 70,
         statements: 70,

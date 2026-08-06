@@ -2,6 +2,7 @@ import { localStorageAdapter, type StorageAdapter } from '@/lib/storage-adapter'
 import {
   CURRENT_SCHEMA_VERSION,
   isEnvelope,
+  isFutureSchema,
   migrateStoredProjects,
   type StorageEnvelope,
 } from '@/lib/storage-migrations'
@@ -80,6 +81,26 @@ export function loadProjects(adapter: StorageAdapter = localStorageAdapter): Pro
   } catch (error) {
     console.error('Failed to parse stored projects; starting from an empty state.', error)
     return {}
+  }
+
+  if (isFutureSchema(parsed)) {
+    // Written by a newer build than this one — most likely another tab
+    // that already accepted an app update while this one is still running
+    // stale JS (ADR-0003: the update prompt lets that window stay open
+    // indefinitely). Read the data as-is rather than attempt to migrate
+    // it — this build's migration list has no entry for a version ahead
+    // of what it knows. Any later save from THIS tab stamps its own
+    // honest CURRENT_SCHEMA_VERSION (see saveProjects) rather than
+    // preserving the higher number: this build cannot promise the data
+    // it writes is actually still shaped like that newer version, and a
+    // down-stamp is safe precisely because migrations must stay purely
+    // additive (see the INVARIANT note above) — the newer build simply
+    // re-runs its migration next time it sees this data, which is a
+    // no-op-or-repair, never a loss.
+    console.warn(
+      `Stored projects are stamped schemaVersion ${parsed.schemaVersion}, newer than this build's ${CURRENT_SCHEMA_VERSION}. Reading as-is without migrating.`,
+    )
+    return parsed.projects
   }
 
   const envelope = migrateStoredProjects(parsed)

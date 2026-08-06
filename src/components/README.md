@@ -93,6 +93,12 @@ and `IconButton` (icon-only, e.g. toolbar/sidebar).
   `aria-controls` pointing at the controlled region id.
 - `danger` variant: no extra ARIA role change — semantics come from the
   dialog's own `role="dialog"` and label text ("Excluir"), not from the button.
+- `Button`'s accessible name defaults to its visible text — most callers
+  need nothing extra. An optional `ariaLabel` prop overrides it for the
+  rare case where that visible text is short/generic enough to be
+  ambiguous out of context (e.g. `UpdateBanner`'s "Atualizar" ->
+  `aria-label="Atualizar o aplicativo"`, ADR-0003) — same convention as
+  `IconButton`'s `label`.
 
 ### Keyboard
 
@@ -103,7 +109,7 @@ and `IconButton` (icon-only, e.g. toolbar/sidebar).
 ### Props sketch
 
 ```
-Button:     variant: 'default' | 'primary' | 'danger', disabled?, onClick, children (label)
+Button:     variant: 'default' | 'primary' | 'danger', disabled?, onClick, children (label), ariaLabel?
 IconButton: icon (node), label (string, -> aria-label), variant?: 'default' | 'compact',
             disabled?, onClick, ariaHasPopup?, ariaExpanded?, ariaControls?
 ```

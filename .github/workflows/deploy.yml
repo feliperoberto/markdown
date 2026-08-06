@@ -41,13 +41,6 @@ jobs:
       - name: Preserve custom domain (CNAME)
         run: cp CNAME dist/CNAME
 
-      - name: Preserve root entry point (app.html -> index.html)
-        # Vite's build entry is app.html (see vite.config.ts), so dist/
-        # has no index.html. GitHub Pages requires index.html to serve the
-        # domain root ("/"), so copy the built app.html to index.html to
-        # keep https://feliperoberto.com.br/ resolving to the app.
-        run: cp dist/app.html dist/index.html
-
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:

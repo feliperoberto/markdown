@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A notice when a new version of the app is available, with an "Atualizar"
+  action, instead of the app updating itself silently in the background.
+  The installed app version is now shown in the Google Drive/Config panel.
 - Splash screen CTA linking to the companion book's PDF (`marcar-para-existir.pdf`).
 - Per-file "last modified" timestamp shown in the sidebar file list.
 - Archive/unarchive projects: an "Arquivar projeto"/"Desarquivar projeto"
@@ -20,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The app no longer updates itself in the background while you're writing —
+  updates apply only when you choose them, so an update can never interrupt
+  an editing session or drop your Google Drive connection unexpectedly
+  ([ADR-0003](./docs/adr/0003-user-prompted-service-worker-updates.md)).
 - Google Drive sync now reconciles local and remote data by per-file
   freshness (newest edit wins, files unique to either side are always kept)
   instead of blindly overwriting one side — this applies to both the manual

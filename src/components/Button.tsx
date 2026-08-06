@@ -12,6 +12,16 @@ export interface ButtonProps {
   ariaHasPopup?: JSX.AriaAttributes['aria-haspopup']
   /** Overrides the implicit `button` role — e.g. `menuitem` inside a `role="menu"` container. */
   role?: JSX.HTMLAttributes<HTMLButtonElement>['role']
+  /**
+   * Overrides the button's accessible name (default: its visible text
+   * content). Most callers don't need this — a labeled button's own text
+   * is already its accessible name. Use it only when that visible label is
+   * short/generic enough to be ambiguous out of context (e.g. a bare
+   * "Atualizar" reached via the accessibility tree without its
+   * surrounding banner text) — mirrors IconButton's `label` -> aria-label
+   * convention.
+   */
+  ariaLabel?: string
 }
 
 /**
@@ -26,6 +36,7 @@ export function Button({
   type = 'button',
   ariaHasPopup,
   role,
+  ariaLabel,
 }: ButtonProps) {
   const variantClass =
     variant === 'primary' ? styles.primary : variant === 'danger' ? styles.danger : styles.default
@@ -37,6 +48,7 @@ export function Button({
       disabled={disabled}
       onClick={onClick}
       aria-haspopup={ariaHasPopup}
+      aria-label={ariaLabel}
       role={role}
     >
       {children}

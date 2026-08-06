@@ -29,7 +29,7 @@
       "@/lib/*": ["src/lib/*"],
       "@/styles/*": ["src/styles/*"]
     },
-    "types": ["vite/client", "node"]
+    "types": ["vite/client", "node", "vite-plugin-pwa/client"]
   },
   "include": ["src", "vite.config.ts", "app.html"]
 }

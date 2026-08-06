@@ -16,6 +16,23 @@
 // Adding a future schema change means: bump `CURRENT_SCHEMA_VERSION` and
 // append one more `{ from, migrate }` entry to `migrations` below — never
 // mutate an existing migration once it has shipped.
+//
+// INVARIANT (ADR-0003): migrations must be purely additive. With the
+// service-worker update prompt, a tab can keep running an old build
+// indefinitely — the user can dismiss the "Atualizar" banner, or simply
+// never trigger the re-check. So a shipped release may never remove or
+// repurpose a field the immediately preceding release still reads/writes;
+// an un-updated tab has no bounded lifetime in which to catch up.
+//
+// This is also why an old tab reading data a newer tab already wrote
+// (`isFutureSchema` below) is safe to save again stamped with its OWN,
+// lower CURRENT_SCHEMA_VERSION rather than preserving the higher number
+// it found on disk: the old build cannot promise the data it writes is
+// still shaped like that newer version, so claiming otherwise would let a
+// future build skip a migration it actually still needs to run. A
+// down-stamp costs nothing but a redundant (safe, additive-by-invariant)
+// re-migration next time a newer build sees the data — see
+// `src/features/projects/storage.ts`'s `saveProjects`.
 import type { ProjectsState } from '@/features/projects/types'
 
 export const CURRENT_SCHEMA_VERSION = 1
@@ -40,6 +57,18 @@ export function isEnvelope(value: unknown): value is StorageEnvelope {
   return (
     isPlainObject(value) && typeof value.schemaVersion === 'number' && isPlainObject(value.projects)
   )
+}
+
+/**
+ * True when `raw` was written by a NEWER build than this one — the mirror
+ * case of the legacy-blob migration above, and the one a long-lived,
+ * un-updated tab can now actually hit (see the INVARIANT note at the top
+ * of this file). Callers should read the data as-is without attempting to
+ * migrate it — this build's migration list has no entry for a version
+ * ahead of what it knows.
+ */
+export function isFutureSchema(raw: unknown): raw is StorageEnvelope {
+  return isEnvelope(raw) && raw.schemaVersion > CURRENT_SCHEMA_VERSION
 }
 
 const migrations: Migration[] = [
