@@ -44,6 +44,19 @@ const MAX_BACKUPS = 5
 // back to a neutral default rather than throwing.
 const LAST_EDITED_FILE_KEY = 'lastEditedFile'
 const COLLAPSED_PROJECTS_KEY = 'collapsedProjects'
+// Archive feature: which projects are hidden from the everyday list.
+// Deliberately the same sidecar-key pattern as COLLAPSED_PROJECTS_KEY, and
+// deliberately NOT part of the `projects` envelope: it's device-local view
+// state, never written into a Drive snapshot and never sent through
+// mergeProjectsByFreshness (which resolves conflicts by file timestamp — a
+// name set has none, so a cross-device merge could only union or
+// last-writer-wins, either of which reads as "why did my archived project
+// come back / vanish on my other device?"). A Drive pull can only ever ADD
+// projects, and those always arrive unarchived — correct, since the set
+// can't go stale from sync. If archiving ever needs to follow you across
+// devices, that's a real schema change (per-project metadata with an
+// `archivedAt`), not an extension of this key.
+const ARCHIVED_PROJECTS_KEY = 'archivedProjects'
 
 export interface LastEditedFile {
   project: string
@@ -182,13 +195,13 @@ export function saveLastEditedFile(
 }
 
 /**
- * Reads the set of project names the user has collapsed (issue #92:
- * remember collapsed/expanded state). Returns an empty set on anything
- * malformed — a missing entry means "nothing collapsed", i.e. every
- * project expanded, matching the previous always-expanded default.
+ * Reads a JSON-array-of-names sidecar key as a `Set<string>`. Shared by
+ * every "which projects are …" sidecar (collapsed, archived): returns an
+ * empty set on anything missing or malformed — a neutral default rather
+ * than a thrown error, since losing this state never risks a document.
  */
-export function loadCollapsedProjects(adapter: StorageAdapter = localStorageAdapter): Set<string> {
-  const raw = adapter.get(COLLAPSED_PROJECTS_KEY)
+function loadNameSet(key: string, adapter: StorageAdapter): Set<string> {
+  const raw = adapter.get(key)
   if (!raw) return new Set()
   try {
     const parsed = JSON.parse(raw) as unknown
@@ -196,9 +209,28 @@ export function loadCollapsedProjects(adapter: StorageAdapter = localStorageAdap
       return new Set(parsed.filter((name): name is string => typeof name === 'string'))
     }
   } catch (error) {
-    console.error('Failed to parse collapsed-projects set; ignoring it.', error)
+    console.error(`Failed to parse "${key}" name set; ignoring it.`, error)
   }
   return new Set()
+}
+
+/** Persists a name set to a sidecar key as a JSON array. Best-effort. */
+function saveNameSet(key: string, names: Iterable<string>, adapter: StorageAdapter): void {
+  try {
+    adapter.set(key, JSON.stringify(Array.from(names)))
+  } catch (error) {
+    console.error(`Failed to persist "${key}" name set; continuing.`, error)
+  }
+}
+
+/**
+ * Reads the set of project names the user has collapsed (issue #92:
+ * remember collapsed/expanded state). Returns an empty set on anything
+ * malformed — a missing entry means "nothing collapsed", i.e. every
+ * project expanded, matching the previous always-expanded default.
+ */
+export function loadCollapsedProjects(adapter: StorageAdapter = localStorageAdapter): Set<string> {
+  return loadNameSet(COLLAPSED_PROJECTS_KEY, adapter)
 }
 
 /** Persists the collapsed-project name set. Best-effort. */
@@ -206,9 +238,22 @@ export function saveCollapsedProjects(
   names: Iterable<string>,
   adapter: StorageAdapter = localStorageAdapter,
 ): void {
-  try {
-    adapter.set(COLLAPSED_PROJECTS_KEY, JSON.stringify(Array.from(names)))
-  } catch (error) {
-    console.error('Failed to persist collapsed-projects set; continuing.', error)
-  }
+  saveNameSet(COLLAPSED_PROJECTS_KEY, names, adapter)
+}
+
+/**
+ * Reads the set of project names the user has archived. Returns an empty
+ * set on anything malformed — a missing entry means "nothing archived",
+ * i.e. every project visible, matching the pre-feature default.
+ */
+export function loadArchivedProjects(adapter: StorageAdapter = localStorageAdapter): Set<string> {
+  return loadNameSet(ARCHIVED_PROJECTS_KEY, adapter)
+}
+
+/** Persists the archived-project name set. Best-effort. */
+export function saveArchivedProjects(
+  names: Iterable<string>,
+  adapter: StorageAdapter = localStorageAdapter,
+): void {
+  saveNameSet(ARCHIVED_PROJECTS_KEY, names, adapter)
 }

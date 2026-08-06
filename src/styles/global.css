@@ -237,6 +237,42 @@ body {
   line-height: 1.5;
 }
 
+/* Archive feature: reveals/hides archived projects in the list above it.
+   Only rendered when at least one project is archived. */
+.archived-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.5rem;
+  margin-top: 0.15rem;
+  border: none;
+  border-top: 1px dashed rgba(255, 255, 255, 0.12);
+  background: transparent;
+  color: var(--cream-soft);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.archived-toggle:hover {
+  color: var(--cream);
+}
+
+.archived-toggle.active {
+  color: var(--accent);
+  border-top-color: var(--accent);
+}
+
+.archived-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* Project group cards */
 .project-group {
   background: rgba(255, 255, 255, 0.025);
@@ -262,6 +298,18 @@ body {
 .project-group.drop-target {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
+/* Archive feature: set aside without being unusable — files inside stay
+   fully readable. State is also carried non-visually by .project-badge
+   below and the dashed border, so it never rests on opacity alone. */
+.project-group.archived {
+  opacity: 0.65;
+  border-style: dashed;
+}
+
+.project-group.archived:hover {
+  opacity: 1;
 }
 
 .file-item.drop-target {
@@ -301,6 +349,13 @@ body {
 
 .project-toggle.expanded {
   transform: rotate(90deg);
+}
+
+/* Archive feature: badge next to the name of an archived project. */
+.project-badge {
+  font-size: 0.7rem;
+  line-height: 1;
+  flex-shrink: 0;
 }
 
 .project-name {

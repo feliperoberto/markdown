@@ -12,9 +12,17 @@ export function projectExists(state: ProjectsState, projectName: string): boolea
  * #92). Used as the fallback when the remembered last-edited file no longer
  * exists (and to focus a real file on init so typing edits something).
  * Skips empty projects; returns `null` only when no project holds any file.
+ *
+ * `skipProjects` (archive feature) additionally skips any project named in
+ * it — e.g. picking the next file to focus after the current project was
+ * archived, without proposing another hidden project's file.
  */
-export function firstFileOf(state: ProjectsState): { project: string; file: string } | null {
+export function firstFileOf(
+  state: ProjectsState,
+  skipProjects?: ReadonlySet<string>,
+): { project: string; file: string } | null {
   for (const project of Object.keys(state)) {
+    if (skipProjects?.has(project)) continue
     const files = Object.keys(state[project] ?? {})
     if (files.length > 0) return { project, file: files[0]! }
   }
@@ -300,4 +308,38 @@ export function mergeProjectsByFreshness(
   }
 
   return { merged, localChanged, remoteChanged }
+}
+
+/**
+ * Carries an archived flag across a project rename (project identity is the
+ * object key, so a rename is a key move — see `renameProject`). Returns the
+ * same reference when `oldName` isn't archived, matching this file's
+ * same-reference-on-no-op convention.
+ */
+export function renameInArchived(
+  archived: ReadonlySet<string>,
+  oldName: string,
+  newName: string,
+): ReadonlySet<string> {
+  if (!archived.has(oldName)) return archived
+  const next = new Set(archived)
+  next.delete(oldName)
+  next.add(newName)
+  return next
+}
+
+/**
+ * Drops archived-set entries for projects that no longer exist (deleted, or
+ * a stale name from a previous session) so the persisted set doesn't
+ * accumulate garbage forever. Uses `Object.prototype.hasOwnProperty` (not
+ * `name in state`) so a project literally named `constructor`/`toString`
+ * behaves, matching `projectExists`. Returns the same reference when
+ * nothing is stale.
+ */
+export function pruneArchived(
+  archived: ReadonlySet<string>,
+  state: ProjectsState,
+): ReadonlySet<string> {
+  const next = new Set([...archived].filter((name) => projectExists(state, name)))
+  return next.size === archived.size ? archived : next
 }

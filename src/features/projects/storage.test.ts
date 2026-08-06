@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
+  loadArchivedProjects,
   loadCollapsedProjects,
   loadLastEditedFile,
   loadProjects,
+  saveArchivedProjects,
   saveCollapsedProjects,
   saveLastEditedFile,
   saveProjects,
@@ -98,6 +100,37 @@ describe('collapsed-projects memory (issue #92)', () => {
     expect([...loadCollapsedProjects()].sort()).toEqual(['A', 'B'])
     localStorage.setItem('collapsedProjects', '{"not":"an array"}')
     expect(loadCollapsedProjects().size).toBe(0)
+  })
+})
+
+describe('archived-projects memory', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('round-trips a saved set of names', () => {
+    saveArchivedProjects(new Set(['A', 'B']))
+    expect([...loadArchivedProjects()].sort()).toEqual(['A', 'B'])
+  })
+
+  it('returns an empty set when nothing is stored (nothing archived)', () => {
+    expect(loadArchivedProjects().size).toBe(0)
+  })
+
+  it('ignores non-string entries and malformed values', () => {
+    localStorage.setItem('archivedProjects', '["A", 1, null, "B"]')
+    expect([...loadArchivedProjects()].sort()).toEqual(['A', 'B'])
+    localStorage.setItem('archivedProjects', '{"not":"an array"}')
+    expect(loadArchivedProjects().size).toBe(0)
+  })
+
+  it('does not throw when the adapter fails to save', () => {
+    const throwingAdapter: StorageAdapter = {
+      get: () => null,
+      set: () => {
+        throw new DOMException('The quota has been exceeded.', 'QuotaExceededError')
+      },
+      remove: () => {},
+    }
+    expect(() => saveArchivedProjects(new Set(['A']), throwingAdapter)).not.toThrow()
   })
 })
 

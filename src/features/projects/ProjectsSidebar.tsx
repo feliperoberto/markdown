@@ -1,9 +1,14 @@
 import type { JSX } from 'preact'
-import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { ProjectGroup } from './ProjectGroup'
 import { showPromptDialog } from './dialogs'
 import { loadCollapsedProjects, saveCollapsedProjects } from './storage'
 import type { ProjectsState } from './types'
+
+// Stable empty-set default for the `archivedProjects` prop: a `= new Set()`
+// default parameter would allocate a fresh Set every render and defeat
+// ProjectGroup's memo().
+const NO_ARCHIVED: ReadonlySet<string> = new Set()
 
 export interface ProjectsSidebarProps {
   projects: ProjectsState
@@ -45,6 +50,12 @@ export interface ProjectsSidebarProps {
     beforeFile?: string | null,
   ) => void
   onMoveProject?: (projectName: string, beforeProject?: string | null) => void
+  // Archive feature: names of projects hidden from the everyday list, and
+  // the callback that flips one project's archived state. Optional so the
+  // tree still renders (with nothing archived) when a caller doesn't wire
+  // it up, matching this file's convention for feature-gating props.
+  archivedProjects?: ReadonlySet<string>
+  onToggleArchived?: (projectName: string) => void
 }
 
 // Renders the full project/file sidebar tree. Owns only tree
@@ -71,9 +82,27 @@ export function ProjectsSidebar({
   onOpenConfig,
   onMoveFile,
   onMoveProject,
+  archivedProjects = NO_ARCHIVED,
+  onToggleArchived,
 }: ProjectsSidebarProps): JSX.Element {
   const [selectedByProject, setSelectedByProject] = useState<Record<string, Set<string>>>({})
-  const projectNames = Object.keys(projects)
+  // The full, unfiltered list. This is what duplicate-name validation
+  // (handleNewProject below, and ProjectGroup's rename validation) must see
+  // — filtering it would let a user create/rename into a name collision
+  // with a hidden archived project, which model.createProject/renameProject
+  // would then silently no-op. Memoized because Object.keys returns a new
+  // array reference every render, which would defeat ProjectGroup's memo().
+  const projectNames = useMemo(() => Object.keys(projects), [projects])
+  const archivedCount = projectNames.filter((name) => archivedProjects.has(name)).length
+  // Whether the archived section is expanded — deliberately transient, not
+  // persisted like collapsedProjects: archiving means "out of my way", so a
+  // reload should show only the everyday list again.
+  const [showArchived, setShowArchived] = useState(false)
+  const visibleProjectNames = useMemo(
+    () =>
+      showArchived ? projectNames : projectNames.filter((name) => !archivedProjects.has(name)),
+    [projectNames, archivedProjects, showArchived],
+  )
   const importZipInputRef = useRef<HTMLInputElement>(null)
 
   // Remembered collapsed/expanded state per project (issue #92). Seeded
@@ -113,9 +142,12 @@ export function ProjectsSidebar({
   }, [])
 
   // Prunes stale selection entries whenever the project/file set changes
-  // (rename, delete, import, restore). Previously a renamed/deleted file
-  // stayed in `selectedByProject` forever: the checkbox visually stayed
-  // "checked" for a file that no longer exists under that name, and — had
+  // (rename, delete, import, restore) — and also when a project is
+  // archived: its checkboxes go off-screen behind the "Mostrar arquivados"
+  // toggler, so a file checked before archiving must not silently stay in
+  // the batch-download selection. Previously a renamed/deleted file stayed
+  // in `selectedByProject` forever: the checkbox visually stayed "checked"
+  // for a file that no longer exists under that name, and — had
   // `batchSelectionEntries` (app.tsx) not separately filtered dead
   // entries — a batch export could silently drop a file the user believed
   // was still selected.
@@ -125,7 +157,7 @@ export function ProjectsSidebar({
       const next: Record<string, Set<string>> = {}
       for (const [projectName, fileNames] of Object.entries(prev)) {
         const files = projects[projectName]
-        if (!files) {
+        if (!files || archivedProjects.has(projectName)) {
           changed = true
           continue
         }
@@ -143,7 +175,7 @@ export function ProjectsSidebar({
       return next
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- onSelectionChange intentionally excluded: it's a per-render callback prop, not state this effect should re-run for.
-  }, [projects])
+  }, [projects, archivedProjects])
 
   function toggleSelected(projectName: string, fileName: string, selected: boolean) {
     setSelectedByProject((prev) => {
@@ -209,14 +241,19 @@ export function ProjectsSidebar({
         >
           {projectNames.length === 0 ? (
             <div className="projects-list-empty">Nenhum projeto ainda. Marque o primeiro.</div>
+          ) : visibleProjectNames.length === 0 ? (
+            <div className="projects-list-empty">
+              Todos os projetos estão arquivados. Use o botão abaixo para mostrá-los.
+            </div>
           ) : (
-            projectNames.map((projectName) => (
+            visibleProjectNames.map((projectName) => (
               <ProjectGroup
                 key={projectName}
                 projectName={projectName}
                 files={projects[projectName]!}
                 isActiveProject={currentProject === projectName}
                 isExpanded={!collapsedProjects.has(projectName)}
+                isArchived={archivedProjects.has(projectName)}
                 currentFile={currentProject === projectName ? currentFile : null}
                 selectedFiles={selectedByProject[projectName] ?? new Set()}
                 projectNames={projectNames}
@@ -233,8 +270,23 @@ export function ProjectsSidebar({
                 onUploadMultipleFiles={onUploadMultipleFiles}
                 onMoveFile={onMoveFile}
                 onMoveProject={onMoveProject}
+                onToggleArchived={onToggleArchived}
               />
             ))
+          )}
+
+          {archivedCount > 0 && (
+            <button
+              type="button"
+              className={`archived-toggle${showArchived ? ' active' : ''}`}
+              aria-pressed={showArchived}
+              onClick={() => setShowArchived((v) => !v)}
+            >
+              <span aria-hidden="true">📦</span>
+              <span>
+                {showArchived ? 'Ocultar arquivados' : `Mostrar arquivados (${archivedCount})`}
+              </span>
+            </button>
           )}
         </div>
 

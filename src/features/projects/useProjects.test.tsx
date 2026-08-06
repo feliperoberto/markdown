@@ -13,8 +13,12 @@ function Harness() {
     selectFile,
     createFile,
     createProject,
+    renameProject,
+    deleteProject,
     moveFile,
     moveProject,
+    archivedProjects,
+    toggleProjectArchived,
     reconcileWithRemote,
   } = useProjects()
 
@@ -25,6 +29,12 @@ function Harness() {
       <button onClick={() => createFile('Segundo', 'notes', 'other')}>create-file-segundo</button>
       <button onClick={() => moveFile('Meu Projeto', 'notes', 'Segundo', null)}>move-file</button>
       <button onClick={() => moveProject('Segundo', 'Meu Projeto')}>move-project</button>
+      <button onClick={() => toggleProjectArchived('Meu Projeto')}>
+        toggle-archive-meu-projeto
+      </button>
+      <button onClick={() => toggleProjectArchived('Segundo')}>toggle-archive-segundo</button>
+      <button onClick={() => renameProject('Meu Projeto', 'Renomeado')}>rename-meu-projeto</button>
+      <button onClick={() => deleteProject('Meu Projeto')}>delete-meu-projeto</button>
       <button
         onClick={() =>
           reconcileWithRemote({
@@ -54,6 +64,7 @@ function Harness() {
       </button>
       <button onClick={() => selectFile('Meu Projeto', 'notes')}>select-notes</button>
       <pre>{JSON.stringify({ projects, currentProject, currentFile })}</pre>
+      <pre id="archived">{JSON.stringify([...archivedProjects].sort())}</pre>
     </div>
   )
 }
@@ -222,5 +233,141 @@ describe('useProjects', () => {
     expect(stateText()).not.toContain('"notes"')
 
     setItemSpy.mockRestore()
+  })
+
+  describe('archive feature', () => {
+    it('toggleProjectArchived archives and unarchives, persisting the set', async () => {
+      const { container } = renderHarness()
+      const archivedText = () => container.querySelector('#archived')?.textContent ?? ''
+
+      await waitFor(() => expect(archivedText()).toBe('[]'))
+
+      fireEvent.click(screen.getByText('toggle-archive-meu-projeto'))
+      await waitFor(() => expect(archivedText()).toBe('["Meu Projeto"]'))
+      expect(JSON.parse(localStorage.getItem('archivedProjects') ?? '[]')).toEqual(['Meu Projeto'])
+
+      fireEvent.click(screen.getByText('toggle-archive-meu-projeto'))
+      await waitFor(() => expect(archivedText()).toBe('[]'))
+      expect(JSON.parse(localStorage.getItem('archivedProjects') ?? '[]')).toEqual([])
+    })
+
+    it('archiving the currently-open project moves the selection to the first visible file', async () => {
+      const { container } = renderHarness()
+      const stateText = () => container.querySelector('pre')?.textContent ?? ''
+
+      fireEvent.click(screen.getByText('create-file')) // Meu Projeto/notes
+      fireEvent.click(screen.getByText('create-project')) // Segundo (also selects it)
+      fireEvent.click(screen.getByText('create-file-segundo')) // Segundo/notes
+      // Re-select Meu Projeto/notes so it's the active project before archiving.
+      fireEvent.click(screen.getByText('select-notes'))
+      await waitFor(() => expect(stateText()).toContain('"currentProject":"Meu Projeto"'))
+
+      // Archiving the active project ("Meu Projeto") should move the
+      // selection to the first file of the next visible project.
+      fireEvent.click(screen.getByText('toggle-archive-meu-projeto'))
+
+      await waitFor(() => {
+        expect(stateText()).toContain('"currentProject":"Segundo"')
+        expect(stateText()).toContain('"currentFile":"notes"')
+      })
+    })
+
+    it('renaming an archived project carries the archived flag to the new name', async () => {
+      const { container } = renderHarness()
+      const archivedText = () => container.querySelector('#archived')?.textContent ?? ''
+
+      fireEvent.click(screen.getByText('toggle-archive-meu-projeto'))
+      await waitFor(() => expect(archivedText()).toBe('["Meu Projeto"]'))
+
+      fireEvent.click(screen.getByText('rename-meu-projeto'))
+      await waitFor(() => expect(archivedText()).toBe('["Renomeado"]'))
+    })
+
+    it('deleting an archived project drops it from the archived set', async () => {
+      const { container } = renderHarness()
+      const archivedText = () => container.querySelector('#archived')?.textContent ?? ''
+
+      fireEvent.click(screen.getByText('toggle-archive-meu-projeto'))
+      await waitFor(() => expect(archivedText()).toBe('["Meu Projeto"]'))
+
+      fireEvent.click(screen.getByText('delete-meu-projeto'))
+      await waitFor(() => expect(archivedText()).toBe('[]'))
+    })
+
+    // Regression test: archiving the last still-visible project used to
+    // null out currentProject/currentFile even when an already-archived
+    // project still had a file — leaving a blank, non-persisting editor —
+    // instead of falling back to it the way resolveInitialSelection does
+    // for the identical all-archived state on boot.
+    it("archiving the last visible project falls back to an archived project's file instead of nulling the selection", async () => {
+      const { container } = renderHarness()
+      const stateText = () => container.querySelector('pre')?.textContent ?? ''
+
+      // Archive "Segundo" first (it has no files) — the selection re-points
+      // back to the seeded "Meu Projeto"/"Sem título".
+      fireEvent.click(screen.getByText('create-project')) // Segundo
+      fireEvent.click(screen.getByText('toggle-archive-segundo'))
+      await waitFor(() => expect(stateText()).toContain('"currentProject":"Meu Projeto"'))
+
+      // Now archive the only remaining visible project.
+      fireEvent.click(screen.getByText('toggle-archive-meu-projeto'))
+
+      await waitFor(() => {
+        expect(stateText()).toContain('"currentProject":"Meu Projeto"')
+        expect(stateText()).toContain('"currentFile":"Sem título"')
+      })
+    })
+
+    // Regression test: a failed delete write (e.g. quota exceeded) used to
+    // still drop the project from the archived set even though the project
+    // itself was never removed — it silently reappeared in the everyday
+    // list despite persist() never having landed.
+    it('a failed delete does not un-archive the project', async () => {
+      const { container } = renderHarness()
+      const archivedText = () => container.querySelector('#archived')?.textContent ?? ''
+      const stateText = () => container.querySelector('pre')?.textContent ?? ''
+
+      fireEvent.click(screen.getByText('toggle-archive-meu-projeto'))
+      await waitFor(() => expect(archivedText()).toBe('["Meu Projeto"]'))
+
+      const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new DOMException('The quota has been exceeded.', 'QuotaExceededError')
+      })
+
+      fireEvent.click(screen.getByText('delete-meu-projeto'))
+      await waitFor(() => expect(screen.getByRole('alert')).not.toBeNull())
+      setItemSpy.mockRestore()
+
+      // The delete never reached storage, so the project still exists and
+      // must still be archived.
+      expect(stateText()).toContain('"Meu Projeto"')
+      expect(archivedText()).toBe('["Meu Projeto"]')
+    })
+
+    // A last-edited pointer into a project the user has since archived must
+    // not reopen the very thing they hid — the next visible file should be
+    // selected instead.
+    it('boot selection skips a last-edited file whose project is archived', async () => {
+      localStorage.setItem(
+        'projects',
+        JSON.stringify({
+          schemaVersion: 1,
+          projects: {
+            A: { one: { name: 'one', content: '', size: 0, timestamp: 't' } },
+            B: { two: { name: 'two', content: '', size: 0, timestamp: 't' } },
+          },
+        }),
+      )
+      localStorage.setItem('lastEditedFile', JSON.stringify({ project: 'A', file: 'one' }))
+      localStorage.setItem('archivedProjects', JSON.stringify(['A']))
+
+      const { container } = renderHarness()
+      const stateText = () => container.querySelector('pre')?.textContent ?? ''
+
+      await waitFor(() => {
+        expect(stateText()).toContain('"currentProject":"B"')
+        expect(stateText()).toContain('"currentFile":"two"')
+      })
+    })
   })
 })
