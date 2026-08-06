@@ -5,8 +5,22 @@ import { useEffect, useRef } from 'preact/hooks'
  * every outside-click dismissal in the app (mobile sidebar drawer in
  * app.tsx, project actions menu in ProjectGroup.tsx) so the event semantics
  * don't drift across copies: listens on `document` for `click` (not
- * `mousedown`), so it fires after — not before — the same tap's own onClick
- * handlers have already run.
+ * `mousedown`), so it never races the same tap's own mousedown-driven focus
+ * changes.
+ *
+ * Listens during the CAPTURE phase, not bubble — deliberately, not merely
+ * conventionally. Plenty of unrelated controls elsewhere in the app call
+ * `event.stopPropagation()` on their own click (e.g. a file row's select
+ * checkbox, its rename/delete buttons, the sidebar footer's "Novo
+ * projeto"/"Importar" buttons) so their own click doesn't also bubble into
+ * a parent row's onClick. A bubble-phase document listener would never see
+ * those clicks at all — the event stops before it gets there — which
+ * silently defeats outside-dismissal for every one of them: clicking any
+ * such control while a menu is open would leave the menu floating open.
+ * Capture runs top-down, before any handler along the path (including a
+ * stopPropagation() one) gets a chance to run, so this listener always
+ * observes the click's real target regardless of what that target's own
+ * handler later does with propagation.
  *
  * `isInside` is re-evaluated on every document click while `active` is
  * true; return true to keep the widget open (the click landed somewhere
@@ -40,7 +54,7 @@ export function useOutsideClick(
       onOutsideRef.current()
     }
 
-    document.addEventListener('click', handleClick)
-    return () => document.removeEventListener('click', handleClick)
+    document.addEventListener('click', handleClick, true)
+    return () => document.removeEventListener('click', handleClick, true)
   }, [active])
 }

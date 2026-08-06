@@ -104,4 +104,28 @@ describe('useOutsideClick', () => {
       outside.remove()
     }
   })
+
+  it('still fires onOutside for a click on a target that stops its own propagation', () => {
+    // Regression test: other controls in the app (a file row's select
+    // checkbox, its rename/delete buttons, sidebar footer buttons) call
+    // event.stopPropagation() in their own click handler so their click
+    // doesn't also bubble into a parent row's onClick. A bubble-phase
+    // document listener would never see those clicks — the outside-click
+    // hook must run in the capture phase so a stopPropagation() elsewhere
+    // in the app can't silently defeat dismissal.
+    const onOutside = vi.fn()
+    const outsideStopper = document.createElement('button')
+    outsideStopper.addEventListener('click', (e) => e.stopPropagation())
+    document.body.appendChild(outsideStopper)
+
+    try {
+      renderHook(() => useOutsideClick(true, () => false, onOutside))
+
+      act(() => click(outsideStopper))
+
+      expect(onOutside).toHaveBeenCalledOnce()
+    } finally {
+      outsideStopper.remove()
+    }
+  })
 })

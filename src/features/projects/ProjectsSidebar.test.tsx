@@ -149,6 +149,26 @@ describe('ProjectsSidebar + useProjects', () => {
       fireEvent.click(document.body)
       expect(screen.queryByRole('menu', { name: /Ações do projeto Meu Projeto/ })).toBeNull()
     })
+
+    it('closes the open menu on a click that stops its own propagation (e.g. a file checkbox)', async () => {
+      renderHarness()
+
+      // Seed a file so its select checkbox exists.
+      vi.mocked(showPromptDialog).mockResolvedValueOnce('notes')
+      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Meu Projeto/ }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Novo arquivo/ }))
+      expect(await screen.findByText('notes')).not.toBeNull()
+
+      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Meu Projeto/ }))
+      expect(screen.getByRole('menu', { name: /Ações do projeto Meu Projeto/ })).not.toBeNull()
+
+      // The file's select checkbox calls stopPropagation() so its click
+      // doesn't also trigger the row's own onClick (FileRow.tsx). A
+      // bubble-phase outside-click listener would never see this click at
+      // all, silently leaving the menu open (bug this test guards against).
+      fireEvent.click(screen.getByRole('checkbox', { name: /Selecionar notes/ }))
+      expect(screen.queryByRole('menu', { name: /Ações do projeto Meu Projeto/ })).toBeNull()
+    })
   })
 
   describe('archive feature', () => {
