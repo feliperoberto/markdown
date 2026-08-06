@@ -21,6 +21,17 @@ export interface ProjectGroupProps {
   onSelectFile: (projectName: string, fileName: string) => void
   /** Toggles this project's expanded state; takes the name so the callback stays memo-stable. */
   onToggleExpanded: (projectName: string) => void
+  /**
+   * Whether THIS project's "..." actions menu is open. Owned by the sidebar
+   * (not local state) so opening one project's menu closes any other
+   * project's menu that was already open — see ProjectsSidebar's
+   * `openMenuProject`.
+   */
+  isMenuOpen: boolean
+  /** Opens this project's menu, closing whichever other project's menu was open. */
+  onOpenMenu: (projectName: string) => void
+  /** Closes the menu, regardless of which project currently owns it. */
+  onCloseMenu: () => void
   onToggleSelected: (projectName: string, fileName: string, selected: boolean) => void
   onCreateFile: (projectName: string, fileName: string) => void
   onRenameFile: (projectName: string, oldFileName: string, newFileName: string) => void
@@ -64,6 +75,9 @@ export const ProjectGroup = memo(function ProjectGroup({
   projectNames,
   onSelectFile,
   onToggleExpanded,
+  isMenuOpen,
+  onOpenMenu,
+  onCloseMenu,
   onToggleSelected,
   onCreateFile,
   onRenameFile,
@@ -77,7 +91,6 @@ export const ProjectGroup = memo(function ProjectGroup({
   onMoveProject,
   onToggleArchived,
 }: ProjectGroupProps): JSX.Element {
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 })
   // True while a compatible drag hovers this project — drives the drop
   // highlight without touching global state.
@@ -173,15 +186,16 @@ export const ProjectGroup = memo(function ProjectGroup({
   // viewport's left edge.
   function toggleMenu(e: MouseEvent) {
     e.stopPropagation()
-    setIsMenuOpen((open) => {
-      if (open) return false
-      const buttonEl = document.getElementById(menuButtonId)
-      const rect = buttonEl?.getBoundingClientRect()
-      if (rect) {
-        setMenuPosition({ top: rect.bottom + 4, left: Math.max(4, rect.left - 180) })
-      }
-      return true
-    })
+    if (isMenuOpen) {
+      onCloseMenu()
+      return
+    }
+    const buttonEl = document.getElementById(menuButtonId)
+    const rect = buttonEl?.getBoundingClientRect()
+    if (rect) {
+      setMenuPosition({ top: rect.bottom + 4, left: Math.max(4, rect.left - 180) })
+    }
+    onOpenMenu(projectName)
   }
 
   // Keyboard-navigable dropdown menu (issue: the menu rendered role="menu"
@@ -198,7 +212,7 @@ export const ProjectGroup = memo(function ProjectGroup({
     items[0]?.focus()
 
     function closeAndReturnFocus() {
-      setIsMenuOpen(false)
+      onCloseMenu()
       document.getElementById(menuButtonId)?.focus()
     }
 
@@ -221,13 +235,34 @@ export const ProjectGroup = memo(function ProjectGroup({
       items[next]?.focus()
     }
 
+    // Closes on any click/tap outside the menu and its trigger — losing
+    // focus to another project's "..." button, a file row, the editor,
+    // or anywhere else on the page should dismiss this menu rather than
+    // leaving it floating open (bug: previously each ProjectGroup owned
+    // its own isMenuOpen with no outside-interaction handling at all, so
+    // opening a second project's menu — or clicking anywhere else — left
+    // every previously-opened menu stuck open). Uses 'click' (not
+    // 'mousedown') so it fires after, not before, the same tap's own
+    // onClick handlers — matching the outside-click pattern in app.tsx.
+    function handleOutsideInteraction(e: MouseEvent) {
+      const target = e.target as Node
+      if (menuEl?.contains(target)) return
+      const buttonEl = document.getElementById(menuButtonId)
+      if (buttonEl?.contains(target)) return
+      onCloseMenu()
+    }
+
     document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isMenuOpen, menuButtonId])
+    document.addEventListener('click', handleOutsideInteraction)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('click', handleOutsideInteraction)
+    }
+  }, [isMenuOpen, menuButtonId, onCloseMenu])
 
   async function handleNewFile(e: MouseEvent) {
     e.stopPropagation()
-    setIsMenuOpen(false)
+    onCloseMenu()
     const name = await showPromptDialog({
       title: 'Novo arquivo',
       label: 'Nome do arquivo',
@@ -244,7 +279,7 @@ export const ProjectGroup = memo(function ProjectGroup({
 
   async function handleRenameProject(e: MouseEvent) {
     e.stopPropagation()
-    setIsMenuOpen(false)
+    onCloseMenu()
     const trimmed = await showPromptDialog({
       title: 'Renomear projeto',
       label: 'Novo nome do projeto',
@@ -262,7 +297,7 @@ export const ProjectGroup = memo(function ProjectGroup({
 
   async function handleDeleteProject(e: MouseEvent) {
     e.stopPropagation()
-    setIsMenuOpen(false)
+    onCloseMenu()
     const confirmed = await showConfirmDialog({
       title: 'Excluir projeto',
       message: `Excluir o projeto "${projectName}" e todos os seus arquivos? Essa ação não pode ser desfeita.`,
@@ -275,19 +310,19 @@ export const ProjectGroup = memo(function ProjectGroup({
   // delete this needs no confirm dialog.
   function handleToggleArchived(e: MouseEvent) {
     e.stopPropagation()
-    setIsMenuOpen(false)
+    onCloseMenu()
     onToggleArchived?.(projectName)
   }
 
   function handleExportProject(e: MouseEvent) {
     e.stopPropagation()
-    setIsMenuOpen(false)
+    onCloseMenu()
     onExportProject?.(projectName)
   }
 
   function handleUploadClick(e: MouseEvent) {
     e.stopPropagation()
-    setIsMenuOpen(false)
+    onCloseMenu()
     fileInputRef.current?.click()
   }
 
@@ -299,7 +334,7 @@ export const ProjectGroup = memo(function ProjectGroup({
 
   function handleUploadMultipleClick(e: MouseEvent) {
     e.stopPropagation()
-    setIsMenuOpen(false)
+    onCloseMenu()
     multiFileInputRef.current?.click()
   }
 

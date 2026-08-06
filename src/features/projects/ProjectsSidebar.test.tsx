@@ -120,6 +120,37 @@ describe('ProjectsSidebar + useProjects', () => {
     await waitFor(() => expect(screen.queryByText('renamed-notes')).toBeNull())
   })
 
+  describe('project actions menu', () => {
+    it('closes a project menu when another project menu is opened', async () => {
+      renderHarness()
+
+      vi.mocked(showPromptDialog).mockResolvedValueOnce('Segundo')
+      fireEvent.click(screen.getByRole('button', { name: 'Criar novo projeto' }))
+      expect(await screen.findByText('Segundo')).not.toBeNull()
+
+      // The default seeded project is "Meu Projeto".
+      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Meu Projeto/ }))
+      expect(screen.getByRole('menu', { name: /Ações do projeto Meu Projeto/ })).not.toBeNull()
+
+      // Opening the second project's menu must close the first one instead
+      // of leaving both open (bug: each menu previously tracked its own
+      // open/closed state independently).
+      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Segundo/ }))
+      expect(screen.getByRole('menu', { name: /Ações do projeto Segundo/ })).not.toBeNull()
+      expect(screen.queryByRole('menu', { name: /Ações do projeto Meu Projeto/ })).toBeNull()
+    })
+
+    it('closes the open menu on an outside click', async () => {
+      renderHarness()
+
+      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Meu Projeto/ }))
+      expect(screen.getByRole('menu', { name: /Ações do projeto Meu Projeto/ })).not.toBeNull()
+
+      fireEvent.click(document.body)
+      expect(screen.queryByRole('menu', { name: /Ações do projeto Meu Projeto/ })).toBeNull()
+    })
+  })
+
   describe('archive feature', () => {
     it('hides an archived project by default and reveals it via the toggler', async () => {
       renderHarness()

@@ -86,6 +86,19 @@ export function ProjectsSidebar({
   onToggleArchived,
 }: ProjectsSidebarProps): JSX.Element {
   const [selectedByProject, setSelectedByProject] = useState<Record<string, Set<string>>>({})
+  // Which project's "..." actions menu is open, if any — a single slot
+  // shared across every ProjectGroup (bug: previously each ProjectGroup
+  // tracked isMenuOpen as its own local state, so opening a second
+  // project's menu didn't close the first, leaving multiple menus open at
+  // once). Stable callbacks so setting this doesn't defeat ProjectGroup's
+  // memo() for projects whose own isMenuOpen value doesn't change.
+  const [openMenuProject, setOpenMenuProject] = useState<string | null>(null)
+  const handleOpenMenu = useCallback((projectName: string) => {
+    setOpenMenuProject(projectName)
+  }, [])
+  const handleCloseMenu = useCallback(() => {
+    setOpenMenuProject(null)
+  }, [])
   // The full, unfiltered list. This is what duplicate-name validation
   // (handleNewProject below, and ProjectGroup's rename validation) must see
   // — filtering it would let a user create/rename into a name collision
@@ -115,6 +128,14 @@ export function ProjectsSidebar({
   useEffect(() => {
     saveCollapsedProjects(collapsedProjects)
   }, [collapsedProjects])
+
+  // Closes a dangling open menu if its project was deleted/renamed out from
+  // under it (e.g. via the "Excluir projeto" action inside that same menu).
+  useEffect(() => {
+    setOpenMenuProject((prev) =>
+      prev !== null && !Object.prototype.hasOwnProperty.call(projects, prev) ? null : prev,
+    )
+  }, [projects])
 
   // Drop entries for projects that no longer exist (deleted/renamed) so the
   // persisted set doesn't accumulate stale names forever.
@@ -259,6 +280,9 @@ export function ProjectsSidebar({
                 projectNames={projectNames}
                 onSelectFile={onSelectFile}
                 onToggleExpanded={toggleProjectCollapsed}
+                isMenuOpen={openMenuProject === projectName}
+                onOpenMenu={handleOpenMenu}
+                onCloseMenu={handleCloseMenu}
                 onToggleSelected={toggleSelected}
                 onCreateFile={onCreateFile}
                 onRenameFile={onRenameFile}
