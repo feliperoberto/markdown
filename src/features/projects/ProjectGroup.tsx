@@ -6,6 +6,7 @@ import { showConfirmDialog, showPromptDialog } from './dialogs'
 import { DND_MIME, getActiveDragKind, readDrag, serializeDrag, setActiveDrag } from './dnd'
 import type { ProjectFiles } from './types'
 import { IconButton } from '@/components'
+import { useOutsideClick } from '@/lib/useOutsideClick'
 
 export interface ProjectGroupProps {
   projectName: string
@@ -235,30 +236,22 @@ export const ProjectGroup = memo(function ProjectGroup({
       items[next]?.focus()
     }
 
-    // Closes on any click/tap outside the menu and its trigger — losing
-    // focus to another project's "..." button, a file row, the editor,
-    // or anywhere else on the page should dismiss this menu rather than
-    // leaving it floating open (bug: previously each ProjectGroup owned
-    // its own isMenuOpen with no outside-interaction handling at all, so
-    // opening a second project's menu — or clicking anywhere else — left
-    // every previously-opened menu stuck open). Uses 'click' (not
-    // 'mousedown') so it fires after, not before, the same tap's own
-    // onClick handlers — matching the outside-click pattern in app.tsx.
-    function handleOutsideInteraction(e: MouseEvent) {
-      const target = e.target as Node
-      if (menuEl?.contains(target)) return
-      const buttonEl = document.getElementById(menuButtonId)
-      if (buttonEl?.contains(target)) return
-      onCloseMenu()
-    }
-
     document.addEventListener('keydown', handleKeyDown)
-    document.addEventListener('click', handleOutsideInteraction)
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown)
-      document.removeEventListener('click', handleOutsideInteraction)
-    }
+    return () => document.removeEventListener('keydown', handleKeyDown)
   }, [isMenuOpen, menuButtonId, onCloseMenu])
+
+  // Closes on any click/tap outside the menu and its trigger — losing focus
+  // to another project's "..." button, a file row, the editor, or anywhere
+  // else on the page should dismiss this menu rather than leaving it
+  // floating open.
+  useOutsideClick(
+    isMenuOpen,
+    (target) => {
+      if (menuRef.current?.contains(target)) return true
+      return Boolean(document.getElementById(menuButtonId)?.contains(target))
+    },
+    onCloseMenu,
+  )
 
   async function handleNewFile(e: MouseEvent) {
     e.stopPropagation()

@@ -1,5 +1,5 @@
 import type { JSX } from 'preact'
-import { useEffect, useState } from 'preact/hooks'
+import { useState } from 'preact/hooks'
 import { EditorFeature, FontSizeButton, useEditorFontSize } from '@/features/editor'
 import { ProjectsSidebar, useProjects } from '@/features/projects'
 import {
@@ -21,6 +21,7 @@ import { FullscreenToggle } from '@/features/fullscreen'
 import { SplashScreen } from '@/features/onboarding'
 import { BatchDownloadArea, Breadcrumbs, IconButton, useToast } from '@/components'
 import { copyToClipboard } from '@/lib/copyToClipboard'
+import { useOutsideClick } from '@/lib/useOutsideClick'
 
 function downloadBlob(blob: Blob, fileName: string): void {
   const url = URL.createObjectURL(blob)
@@ -82,7 +83,7 @@ export function App(): JSX.Element {
   // Clicking outside the drawer closes it too (issue: previously the
   // hamburger button was the ONLY way to close it — the prototype's
   // `document.addEventListener('click', ...)` closes on any click outside
-  // #sidebar/#menuBtn, at every viewport width, matching this effect).
+  // #sidebar/#menuBtn, at every viewport width, matching this behavior).
   //
   // Also ignores clicks inside any open dialog/modal (issue: confirming
   // "Novo projeto"/"Novo arquivo" etc. clicks a button that's portal-
@@ -90,21 +91,16 @@ export function App(): JSX.Element {
   // #projectsSidebar/#sidebarMenuButton by definition — which bubbles up
   // to this listener and silently closed the sidebar every time a dialog
   // was confirmed, on every viewport width including desktop).
-  useEffect(() => {
-    if (sidebarHiddenOnMobile) return
-
-    function handleOutsideClick(e: MouseEvent) {
-      const target = e.target as Node
+  useOutsideClick(
+    !sidebarHiddenOnMobile,
+    (target) => {
       const sidebarEl = document.getElementById('projectsSidebar')
       const menuButtonEl = document.getElementById('sidebarMenuButton')
-      if (sidebarEl?.contains(target) || menuButtonEl?.contains(target)) return
-      if (target instanceof Element && target.closest('[role="dialog"]')) return
-      setSidebarHiddenOnMobile(true)
-    }
-
-    document.addEventListener('click', handleOutsideClick)
-    return () => document.removeEventListener('click', handleOutsideClick)
-  }, [sidebarHiddenOnMobile])
+      if (sidebarEl?.contains(target) || menuButtonEl?.contains(target)) return true
+      return target instanceof Element && target.closest('[role="dialog"]') !== null
+    },
+    () => setSidebarHiddenOnMobile(true),
+  )
 
   const showToast = useToast()
   const { cycleFontSize } = useEditorFontSize()
