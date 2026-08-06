@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/preact'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/preact'
 import { useProjects } from './useProjects'
 import { ProjectsSidebar } from './ProjectsSidebar'
 import { ToastProvider } from '@/components'
@@ -21,7 +21,11 @@ import { showPromptDialog, showConfirmDialog } from './dialogs'
 
 /** Harness wiring the real `useProjects` state hook to `ProjectsSidebar`,
  * mirroring how the app shell actually composes them. */
-function Harness() {
+function Harness({
+  onSelectionChange,
+}: {
+  onSelectionChange?: (selection: ReadonlyArray<{ projectName: string; fileName: string }>) => void
+} = {}) {
   const {
     projects,
     currentProject,
@@ -33,6 +37,8 @@ function Harness() {
     deleteFile,
     renameProject,
     deleteProject,
+    archivedProjects,
+    toggleProjectArchived,
   } = useProjects()
 
   return (
@@ -47,16 +53,25 @@ function Harness() {
       onDeleteFile={deleteFile}
       onRenameProject={renameProject}
       onDeleteProject={deleteProject}
+      archivedProjects={archivedProjects}
+      onToggleArchived={toggleProjectArchived}
+      onSelectionChange={onSelectionChange}
     />
   )
 }
 
 // useProjects now calls useToast() (error-toast on a failed save), so the
 // hook must render inside a ToastProvider.
-function renderHarness() {
+function renderHarness(
+  props: {
+    onSelectionChange?: (
+      selection: ReadonlyArray<{ projectName: string; fileName: string }>,
+    ) => void
+  } = {},
+) {
   return render(
     <ToastProvider>
-      <Harness />
+      <Harness {...props} />
     </ToastProvider>,
   )
 }
@@ -66,6 +81,16 @@ describe('ProjectsSidebar + useProjects', () => {
     localStorage.clear()
     vi.mocked(showPromptDialog).mockReset()
     vi.mocked(showConfirmDialog).mockReset()
+  })
+
+  // Auto-cleanup from @testing-library/preact only registers itself when
+  // `afterEach` exists as a global (see its index.mjs); this project runs
+  // Vitest with `globals: false`, so without this explicit call each
+  // additional test in this file would render on top of the previous
+  // test's leftover DOM. The original single-test file didn't need it —
+  // this now has several.
+  afterEach(() => {
+    cleanup()
   })
 
   it('reflects creating, renaming and deleting a file in the sidebar tree', async () => {
@@ -93,5 +118,86 @@ describe('ProjectsSidebar + useProjects', () => {
     // Delete the file.
     fireEvent.click(screen.getByRole('button', { name: 'Excluir arquivo renamed-notes' }))
     await waitFor(() => expect(screen.queryByText('renamed-notes')).toBeNull())
+  })
+
+  describe('archive feature', () => {
+    it('hides an archived project by default and reveals it via the toggler', async () => {
+      renderHarness()
+
+      vi.mocked(showPromptDialog).mockResolvedValueOnce('Segundo')
+      fireEvent.click(screen.getByRole('button', { name: 'Criar novo projeto' }))
+      expect(await screen.findByText('Segundo')).not.toBeNull()
+
+      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Segundo/ }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Arquivar projeto/ }))
+
+      // Leaves the everyday list...
+      await waitFor(() => expect(screen.queryByText('Segundo')).toBeNull())
+
+      // ...and the toggler appears with the count.
+      const toggle = await screen.findByRole('button', { name: 'Mostrar arquivados (1)' })
+      expect(toggle.getAttribute('aria-pressed')).toBe('false')
+
+      fireEvent.click(toggle)
+      expect(await screen.findByText('Segundo')).not.toBeNull()
+      expect(
+        screen.getByRole('button', { name: 'Ocultar arquivados' }).getAttribute('aria-pressed'),
+      ).toBe('true')
+    })
+
+    it('shows no toggler when nothing is archived', () => {
+      renderHarness()
+      expect(screen.queryByRole('button', { name: /arquivados/i })).toBeNull()
+    })
+
+    it('shows the all-archived empty state once the only project is archived', async () => {
+      renderHarness()
+
+      // The default seeded project is "Meu Projeto".
+      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Meu Projeto/ }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Arquivar projeto/ }))
+
+      expect(
+        await screen.findByText(
+          'Todos os projetos estão arquivados. Use o botão abaixo para mostrá-los.',
+        ),
+      ).not.toBeNull()
+    })
+
+    it('flips the menu label between Arquivar/Desarquivar without a confirm dialog', async () => {
+      renderHarness()
+
+      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Meu Projeto/ }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Arquivar projeto/ }))
+      expect(showConfirmDialog).not.toHaveBeenCalled()
+
+      // Reveal it, then open its menu again to check the label flipped.
+      fireEvent.click(await screen.findByRole('button', { name: 'Mostrar arquivados (1)' }))
+      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Meu Projeto/ }))
+      expect(await screen.findByRole('menuitem', { name: /Desarquivar projeto/ })).not.toBeNull()
+    })
+
+    it('drops a checked file from the batch selection when its project is archived', async () => {
+      const onSelectionChange = vi.fn()
+      renderHarness({ onSelectionChange })
+
+      vi.mocked(showPromptDialog).mockResolvedValueOnce('notes')
+      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Meu Projeto/ }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Novo arquivo/ }))
+      expect(await screen.findByText('notes')).not.toBeNull()
+
+      fireEvent.click(screen.getByRole('checkbox', { name: /Selecionar notes/ }))
+      await waitFor(() =>
+        expect(onSelectionChange).toHaveBeenLastCalledWith([
+          { projectName: 'Meu Projeto', fileName: 'notes' },
+        ]),
+      )
+
+      onSelectionChange.mockClear()
+      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Meu Projeto/ }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Arquivar projeto/ }))
+
+      await waitFor(() => expect(onSelectionChange).toHaveBeenLastCalledWith([]))
+    })
   })
 })

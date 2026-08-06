@@ -49,6 +49,8 @@ export function App(): JSX.Element {
     updateFileContent,
     moveFile,
     moveProject,
+    archivedProjects,
+    toggleProjectArchived,
     importProjects,
     reconcileWithRemote,
   } = useProjects()
@@ -278,6 +280,8 @@ export function App(): JSX.Element {
             onOpenConfig={() => setDriveConfigOpenSignal((n) => (n ?? 0) + 1)}
             onMoveFile={moveFile}
             onMoveProject={moveProject}
+            archivedProjects={archivedProjects}
+            onToggleArchived={toggleProjectArchived}
           />
           <main className="app-main">
             <div className="toolbar">

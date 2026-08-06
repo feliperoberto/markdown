@@ -67,6 +67,56 @@ describe('firstFileOf', () => {
     expect(model.firstFileOf({ Empty: {} })).toBeNull()
     expect(model.firstFileOf({})).toBeNull()
   })
+
+  it('skips projects named in skipProjects (archive feature)', () => {
+    const state: ProjectsState = {
+      A: { a1: file('a1', '') },
+      B: { b1: file('b1', '') },
+    }
+    expect(model.firstFileOf(state, new Set(['A']))).toEqual({ project: 'B', file: 'b1' })
+  })
+
+  it('returns null when every project with files is skipped', () => {
+    const state: ProjectsState = { A: { a1: file('a1', '') } }
+    expect(model.firstFileOf(state, new Set(['A']))).toBeNull()
+  })
+
+  it('behaves exactly as before when skipProjects is omitted', () => {
+    const state: ProjectsState = { A: { a1: file('a1', '') } }
+    expect(model.firstFileOf(state)).toEqual({ project: 'A', file: 'a1' })
+  })
+})
+
+describe('renameInArchived', () => {
+  it('swaps the old name for the new one when it was archived', () => {
+    const result = model.renameInArchived(new Set(['A', 'B']), 'A', 'A2')
+    expect([...result].sort()).toEqual(['A2', 'B'])
+  })
+
+  it('returns the same reference when the old name was not archived', () => {
+    const archived = new Set(['B'])
+    expect(model.renameInArchived(archived, 'A', 'A2')).toBe(archived)
+  })
+})
+
+describe('pruneArchived', () => {
+  it('drops names for projects that no longer exist', () => {
+    const state: ProjectsState = { A: { a: file('a', '') } }
+    const result = model.pruneArchived(new Set(['A', 'Gone']), state)
+    expect([...result]).toEqual(['A'])
+  })
+
+  it('returns the same reference when nothing is stale', () => {
+    const state: ProjectsState = { A: { a: file('a', '') } }
+    const archived = new Set(['A'])
+    expect(model.pruneArchived(archived, state)).toBe(archived)
+  })
+
+  it('prunes a project literally named "constructor" correctly', () => {
+    const state: ProjectsState = { A: { a: file('a', '') } }
+    const result = model.pruneArchived(new Set(['constructor']), state)
+    expect([...result]).toEqual([])
+  })
 })
 
 describe('moveFile', () => {

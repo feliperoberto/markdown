@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import * as model from './model'
 import {
   backupProjects,
+  loadArchivedProjects,
   loadLastEditedFile,
   loadProjects,
+  saveArchivedProjects,
   saveLastEditedFile,
   saveProjects,
 } from './storage'
@@ -16,15 +18,26 @@ import { useToast } from '@/components'
 // there are no files at all. Reads the persisted pointer once and validates
 // it against live state, so a stale pointer (file since deleted or renamed)
 // falls back gracefully instead of selecting nothing.
-function resolveInitialSelection(projects: ProjectsState): {
+//
+// Archive feature: a last-edited file inside an archived project is treated
+// as absent — reopening the very project the user just hid would be a
+// worse surprise than picking the next visible file — and the first-file
+// fallback also skips archived projects. If literally everything is
+// archived, fall back to the unfiltered first file rather than leaving the
+// editor on nothing: a breadcrumb naming an archived project is better than
+// a blank editor with no obvious next action.
+function resolveInitialSelection(
+  projects: ProjectsState,
+  archived: ReadonlySet<string>,
+): {
   project: string | null
   file: string | null
 } {
   const last = loadLastEditedFile()
-  if (last && projects[last.project]?.[last.file]) {
+  if (last && !archived.has(last.project) && projects[last.project]?.[last.file]) {
     return { project: last.project, file: last.file }
   }
-  const first = model.firstFileOf(projects)
+  const first = model.firstFileOf(projects, archived) ?? model.firstFileOf(projects)
   return { project: first?.project ?? null, file: first?.file ?? null }
 }
 
@@ -51,6 +64,12 @@ export interface UseProjectsResult {
     beforeFile?: string | null,
   ) => void
   moveProject: (projectName: string, beforeProject?: string | null) => void
+  // Archive feature: names of projects currently hidden from the everyday
+  // list. Device-local (see storage.ts's ARCHIVED_PROJECTS_KEY comment) —
+  // not part of `projects`, so it never travels through Drive sync.
+  archivedProjects: ReadonlySet<string>
+  /** Flips a project's archived state (archive if visible, unarchive if archived). */
+  toggleProjectArchived: (projectName: string) => void
   importProjects: (incoming: ProjectsState) => void
   // Accepts `unknown` (not `ProjectsState`) because the caller's source is
   // untrusted external data (a Drive pull) — normalizeProjectsState
@@ -68,14 +87,23 @@ export interface UseProjectsResult {
 export function useProjects(): UseProjectsResult {
   // Load projects and resolve the initial selection together, exactly once,
   // so both derive from the same first read (loadProjects() seeds a default
-  // project on genuine first run — see storage.ts).
+  // project on genuine first run — see storage.ts). The archived set is
+  // loaded here too since resolveInitialSelection needs it before first
+  // render, and pruned against the freshly loaded projects immediately
+  // (same reasoning as ProjectsSidebar's collapsed-set pruning).
   const initialRef = useRef<{
     projects: ProjectsState
+    archived: Set<string>
     selection: { project: string | null; file: string | null }
   } | null>(null)
   if (initialRef.current === null) {
     const loaded = loadProjects()
-    initialRef.current = { projects: loaded, selection: resolveInitialSelection(loaded) }
+    const archived = new Set(model.pruneArchived(loadArchivedProjects(), loaded))
+    initialRef.current = {
+      projects: loaded,
+      archived,
+      selection: resolveInitialSelection(loaded, archived),
+    }
   }
 
   const [projects, setProjects] = useState<ProjectsState>(initialRef.current.projects)
@@ -83,7 +111,25 @@ export function useProjects(): UseProjectsResult {
     initialRef.current.selection.project,
   )
   const [currentFile, setCurrentFile] = useState<string | null>(initialRef.current.selection.file)
+  const [archivedProjects, setArchivedProjects] = useState<Set<string>>(initialRef.current.archived)
   const showToast = useToast()
+
+  // Write-through persistence for the archived set, mirroring
+  // ProjectsSidebar's collapsedProjects effect. Best-effort (see
+  // saveArchivedProjects) — losing this never risks a document.
+  useEffect(() => {
+    saveArchivedProjects(archivedProjects)
+  }, [archivedProjects])
+
+  // Drop archived entries for projects that no longer exist (deleted, or a
+  // stale name from a previous session that outlived a hand-edited/older
+  // localStorage value) so the persisted set doesn't accumulate garbage.
+  useEffect(() => {
+    setArchivedProjects((prev) => {
+      const next = model.pruneArchived(prev, projects)
+      return next === prev ? prev : new Set(next)
+    })
+  }, [projects])
 
   // Remember the open file across visits (issue #92). Runs on every
   // selection change — including the setCurrentFile updates that rename/
@@ -154,8 +200,19 @@ export function useProjects(): UseProjectsResult {
 
   const renameProject = useCallback(
     (oldName: string, newName: string) => {
-      persist(model.renameProject(projects, oldName, newName))
+      const saved = persist(model.renameProject(projects, oldName, newName))
       setCurrentProject((current) => (current === oldName ? newName : current))
+      // Carry the archived flag across the key move — project identity is
+      // the object key, so without this a renamed archived project would
+      // silently reappear in the everyday list. Gated on the write actually
+      // landing, same precedent as moveFile only following the active file
+      // into its new project when persist() succeeded.
+      if (saved) {
+        setArchivedProjects((prev) => {
+          const next = model.renameInArchived(prev, oldName, newName)
+          return next === prev ? prev : new Set(next)
+        })
+      }
       showToast('✅ Projeto renomeado', 'success')
     },
     [projects, persist, showToast],
@@ -177,9 +234,43 @@ export function useProjects(): UseProjectsResult {
         return wasCurrentProject ? null : current
       })
       setCurrentFile((file) => (wasCurrentProject ? null : file))
+      // Explicit drop in the same commit as the delete, rather than relying
+      // solely on the prune effect (belt-and-braces — see that effect).
+      setArchivedProjects((prev) => {
+        if (!prev.has(name)) return prev
+        const next = new Set(prev)
+        next.delete(name)
+        return next
+      })
       showToast('🗑 Projeto excluído', 'success')
     },
     [projects, persist, showToast],
+  )
+
+  // Archive feature: flips a project's archived state. Reversible, so
+  // unlike delete this needs no confirm and no backup — no project data is
+  // touched, only the sidecar visibility set.
+  const toggleProjectArchived = useCallback(
+    (projectName: string) => {
+      const willArchive = !archivedProjects.has(projectName)
+      const next = new Set(archivedProjects)
+      if (willArchive) next.add(projectName)
+      else next.delete(projectName)
+      setArchivedProjects(next)
+
+      // Archiving the project whose file is open: move the selection to the
+      // first file of the first still-visible project rather than leaving
+      // the editor open on a project that just vanished from the tree.
+      // Content is already persisted per keystroke, so nothing is lost by
+      // moving the selection.
+      if (willArchive && currentProject === projectName) {
+        const target = model.firstFileOf(projects, next)
+        setCurrentProject(target?.project ?? null)
+        setCurrentFile(target?.file ?? null)
+      }
+      showToast(willArchive ? '📦 Projeto arquivado' : '📂 Projeto desarquivado', 'success')
+    },
+    [archivedProjects, projects, currentProject, showToast],
   )
 
   const createFile = useCallback(
@@ -311,6 +402,8 @@ export function useProjects(): UseProjectsResult {
     updateFileContent,
     moveFile,
     moveProject,
+    archivedProjects,
+    toggleProjectArchived,
     importProjects,
     reconcileWithRemote,
   }

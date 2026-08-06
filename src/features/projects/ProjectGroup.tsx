@@ -13,6 +13,8 @@ export interface ProjectGroupProps {
   isActiveProject: boolean
   /** Expanded/collapsed state, owned by the sidebar so it can be persisted (issue #92). */
   isExpanded: boolean
+  /** Archive feature: hidden from the everyday list, shown via the sidebar's "Mostrar arquivados" toggler. */
+  isArchived: boolean
   currentFile: string | null
   selectedFiles: ReadonlySet<string>
   projectNames: string[]
@@ -43,6 +45,8 @@ export interface ProjectGroupProps {
     beforeFile?: string | null,
   ) => void
   onMoveProject?: (projectName: string, beforeProject?: string | null) => void
+  /** Archive feature: flips this project's archived state. */
+  onToggleArchived?: (projectName: string) => void
 }
 
 // One collapsible project entry in the sidebar tree: header (name, expand
@@ -54,6 +58,7 @@ export const ProjectGroup = memo(function ProjectGroup({
   files,
   isActiveProject,
   isExpanded,
+  isArchived,
   currentFile,
   selectedFiles,
   projectNames,
@@ -70,6 +75,7 @@ export const ProjectGroup = memo(function ProjectGroup({
   onUploadMultipleFiles,
   onMoveFile,
   onMoveProject,
+  onToggleArchived,
 }: ProjectGroupProps): JSX.Element {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 })
@@ -104,7 +110,7 @@ export const ProjectGroup = memo(function ProjectGroup({
   // whole group is a drop zone that accepts either a project (reorder,
   // dropping before this one) or a file (move into this project, appended).
   function handleHeaderDragStart(e: DragEvent) {
-    if (!onMoveProject) return
+    if (!onMoveProject || isArchived) return
     const payload = { kind: 'project' as const, project: projectName }
     e.dataTransfer?.setData(DND_MIME, serializeDrag(payload))
     if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
@@ -122,6 +128,9 @@ export const ProjectGroup = memo(function ProjectGroup({
     // foreign OS-file/text drags from highlighting the group or triggering a
     // navigating drop.
     if (!dragEnabled || getActiveDragKind() === null) return
+    // Archived projects sit outside project-reorder (see handleHeaderDragStart
+    // and handleGroupDrop below) but still accept incoming file drops.
+    if (isArchived && getActiveDragKind() === 'project') return
     e.preventDefault()
     if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
     if (!isDropTarget) setIsDropTarget(true)
@@ -140,6 +149,9 @@ export const ProjectGroup = memo(function ProjectGroup({
     setIsDropTarget(false)
     const payload = readDrag(e)
     if (!payload) return
+    // Archived projects sit outside reordering — dropping a dragged project
+    // "before" a hidden one is not a placement the user can see happen.
+    if (payload.kind === 'project' && isArchived) return
     e.preventDefault()
     if (payload.kind === 'project') {
       onMoveProject?.(payload.project, projectName)
@@ -259,6 +271,14 @@ export const ProjectGroup = memo(function ProjectGroup({
     if (confirmed) onDeleteProject(projectName)
   }
 
+  // Archive feature: reversible from the same menu position, so unlike
+  // delete this needs no confirm dialog.
+  function handleToggleArchived(e: MouseEvent) {
+    e.stopPropagation()
+    setIsMenuOpen(false)
+    onToggleArchived?.(projectName)
+  }
+
   function handleExportProject(e: MouseEvent) {
     e.stopPropagation()
     setIsMenuOpen(false)
@@ -298,7 +318,7 @@ export const ProjectGroup = memo(function ProjectGroup({
 
   return (
     <div
-      className={`project-group${isDropTarget ? ' drop-target' : ''}`}
+      className={`project-group${isArchived ? ' archived' : ''}${isDropTarget ? ' drop-target' : ''}`}
       onDragOver={handleGroupDragOver}
       onDragLeave={handleGroupDragLeave}
       onDrop={handleGroupDrop}
@@ -308,7 +328,7 @@ export const ProjectGroup = memo(function ProjectGroup({
         role="button"
         tabIndex={0}
         aria-expanded={isExpanded}
-        draggable={Boolean(onMoveProject)}
+        draggable={Boolean(onMoveProject) && !isArchived}
         onDragStart={handleHeaderDragStart}
         onDragEnd={handleHeaderDragEnd}
         onClick={toggleExpanded}
@@ -319,6 +339,16 @@ export const ProjectGroup = memo(function ProjectGroup({
           ▶
         </span>
         <span className="project-name">{projectName}</span>
+        {isArchived && (
+          <span
+            className="project-badge"
+            role="img"
+            aria-label="Arquivado"
+            title="Projeto arquivado"
+          >
+            📦
+          </span>
+        )}
         <IconButton
           id={menuButtonId}
           variant="compact"
@@ -379,6 +409,16 @@ export const ProjectGroup = memo(function ProjectGroup({
               onClick={handleExportProject}
             >
               ⬇️ Baixar projeto
+            </button>
+          )}
+          {onToggleArchived && (
+            <button
+              type="button"
+              className="dropdown-item"
+              role="menuitem"
+              onClick={handleToggleArchived}
+            >
+              {isArchived ? '📂 Desarquivar projeto' : '📦 Arquivar projeto'}
             </button>
           )}
           <button
