@@ -294,6 +294,56 @@ describe('useProjects', () => {
       await waitFor(() => expect(archivedText()).toBe('[]'))
     })
 
+    // Regression test: archiving the last still-visible project used to
+    // null out currentProject/currentFile even when an already-archived
+    // project still had a file — leaving a blank, non-persisting editor —
+    // instead of falling back to it the way resolveInitialSelection does
+    // for the identical all-archived state on boot.
+    it("archiving the last visible project falls back to an archived project's file instead of nulling the selection", async () => {
+      const { container } = renderHarness()
+      const stateText = () => container.querySelector('pre')?.textContent ?? ''
+
+      // Archive "Segundo" first (it has no files) — the selection re-points
+      // back to the seeded "Meu Projeto"/"Sem título".
+      fireEvent.click(screen.getByText('create-project')) // Segundo
+      fireEvent.click(screen.getByText('toggle-archive-segundo'))
+      await waitFor(() => expect(stateText()).toContain('"currentProject":"Meu Projeto"'))
+
+      // Now archive the only remaining visible project.
+      fireEvent.click(screen.getByText('toggle-archive-meu-projeto'))
+
+      await waitFor(() => {
+        expect(stateText()).toContain('"currentProject":"Meu Projeto"')
+        expect(stateText()).toContain('"currentFile":"Sem título"')
+      })
+    })
+
+    // Regression test: a failed delete write (e.g. quota exceeded) used to
+    // still drop the project from the archived set even though the project
+    // itself was never removed — it silently reappeared in the everyday
+    // list despite persist() never having landed.
+    it('a failed delete does not un-archive the project', async () => {
+      const { container } = renderHarness()
+      const archivedText = () => container.querySelector('#archived')?.textContent ?? ''
+      const stateText = () => container.querySelector('pre')?.textContent ?? ''
+
+      fireEvent.click(screen.getByText('toggle-archive-meu-projeto'))
+      await waitFor(() => expect(archivedText()).toBe('["Meu Projeto"]'))
+
+      const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new DOMException('The quota has been exceeded.', 'QuotaExceededError')
+      })
+
+      fireEvent.click(screen.getByText('delete-meu-projeto'))
+      await waitFor(() => expect(screen.getByRole('alert')).not.toBeNull())
+      setItemSpy.mockRestore()
+
+      // The delete never reached storage, so the project still exists and
+      // must still be archived.
+      expect(stateText()).toContain('"Meu Projeto"')
+      expect(archivedText()).toBe('["Meu Projeto"]')
+    })
+
     // A last-edited pointer into a project the user has since archived must
     // not reopen the very thing they hid — the next visible file should be
     // selected instead.

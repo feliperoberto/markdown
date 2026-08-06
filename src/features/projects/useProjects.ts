@@ -200,14 +200,17 @@ export function useProjects(): UseProjectsResult {
 
   const renameProject = useCallback(
     (oldName: string, newName: string) => {
+      // Gated on the write actually landing — same precedent as moveFile
+      // only following the active file into its new project when
+      // persist() succeeded. Previously this ran unconditionally, so a
+      // failed save (e.g. quota exceeded) left currentProject pointing at
+      // newName while `projects` still had the file under oldName.
       const saved = persist(model.renameProject(projects, oldName, newName))
-      setCurrentProject((current) => (current === oldName ? newName : current))
-      // Carry the archived flag across the key move — project identity is
-      // the object key, so without this a renamed archived project would
-      // silently reappear in the everyday list. Gated on the write actually
-      // landing, same precedent as moveFile only following the active file
-      // into its new project when persist() succeeded.
       if (saved) {
+        setCurrentProject((current) => (current === oldName ? newName : current))
+        // Carry the archived flag across the key move — project identity is
+        // the object key, so without this a renamed archived project would
+        // silently reappear in the everyday list.
         setArchivedProjects((prev) => {
           const next = model.renameInArchived(prev, oldName, newName)
           return next === prev ? prev : new Set(next)
@@ -221,7 +224,7 @@ export function useProjects(): UseProjectsResult {
   const deleteProject = useCallback(
     (name: string) => {
       backupProjects(projects)
-      persist(model.deleteProject(projects, name))
+      const saved = persist(model.deleteProject(projects, name))
       // Both updaters read the same functional-update mechanism so they
       // can't disagree about whether `name` was the active project —
       // previously `setCurrentFile` compared against the closed-over
@@ -236,12 +239,18 @@ export function useProjects(): UseProjectsResult {
       setCurrentFile((file) => (wasCurrentProject ? null : file))
       // Explicit drop in the same commit as the delete, rather than relying
       // solely on the prune effect (belt-and-braces — see that effect).
-      setArchivedProjects((prev) => {
-        if (!prev.has(name)) return prev
-        const next = new Set(prev)
-        next.delete(name)
-        return next
-      })
+      // Gated on the write actually landing — otherwise a failed delete
+      // (e.g. quota exceeded) still un-archives a project that was never
+      // actually removed from `projects`, and it silently reappears in the
+      // everyday list on the next render.
+      if (saved) {
+        setArchivedProjects((prev) => {
+          if (!prev.has(name)) return prev
+          const next = new Set(prev)
+          next.delete(name)
+          return next
+        })
+      }
       showToast('🗑 Projeto excluído', 'success')
     },
     [projects, persist, showToast],
@@ -253,18 +262,29 @@ export function useProjects(): UseProjectsResult {
   const toggleProjectArchived = useCallback(
     (projectName: string) => {
       const willArchive = !archivedProjects.has(projectName)
-      const next = new Set(archivedProjects)
-      if (willArchive) next.add(projectName)
-      else next.delete(projectName)
-      setArchivedProjects(next)
+      // Functional form, matching every other writer of this state
+      // (renameProject/deleteProject/the prune effect) — guards against a
+      // second toggle in the same tick overwriting this one instead of
+      // building on it.
+      setArchivedProjects((prev) => {
+        const next = new Set(prev)
+        if (willArchive) next.add(projectName)
+        else next.delete(projectName)
+        return next
+      })
 
       // Archiving the project whose file is open: move the selection to the
       // first file of the first still-visible project rather than leaving
-      // the editor open on a project that just vanished from the tree.
-      // Content is already persisted per keystroke, so nothing is lost by
-      // moving the selection.
+      // the editor open on a project that just vanished from the tree. If
+      // that was the last visible project, fall back to the unfiltered
+      // first file — same "don't leave the editor on nothing" reasoning as
+      // resolveInitialSelection's boot-time fallback — rather than nulling
+      // out the selection. Content is already persisted per keystroke, so
+      // nothing is lost by moving the selection.
       if (willArchive && currentProject === projectName) {
-        const target = model.firstFileOf(projects, next)
+        const projectedArchived = new Set(archivedProjects)
+        projectedArchived.add(projectName)
+        const target = model.firstFileOf(projects, projectedArchived) ?? model.firstFileOf(projects)
         setCurrentProject(target?.project ?? null)
         setCurrentFile(target?.file ?? null)
       }
