@@ -72,3 +72,5 @@ build time so the domain mapping survives the deploy.
 
 See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for workflow and conventions, and
 [`CHANGELOG.md`](./CHANGELOG.md) for release history.
+
+<!-- ci trigger: re-run required status checks on this branch -->
