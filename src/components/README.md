@@ -189,6 +189,36 @@ Modal: open: boolean, onClose: () => void, titleId: string, title: node,
        children (body), footer? (node), labelledBy?, initialFocusRef?
 ```
 
+### Outside-click dismissal
+
+Modal dismisses via its own `handleOverlayClick`, comparing
+`event.target === event.currentTarget` on its backdrop `div` — not via the
+shared `useOutsideClick` hook (`src/lib/useOutsideClick.ts`). It gets
+"outside" detection for free from having a dedicated full-screen overlay
+element in the DOM, and that click handler is entangled with the
+stacked-Escape logic (`isTopmostModal`) in the same effect.
+`useOutsideClick` is for widgets with no such backdrop element — see the
+project actions menu below.
+
+### Exclusivity for sibling disclosure widgets
+
+When multiple sibling instances of the same disclosure widget can exist
+(e.g. one "..." menu per project row in `ProjectGroup`), do not give each
+instance its own local open/closed `useState` — that lets more than one
+open at once with no way for opening one to close another. Instead, lift a
+single `<T> | null` "which one is open" slot to the nearest shared parent,
+and pass down `isOpen` plus stable (`useCallback`-wrapped) `onOpen(id)` /
+`onClose()` props. See `ProjectsSidebar`'s `openMenuProject` /
+`ProjectGroup`'s `isMenuOpen` for the reference implementation, and pair it
+with `useOutsideClick` (`src/lib/useOutsideClick.ts`) for dismissal on an
+outside click/tap.
+
+This is a different shape than Modal's stack (`modal-stack.ts`), which is
+for _nested_ instances of the same overlay needing topmost-only Escape
+(e.g. Config opening Drive on top of it) — sibling menus are mutually
+exclusive, not nested, so reach for state-lifting here rather than a
+stack/registry module.
+
 ---
 
 ## 3. Toast
