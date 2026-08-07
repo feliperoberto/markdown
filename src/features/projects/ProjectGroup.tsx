@@ -4,12 +4,11 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { FileRow } from './FileRow'
 import { showConfirmDialog, showPromptDialog } from './dialogs'
 import { DND_MIME, getActiveDragKind, readDrag, serializeDrag, setActiveDrag } from './dnd'
-import { isFileArchived } from './model'
 import type { ProjectFiles } from './types'
 import { IconButton } from '@/components'
 import { useOutsideClick } from '@/lib/useOutsideClick'
 
-// Stable empty-set default for the `archivedFiles` prop: a `= new Set()`
+// Stable empty-set default for the `archivedFileNames` prop: a `= new Set()`
 // default parameter would allocate a fresh Set every render and defeat
 // FileRow's memo(), same reasoning as ProjectsSidebar's NO_ARCHIVED.
 const NO_ARCHIVED_FILES: ReadonlySet<string> = new Set()
@@ -65,8 +64,14 @@ export interface ProjectGroupProps {
   onMoveProject?: (projectName: string, beforeProject?: string | null) => void
   /** Archive feature: flips this project's archived state. */
   onToggleArchived?: (projectName: string) => void
-  /** Archive feature (files): composite keys of files hidden from this project's everyday list — see model.ts's encodeArchivedFileKey. */
-  archivedFiles?: ReadonlySet<string>
+  /**
+   * Archive feature (files): plain file names (not composite keys) hidden
+   * from THIS project's everyday list — pre-scoped and referentially stable
+   * per project by the caller (ProjectsSidebar), so that archiving a file in
+   * one project doesn't defeat this component's memo() for every other
+   * project too.
+   */
+  archivedFileNames?: ReadonlySet<string>
   /** Archive feature (files): flips one file's archived state. */
   onToggleFileArchived?: (projectName: string, fileName: string) => void
 }
@@ -101,7 +106,7 @@ export const ProjectGroup = memo(function ProjectGroup({
   onMoveFile,
   onMoveProject,
   onToggleArchived,
-  archivedFiles = NO_ARCHIVED_FILES,
+  archivedFileNames = NO_ARCHIVED_FILES,
   onToggleFileArchived,
 }: ProjectGroupProps): JSX.Element {
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 })
@@ -120,14 +125,12 @@ export const ProjectGroup = memo(function ProjectGroup({
   const [showArchivedFiles, setShowArchivedFiles] = useState(false)
   const visibleFileNames = useMemo(
     () =>
-      showArchivedFiles
-        ? fileNames
-        : fileNames.filter((name) => !isFileArchived(archivedFiles, projectName, name)),
-    [fileNames, archivedFiles, showArchivedFiles, projectName],
+      showArchivedFiles ? fileNames : fileNames.filter((name) => !archivedFileNames.has(name)),
+    [fileNames, archivedFileNames, showArchivedFiles],
   )
   const archivedFileCount = useMemo(
-    () => fileNames.filter((name) => isFileArchived(archivedFiles, projectName, name)).length,
-    [fileNames, archivedFiles, projectName],
+    () => fileNames.filter((name) => archivedFileNames.has(name)).length,
+    [fileNames, archivedFileNames],
   )
 
   const menuId = `project-menu-${projectName}`
@@ -398,10 +401,13 @@ export const ProjectGroup = memo(function ProjectGroup({
         </span>
         <span className="project-name">{projectName}</span>
         {isArchived && (
+          // aria-label distinct from FileRow's file-level badge — see its
+          // comment for why an identical accessible name across both is a
+          // real ambiguity risk, not a hypothetical one.
           <span
             className="project-badge"
             role="img"
-            aria-label="Arquivado"
+            aria-label="Projeto arquivado"
             title="Projeto arquivado"
           >
             📦
@@ -526,7 +532,7 @@ export const ProjectGroup = memo(function ProjectGroup({
               file={files[fileName]!}
               isActive={isActiveProject && currentFile === fileName}
               isSelected={selectedFiles.has(fileName)}
-              isArchived={isFileArchived(archivedFiles, projectName, fileName)}
+              isArchived={archivedFileNames.has(fileName)}
               fileNames={fileNames}
               onSelectFile={onSelectFile}
               onToggleSelected={onToggleSelected}
@@ -543,13 +549,26 @@ export const ProjectGroup = memo(function ProjectGroup({
             type="button"
             className={`archived-files-toggle${showArchivedFiles ? ' active' : ''}`}
             aria-pressed={showArchivedFiles}
+            // aria-label names the project so this toggle's accessible name
+            // stays unique across a sidebar with multiple projects — two
+            // different projects can each have exactly one archived file at
+            // once, which would otherwise give two buttons the identical
+            // visible-text accessible name "Mostrar arquivados (1)" (and the
+            // sidebar's own project-level toggle can coincidentally match
+            // too). The visible label stays short; screen readers and
+            // role-based queries get the disambiguated text via aria-label.
+            aria-label={
+              showArchivedFiles
+                ? `Ocultar arquivados de ${projectName}`
+                : `Mostrar arquivados de ${projectName} (${archivedFileCount})`
+            }
             onClick={(e) => {
               e.stopPropagation()
               setShowArchivedFiles((v) => !v)
             }}
           >
             <span aria-hidden="true">📦</span>
-            <span>
+            <span aria-hidden="true">
               {showArchivedFiles
                 ? 'Ocultar arquivados'
                 : `Mostrar arquivados (${archivedFileCount})`}

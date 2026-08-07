@@ -237,12 +237,23 @@ export function useProjects(): UseProjectsResult {
 
   const renameProject = useCallback(
     (oldName: string, newName: string) => {
+      const next = model.renameProject(projects, oldName, newName)
+      // Same reference back means the rename was a no-op (e.g. `newName`
+      // already exists) — model.renameProject refuses those rather than
+      // overwriting. Bailing out here, before persist()/the cascades below,
+      // matters specifically because `persist()` reports success whenever
+      // the WRITE succeeds, not whenever the state actually changed: it
+      // would happily re-save the identical `projects` object and report
+      // `saved = true`, which previously made the archived-flag cascades
+      // below carry a project's archived files onto a *different*,
+      // unrelated project of that same (rejected) target name.
+      if (next === projects) return
       // Gated on the write actually landing — same precedent as moveFile
       // only following the active file into its new project when
       // persist() succeeded. Previously this ran unconditionally, so a
       // failed save (e.g. quota exceeded) left currentProject pointing at
       // newName while `projects` still had the file under oldName.
-      const saved = persist(model.renameProject(projects, oldName, newName))
+      const saved = persist(next)
       if (saved) {
         setCurrentProject((current) => (current === oldName ? newName : current))
         // Carry the archived flag across the key move — project identity is
@@ -333,13 +344,22 @@ export function useProjects(): UseProjectsResult {
       if (willArchive && currentProject === projectName) {
         const projectedArchived = new Set(archivedProjects)
         projectedArchived.add(projectName)
-        const target = model.firstFileOf(projects, projectedArchived) ?? model.firstFileOf(projects)
+        // Same progressive fallback as resolveInitialSelection/
+        // toggleFileArchived: skip individually-archived files too before
+        // falling back to the fully unfiltered first file — otherwise this
+        // could land the selection on a file that's itself archived (hidden
+        // behind its own project's "Mostrar arquivados" toggler), silently
+        // reopening content the user hid.
+        const target =
+          model.firstFileOf(projects, projectedArchived, archivedFiles) ??
+          model.firstFileOf(projects, projectedArchived) ??
+          model.firstFileOf(projects)
         setCurrentProject(target?.project ?? null)
         setCurrentFile(target?.file ?? null)
       }
       showToast(willArchive ? '📦 Projeto arquivado' : '📂 Projeto desarquivado', 'success')
     },
-    [archivedProjects, projects, currentProject, showToast],
+    [archivedProjects, archivedFiles, projects, currentProject, showToast],
   )
 
   // Archive feature (files): flips one file's archived state. Same
@@ -394,7 +414,15 @@ export function useProjects(): UseProjectsResult {
 
   const renameFile = useCallback(
     (projectName: string, oldFileName: string, newFileName: string) => {
-      const saved = persist(model.renameFile(projects, projectName, oldFileName, newFileName))
+      const next = model.renameFile(projects, projectName, oldFileName, newFileName)
+      // Same reference back means the rename was a no-op (e.g. `newFileName`
+      // already exists in this project) — same reasoning as renameProject's
+      // identical guard above: without bailing out here, persist() would
+      // report success for a write that changed nothing, and the archived-
+      // flag cascade below would still rekey the archived flag onto the
+      // rejected target name.
+      if (next === projects) return
+      const saved = persist(next)
       if (saved) {
         setCurrentFile((file) =>
           currentProject === projectName && file === oldFileName ? newFileName : file,

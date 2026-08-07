@@ -32,6 +32,12 @@ function Harness() {
       <button onClick={() => createFile('Meu Projeto', 'notes', 'hello')}>create-file</button>
       <button onClick={() => createProject('Segundo')}>create-project</button>
       <button onClick={() => createFile('Segundo', 'notes', 'other')}>create-file-segundo</button>
+      <button onClick={() => createFile('Segundo', 'later', 'other 2')}>
+        create-file2-segundo
+      </button>
+      <button onClick={() => toggleFileArchived('Segundo', 'notes')}>
+        toggle-archive-file-segundo-notes
+      </button>
       <button onClick={() => moveFile('Meu Projeto', 'notes', 'Segundo', null)}>move-file</button>
       <button onClick={() => moveProject('Segundo', 'Meu Projeto')}>move-project</button>
       <button onClick={() => toggleProjectArchived('Meu Projeto')}>
@@ -39,6 +45,9 @@ function Harness() {
       </button>
       <button onClick={() => toggleProjectArchived('Segundo')}>toggle-archive-segundo</button>
       <button onClick={() => renameProject('Meu Projeto', 'Renomeado')}>rename-meu-projeto</button>
+      <button onClick={() => renameProject('Meu Projeto', 'Segundo')}>
+        rename-meu-projeto-to-segundo
+      </button>
       <button onClick={() => deleteProject('Meu Projeto')}>delete-meu-projeto</button>
       <button onClick={() => toggleFileArchived('Meu Projeto', 'notes')}>
         toggle-archive-file-notes
@@ -47,6 +56,9 @@ function Harness() {
         toggle-archive-file-sem-titulo
       </button>
       <button onClick={() => renameFile('Meu Projeto', 'notes', 'notas')}>rename-file-notes</button>
+      <button onClick={() => renameFile('Meu Projeto', 'notes', 'Sem título')}>
+        rename-file-notes-to-sem-titulo
+      </button>
       <button onClick={() => deleteFile('Meu Projeto', 'notes')}>delete-file-notes</button>
       <button
         onClick={() =>
@@ -555,6 +567,96 @@ describe('useProjects', () => {
         expect(stateText()).toContain('"currentProject":"A"')
         expect(stateText()).toContain('"currentFile":"two"')
       })
+    })
+
+    // Regression: archiving the currently-open PROJECT used to fall back to
+    // the first file of the first other visible project without checking
+    // whether that file was itself individually archived — silently
+    // reopening content the user had hidden behind that project's own
+    // "Mostrar arquivados" toggler. Mirrors the same invariant
+    // resolveInitialSelection and toggleFileArchived's own fallback already
+    // upheld.
+    it('archiving the currently-open project skips a fallback file that is itself individually archived', async () => {
+      const { container } = renderHarness()
+      const stateText = () => container.querySelector('pre')?.textContent ?? ''
+
+      fireEvent.click(screen.getByText('create-project')) // Segundo (also selects it)
+      fireEvent.click(screen.getByText('create-file-segundo')) // Segundo/notes (first, insertion order)
+      fireEvent.click(screen.getByText('create-file2-segundo')) // Segundo/later
+      fireEvent.click(screen.getByText('toggle-archive-file-segundo-notes')) // archive Segundo/notes
+
+      fireEvent.click(screen.getByText('select-sem-titulo')) // re-select Meu Projeto/Sem título
+      await waitFor(() => expect(stateText()).toContain('"currentProject":"Meu Projeto"'))
+
+      fireEvent.click(screen.getByText('toggle-archive-meu-projeto')) // archive the open project
+
+      await waitFor(() => {
+        expect(stateText()).toContain('"currentProject":"Segundo"')
+        expect(stateText()).toContain('"currentFile":"later"')
+      })
+    })
+  })
+
+  describe('no-op rename guards', () => {
+    // Regression: renameProject/renameFile previously ran persist()
+    // unconditionally and gated the archived-flag cascade on persist()'s
+    // return value alone — but persist() reports success whenever the
+    // WRITE succeeds, not whenever the model call actually changed
+    // anything. model.renameProject silently no-ops (returns the same
+    // `projects` reference) when the target name already exists, so
+    // persist() would re-save the identical state and still report
+    // success — and the cascade would then rekey the archived project's
+    // files onto the colliding, unrelated existing project.
+    it('renaming a project into a colliding name is a no-op and does not touch the archived-files cascade', async () => {
+      const { container } = renderHarness()
+      const stateText = () => container.querySelector('pre')?.textContent ?? ''
+      const archivedFilesText = () => container.querySelector('#archivedFiles')?.textContent ?? ''
+
+      fireEvent.click(screen.getByText('create-file')) // Meu Projeto/notes
+      fireEvent.click(screen.getByText('toggle-archive-file-notes'))
+      await waitFor(() =>
+        expect(archivedFilesText()).toBe(
+          JSON.stringify([encodeArchivedFileKey('Meu Projeto', 'notes')]),
+        ),
+      )
+
+      fireEvent.click(screen.getByText('create-project')) // Segundo — collision target
+      await waitFor(() => expect(stateText()).toContain('"Segundo"'))
+
+      // "Meu Projeto" -> "Segundo" collides with the just-created project,
+      // so model.renameProject must refuse it.
+      fireEvent.click(screen.getByText('rename-meu-projeto-to-segundo'))
+
+      // "Meu Projeto" must still exist, untouched, and its archived file
+      // must still be keyed under "Meu Projeto" — not rekeyed onto the
+      // pre-existing "Segundo".
+      await waitFor(() => expect(stateText()).toContain('"Meu Projeto"'))
+      expect(archivedFilesText()).toBe(
+        JSON.stringify([encodeArchivedFileKey('Meu Projeto', 'notes')]),
+      )
+    })
+
+    it('renaming a file into a colliding name is a no-op and does not touch the archived-files cascade', async () => {
+      const { container } = renderHarness()
+      const archivedFilesText = () => container.querySelector('#archivedFiles')?.textContent ?? ''
+
+      fireEvent.click(screen.getByText('create-file')) // Meu Projeto/notes
+      fireEvent.click(screen.getByText('toggle-archive-file-notes'))
+      await waitFor(() =>
+        expect(archivedFilesText()).toBe(
+          JSON.stringify([encodeArchivedFileKey('Meu Projeto', 'notes')]),
+        ),
+      )
+
+      // "notes" -> "Sem título" collides with the seeded file already in
+      // "Meu Projeto", so model.renameFile must refuse it.
+      fireEvent.click(screen.getByText('rename-file-notes-to-sem-titulo'))
+
+      // The archived flag must still be keyed under "notes" — not rekeyed
+      // onto the pre-existing, unrelated "Sem título".
+      expect(archivedFilesText()).toBe(
+        JSON.stringify([encodeArchivedFileKey('Meu Projeto', 'notes')]),
+      )
     })
   })
 })

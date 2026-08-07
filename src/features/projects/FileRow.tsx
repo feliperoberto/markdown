@@ -185,10 +185,17 @@ export const FileRow = memo(function FileRow({
         <span className="file-name-row">
           <span className="file-name">{file.name}</span>
           {isArchived && (
+            // aria-label distinct from ProjectGroup's project-level badge
+            // ("Projeto arquivado") — both can be visible at once (a project
+            // revealed via the sidebar's "Mostrar arquivados" containing a
+            // file revealed via its own per-project toggler), and an
+            // identical accessible name on both would make them
+            // indistinguishable to assistive tech and to any role-based
+            // query, e.g. getByRole('img', { name: 'Arquivado' }).
             <span
               className="file-badge"
               role="img"
-              aria-label="Arquivado"
+              aria-label="Arquivo arquivado"
               title="Arquivo arquivado"
             >
               📦

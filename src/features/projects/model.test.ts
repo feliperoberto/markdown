@@ -262,6 +262,41 @@ describe('pruneArchivedFiles', () => {
     )
     expect([...result]).toEqual([])
   })
+
+  // Regression: a bare `state[projectName]` truthiness check (rather than an
+  // own-property check) resolves through the prototype chain for a project
+  // name like "constructor" even when no such project exists, and that
+  // inherited function object has its own "name"/"length"/"prototype"
+  // properties — so these entries used to survive pruning forever.
+  it('prunes stale entries for a non-existent "constructor" project paired with a Function-own-property file name', () => {
+    const state: ProjectsState = { A: { a: file('a', '') } }
+    const archived = new Set([
+      model.encodeArchivedFileKey('constructor', 'name'),
+      model.encodeArchivedFileKey('constructor', 'length'),
+      model.encodeArchivedFileKey('constructor', 'prototype'),
+    ])
+    const result = model.pruneArchivedFiles(archived, state)
+    expect([...result]).toEqual([])
+  })
+})
+
+describe('fileExists', () => {
+  // Regression: see the pruneArchivedFiles "constructor" test above for the
+  // scenario this guards — a project name that doesn't exist in `state` but
+  // coincides with an inherited Object.prototype member must never read as
+  // "the file exists".
+  it('returns false for a non-existent "constructor" project even when the file name is a Function-own property', () => {
+    const state: ProjectsState = { A: { a: file('a', '') } }
+    expect(model.fileExists(state, 'constructor', 'name')).toBe(false)
+    expect(model.fileExists(state, 'constructor', 'length')).toBe(false)
+    expect(model.fileExists(state, 'constructor', 'prototype')).toBe(false)
+  })
+
+  it('still finds a file inside a project that is genuinely named "constructor"', () => {
+    const state: ProjectsState = { constructor: { name: file('name', '') } }
+    expect(model.fileExists(state, 'constructor', 'name')).toBe(true)
+    expect(model.fileExists(state, 'constructor', 'missing')).toBe(false)
+  })
 })
 
 describe('moveFile', () => {

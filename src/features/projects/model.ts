@@ -33,8 +33,17 @@ export function firstFileOf(
 }
 
 export function fileExists(state: ProjectsState, projectName: string, fileName: string): boolean {
-  return Boolean(
-    state[projectName] && Object.prototype.hasOwnProperty.call(state[projectName], fileName),
+  // Guarded with `projectExists` (an own-property check), not a bare
+  // `state[projectName]` truthiness check: for a project name that
+  // coincides with an inherited `Object.prototype` member (e.g.
+  // "constructor"), `state[projectName]` resolves through the prototype
+  // chain to a real (truthy) function object even when no such project
+  // exists in `state` — and that function object itself has own properties
+  // like "name"/"length"/"prototype", which would make the second
+  // `hasOwnProperty` check below a false positive too.
+  return (
+    projectExists(state, projectName) &&
+    Object.prototype.hasOwnProperty.call(state[projectName], fileName)
   )
 }
 

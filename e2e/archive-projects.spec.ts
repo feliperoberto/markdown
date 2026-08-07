@@ -6,9 +6,7 @@ import { test, expect } from './fixtures'
 // round-tripped through the app's boot path — the one thing unit tests
 // (which never reload a real page) can't cover.
 test.describe('archive projects', () => {
-  test('archive from the menu, reveal via the toggler, and survive a reload', async ({
-    page,
-  }) => {
+  test('archive from the menu, reveal via the toggler, and survive a reload', async ({ page }) => {
     await page.goto('/app.html')
 
     const keepName = `E2E Keep ${Date.now()}`
@@ -36,7 +34,11 @@ test.describe('archive projects', () => {
     await expect(toggle).toBeVisible()
     await toggle.click()
     await expect(page.getByText(archiveName)).toBeVisible()
-    await expect(page.getByRole('img', { name: 'Arquivado' })).toBeVisible()
+    // Distinct accessible name from a file's own badge ("Arquivo
+    // arquivado") so the two remain distinguishable when both are visible
+    // at once (e.g. an archived project revealed here, containing a file
+    // revealed via its own per-project toggler).
+    await expect(page.getByRole('img', { name: 'Projeto arquivado' })).toBeVisible()
 
     // Reload: the archived project should still be archived (and hidden
     // again, since "show archived" is transient, not persisted).

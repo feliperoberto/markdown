@@ -44,11 +44,16 @@ test.describe('archive files', () => {
     await expect(page.getByText(keepFile)).toBeVisible()
 
     // The per-project toggler shows the count and reveals it with its badge.
-    const toggle = page.getByRole('button', { name: 'Mostrar arquivados (1)' })
+    // Its accessible name includes the project name (unlike its shorter
+    // visible text) so it stays unique from the sidebar's own project-level
+    // toggler or another project's identically-counted one.
+    const toggle = page.getByRole('button', { name: `Mostrar arquivados de ${projectName} (1)` })
     await expect(toggle).toBeVisible()
     await toggle.click()
     await expect(page.getByText(archiveFile)).toBeVisible()
-    await expect(page.getByRole('img', { name: 'Arquivado' })).toBeVisible()
+    // Distinct from a project's own badge ("Projeto arquivado") so the two
+    // remain distinguishable when both are visible at once.
+    await expect(page.getByRole('img', { name: 'Arquivo arquivado' })).toBeVisible()
 
     // Reload: the archived file should still be archived (and hidden again,
     // since "show archived" is transient, not persisted).
@@ -56,10 +61,10 @@ test.describe('archive files', () => {
     await expect(page.getByText(projectName)).toBeVisible()
     await expect(page.getByText(keepFile)).toBeVisible()
     await expect(page.getByText(archiveFile)).toBeHidden()
-    await expect(page.getByRole('button', { name: 'Mostrar arquivados (1)' })).toBeVisible()
+    await expect(toggle).toBeVisible()
 
     // Unarchive it and confirm it's back in the everyday file list.
-    await page.getByRole('button', { name: 'Mostrar arquivados (1)' }).click()
+    await toggle.click()
     await page.getByText(archiveFile).hover()
     await page
       .getByRole('button', { name: `Desarquivar arquivo ${archiveFile}`, exact: true })
