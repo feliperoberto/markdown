@@ -4,9 +4,15 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { FileRow } from './FileRow'
 import { showConfirmDialog, showPromptDialog } from './dialogs'
 import { DND_MIME, getActiveDragKind, readDrag, serializeDrag, setActiveDrag } from './dnd'
+import { isFileArchived } from './model'
 import type { ProjectFiles } from './types'
 import { IconButton } from '@/components'
 import { useOutsideClick } from '@/lib/useOutsideClick'
+
+// Stable empty-set default for the `archivedFiles` prop: a `= new Set()`
+// default parameter would allocate a fresh Set every render and defeat
+// FileRow's memo(), same reasoning as ProjectsSidebar's NO_ARCHIVED.
+const NO_ARCHIVED_FILES: ReadonlySet<string> = new Set()
 
 export interface ProjectGroupProps {
   projectName: string
@@ -59,6 +65,10 @@ export interface ProjectGroupProps {
   onMoveProject?: (projectName: string, beforeProject?: string | null) => void
   /** Archive feature: flips this project's archived state. */
   onToggleArchived?: (projectName: string) => void
+  /** Archive feature (files): composite keys of files hidden from this project's everyday list — see model.ts's encodeArchivedFileKey. */
+  archivedFiles?: ReadonlySet<string>
+  /** Archive feature (files): flips one file's archived state. */
+  onToggleFileArchived?: (projectName: string, fileName: string) => void
 }
 
 // One collapsible project entry in the sidebar tree: header (name, expand
@@ -91,14 +101,34 @@ export const ProjectGroup = memo(function ProjectGroup({
   onMoveFile,
   onMoveProject,
   onToggleArchived,
+  archivedFiles = NO_ARCHIVED_FILES,
+  onToggleFileArchived,
 }: ProjectGroupProps): JSX.Element {
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 })
   // True while a compatible drag hovers this project — drives the drop
   // highlight without touching global state.
   const [isDropTarget, setIsDropTarget] = useState(false)
   // Memoized so FileRow's memo() isn't defeated by a fresh array every
-  // render (Object.keys always returns a new array reference).
+  // render (Object.keys always returns a new array reference). Kept
+  // unfiltered — still feeds handleNewFile's/FileRow's rename-collision
+  // validation, which must see hidden archived files too.
   const fileNames = useMemo(() => Object.keys(files), [files])
+  // Archive feature (files): each project group independently shows/hides
+  // its own archived files — deliberately not lifted into shared state like
+  // openMenuProject, since this is inline content with no cross-project
+  // exclusivity to coordinate (unlike a floating menu overlay).
+  const [showArchivedFiles, setShowArchivedFiles] = useState(false)
+  const visibleFileNames = useMemo(
+    () =>
+      showArchivedFiles
+        ? fileNames
+        : fileNames.filter((name) => !isFileArchived(archivedFiles, projectName, name)),
+    [fileNames, archivedFiles, showArchivedFiles, projectName],
+  )
+  const archivedFileCount = useMemo(
+    () => fileNames.filter((name) => isFileArchived(archivedFiles, projectName, name)).length,
+    [fileNames, archivedFiles, projectName],
+  )
 
   const menuId = `project-menu-${projectName}`
   const menuButtonId = `project-menu-button-${projectName}`
@@ -484,22 +514,47 @@ export const ProjectGroup = memo(function ProjectGroup({
       <div className={`project-files${isExpanded ? ' expanded' : ''}`}>
         {fileNames.length === 0 ? (
           <div className="project-files-empty">Nenhum arquivo</div>
+        ) : visibleFileNames.length === 0 ? (
+          <div className="project-files-empty">
+            Todos os arquivos estão arquivados. Use o botão abaixo para mostrá-los.
+          </div>
         ) : (
-          fileNames.map((fileName) => (
+          visibleFileNames.map((fileName) => (
             <FileRow
               key={fileName}
               projectName={projectName}
               file={files[fileName]!}
               isActive={isActiveProject && currentFile === fileName}
               isSelected={selectedFiles.has(fileName)}
+              isArchived={isFileArchived(archivedFiles, projectName, fileName)}
               fileNames={fileNames}
               onSelectFile={onSelectFile}
               onToggleSelected={onToggleSelected}
               onRenameFile={onRenameFile}
               onDeleteFile={onDeleteFile}
+              onToggleArchived={onToggleFileArchived}
               onMoveFile={onMoveFile}
             />
           ))
+        )}
+
+        {archivedFileCount > 0 && (
+          <button
+            type="button"
+            className={`archived-files-toggle${showArchivedFiles ? ' active' : ''}`}
+            aria-pressed={showArchivedFiles}
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowArchivedFiles((v) => !v)
+            }}
+          >
+            <span aria-hidden="true">📦</span>
+            <span>
+              {showArchivedFiles
+                ? 'Ocultar arquivados'
+                : `Mostrar arquivados (${archivedFileCount})`}
+            </span>
+          </button>
         )}
       </div>
     </div>

@@ -20,11 +20,14 @@ export function projectExists(state: ProjectsState, projectName: string): boolea
 export function firstFileOf(
   state: ProjectsState,
   skipProjects?: ReadonlySet<string>,
+  skipFiles?: ReadonlySet<string>,
 ): { project: string; file: string } | null {
   for (const project of Object.keys(state)) {
     if (skipProjects?.has(project)) continue
-    const files = Object.keys(state[project] ?? {})
-    if (files.length > 0) return { project, file: files[0]! }
+    for (const file of Object.keys(state[project] ?? {})) {
+      if (skipFiles?.has(encodeArchivedFileKey(project, file))) continue
+      return { project, file }
+    }
   }
   return null
 }
@@ -342,4 +345,146 @@ export function pruneArchived(
 ): ReadonlySet<string> {
   const next = new Set([...archived].filter((name) => projectExists(state, name)))
   return next.size === archived.size ? archived : next
+}
+
+/**
+ * Archived-files sidecar entries identify a `(project, file)` pair. File
+ * names aren't globally unique across projects (unlike project names), so a
+ * bare name set won't do — but user-typed names aren't sanitized against
+ * containing arbitrary characters either (only the ZIP-import/Drive-restore
+ * boundary does that), so a hand-rolled delimiter scheme would be unsafe.
+ * JSON-array encoding sidesteps that entirely, matching the precedent in
+ * `dnd.ts`'s `serializeDrag`/`readDrag` for the same reason.
+ */
+export function encodeArchivedFileKey(projectName: string, fileName: string): string {
+  return JSON.stringify([projectName, fileName])
+}
+
+/** Never throws — a hand-edited/corrupt entry decodes to `null`, matching this file's defensive-parsing convention. */
+export function decodeArchivedFileKey(key: string): { project: string; file: string } | null {
+  try {
+    const parsed = JSON.parse(key) as unknown
+    if (
+      Array.isArray(parsed) &&
+      parsed.length === 2 &&
+      typeof parsed[0] === 'string' &&
+      typeof parsed[1] === 'string'
+    ) {
+      return { project: parsed[0], file: parsed[1] }
+    }
+  } catch {
+    // Not our key (or malformed) — ignore.
+  }
+  return null
+}
+
+export function isFileArchived(
+  archivedFiles: ReadonlySet<string>,
+  projectName: string,
+  fileName: string,
+): boolean {
+  return archivedFiles.has(encodeArchivedFileKey(projectName, fileName))
+}
+
+/**
+ * Carries an archived-file flag across a same-project file rename (file
+ * identity is the object key within its project, so a rename is a key move
+ * — see `renameFile`). Returns the same reference when `oldFileName` isn't
+ * archived, matching this file's same-reference-on-no-op convention.
+ */
+export function renameFileInArchivedFiles(
+  archivedFiles: ReadonlySet<string>,
+  projectName: string,
+  oldFileName: string,
+  newFileName: string,
+): ReadonlySet<string> {
+  const oldKey = encodeArchivedFileKey(projectName, oldFileName)
+  if (!archivedFiles.has(oldKey)) return archivedFiles
+  const next = new Set(archivedFiles)
+  next.delete(oldKey)
+  next.add(encodeArchivedFileKey(projectName, newFileName))
+  return next
+}
+
+/**
+ * Carries an archived-file flag across `moveFile` when it moves a file to a
+ * *different* project (a same-project move is just a reorder — identity is
+ * unchanged, so it's a no-op here).
+ */
+export function moveFileInArchivedFiles(
+  archivedFiles: ReadonlySet<string>,
+  fromProject: string,
+  fileName: string,
+  toProject: string,
+): ReadonlySet<string> {
+  if (fromProject === toProject) return archivedFiles
+  const oldKey = encodeArchivedFileKey(fromProject, fileName)
+  if (!archivedFiles.has(oldKey)) return archivedFiles
+  const next = new Set(archivedFiles)
+  next.delete(oldKey)
+  next.add(encodeArchivedFileKey(toProject, fileName))
+  return next
+}
+
+/**
+ * Cascade for a project rename: every archived-file entry belonging to
+ * `oldProjectName` must be rekeyed to `newProjectName`, or it silently
+ * un-archives (its composite key would point at a project name that no
+ * longer exists). Unlike `pruneArchivedFiles`, which only drops stale
+ * entries, this carries them — the same distinction `renameInArchived`
+ * makes for projects themselves.
+ */
+export function renameProjectInArchivedFiles(
+  archivedFiles: ReadonlySet<string>,
+  oldProjectName: string,
+  newProjectName: string,
+): ReadonlySet<string> {
+  let changed = false
+  const next = new Set<string>()
+  for (const key of archivedFiles) {
+    const decoded = decodeArchivedFileKey(key)
+    if (decoded && decoded.project === oldProjectName) {
+      next.add(encodeArchivedFileKey(newProjectName, decoded.file))
+      changed = true
+    } else {
+      next.add(key)
+    }
+  }
+  return changed ? next : archivedFiles
+}
+
+/**
+ * Explicit same-commit cascade for a project delete (mirrors `deleteProject`
+ * callers dropping `projectName` from `archivedProjects` inline): drops
+ * every archived-file entry belonging to `projectName`. Functionally a
+ * subset of what `pruneArchivedFiles` would also eventually catch, but
+ * matches the existing belt-and-braces precedent of an explicit drop in the
+ * same commit as the delete rather than waiting a tick for the prune effect.
+ */
+export function dropProjectFromArchivedFiles(
+  archivedFiles: ReadonlySet<string>,
+  projectName: string,
+): ReadonlySet<string> {
+  const next = new Set(
+    [...archivedFiles].filter((key) => decodeArchivedFileKey(key)?.project !== projectName),
+  )
+  return next.size === archivedFiles.size ? archivedFiles : next
+}
+
+/**
+ * Drops archived-file entries for files that no longer exist (deleted, or a
+ * stale/malformed entry from a previous session) so the persisted set
+ * doesn't accumulate garbage forever. Mirrors `pruneArchived`.
+ */
+export function pruneArchivedFiles(
+  archivedFiles: ReadonlySet<string>,
+  state: ProjectsState,
+): ReadonlySet<string> {
+  const next = new Set(
+    [...archivedFiles].filter((key) => {
+      const decoded = decodeArchivedFileKey(key)
+      return decoded !== null && fileExists(state, decoded.project, decoded.file)
+    }),
+  )
+  return next.size === archivedFiles.size ? archivedFiles : next
 }

@@ -9,6 +9,8 @@ import type { ProjectsState } from './types'
 // default parameter would allocate a fresh Set every render and defeat
 // ProjectGroup's memo().
 const NO_ARCHIVED: ReadonlySet<string> = new Set()
+// Same reasoning, one level down, for the archived-files sidecar.
+const NO_ARCHIVED_FILES: ReadonlySet<string> = new Set()
 
 export interface ProjectsSidebarProps {
   projects: ProjectsState
@@ -56,6 +58,11 @@ export interface ProjectsSidebarProps {
   // it up, matching this file's convention for feature-gating props.
   archivedProjects?: ReadonlySet<string>
   onToggleArchived?: (projectName: string) => void
+  // Archive feature (files): composite keys of files hidden from their
+  // project's everyday list, and the callback that flips one file's
+  // archived state. Same feature-gating convention as the props above.
+  archivedFiles?: ReadonlySet<string>
+  onToggleFileArchived?: (projectName: string, fileName: string) => void
 }
 
 // Renders the full project/file sidebar tree. Owns only tree
@@ -84,6 +91,8 @@ export function ProjectsSidebar({
   onMoveProject,
   archivedProjects = NO_ARCHIVED,
   onToggleArchived,
+  archivedFiles = NO_ARCHIVED_FILES,
+  onToggleFileArchived,
 }: ProjectsSidebarProps): JSX.Element {
   const [selectedByProject, setSelectedByProject] = useState<Record<string, Set<string>>>({})
   // Which project's "..." actions menu is open, if any — a single slot
@@ -295,6 +304,8 @@ export function ProjectsSidebar({
                 onMoveFile={onMoveFile}
                 onMoveProject={onMoveProject}
                 onToggleArchived={onToggleArchived}
+                archivedFiles={archivedFiles}
+                onToggleFileArchived={onToggleFileArchived}
               />
             ))
           )}

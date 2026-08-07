@@ -54,6 +54,8 @@ export function App(): JSX.Element {
     moveProject,
     archivedProjects,
     toggleProjectArchived,
+    archivedFiles,
+    toggleFileArchived,
     importProjects,
     reconcileWithRemote,
   } = useProjects()
@@ -281,6 +283,8 @@ export function App(): JSX.Element {
             onMoveProject={moveProject}
             archivedProjects={archivedProjects}
             onToggleArchived={toggleProjectArchived}
+            archivedFiles={archivedFiles}
+            onToggleFileArchived={toggleFileArchived}
           />
           <main className="app-main">
             <div className="toolbar">

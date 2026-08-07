@@ -12,11 +12,15 @@ export interface FileRowProps {
   file: ProjectFile
   isActive: boolean
   isSelected: boolean
+  /** Archive feature: hidden from the project's everyday list, shown via ProjectGroup's "Mostrar arquivados" toggler. */
+  isArchived: boolean
   fileNames: string[]
   onSelectFile: (projectName: string, fileName: string) => void
   onToggleSelected: (projectName: string, fileName: string, selected: boolean) => void
   onRenameFile: (projectName: string, oldFileName: string, newFileName: string) => void
   onDeleteFile: (projectName: string, fileName: string) => void
+  /** Archive feature: flips this file's archived state. */
+  onToggleArchived?: (projectName: string, fileName: string) => void
   /**
    * Drag & drop (issue #92). When provided, the row becomes draggable and
    * a drop target: dropping a file here inserts the dragged file directly
@@ -41,11 +45,13 @@ export const FileRow = memo(function FileRow({
   file,
   isActive,
   isSelected,
+  isArchived,
   fileNames,
   onSelectFile,
   onToggleSelected,
   onRenameFile,
   onDeleteFile,
+  onToggleArchived,
   onMoveFile,
 }: FileRowProps): JSX.Element {
   const [isSwiped, setIsSwiped] = useState(false)
@@ -143,6 +149,14 @@ export const FileRow = memo(function FileRow({
     onDeleteFile(projectName, file.name)
   }
 
+  // Archive feature: reversible from the same row, so unlike delete this
+  // needs no confirm dialog.
+  function handleToggleArchived(e: MouseEvent) {
+    e.stopPropagation()
+    setIsSwiped(false)
+    onToggleArchived?.(projectName, file.name)
+  }
+
   return (
     <div
       className={`file-item${isActive ? ' active' : ''}${isSwiped ? ' swiped' : ''}${isDropTarget ? ' drop-target' : ''}`}
@@ -168,7 +182,19 @@ export const FileRow = memo(function FileRow({
         />
       </span>
       <span className="file-info">
-        <span className="file-name">{file.name}</span>
+        <span className="file-name-row">
+          <span className="file-name">{file.name}</span>
+          {isArchived && (
+            <span
+              className="file-badge"
+              role="img"
+              aria-label="Arquivado"
+              title="Arquivo arquivado"
+            >
+              📦
+            </span>
+          )}
+        </span>
         <span className="file-timestamp" title={new Date(file.timestamp).toLocaleString()}>
           editado {formatRelativeTime(new Date(file.timestamp).getTime())}
         </span>
@@ -181,6 +207,17 @@ export const FileRow = memo(function FileRow({
           label={`Renomear arquivo ${file.name}`}
           onClick={handleRename}
         />
+        {onToggleArchived && (
+          <IconButton
+            variant="compact"
+            className="file-action-btn archive"
+            icon={isArchived ? '📂' : '📦'}
+            label={
+              isArchived ? `Desarquivar arquivo ${file.name}` : `Arquivar arquivo ${file.name}`
+            }
+            onClick={handleToggleArchived}
+          />
+        )}
         <IconButton
           variant="compact"
           className="file-action-btn delete"

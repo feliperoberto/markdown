@@ -238,8 +238,12 @@ body {
 }
 
 /* Archive feature: reveals/hides archived projects in the list above it.
-   Only rendered when at least one project is archived. */
-.archived-toggle {
+   Only rendered when at least one project is archived. Archive feature
+   (files): .archived-files-toggle is the same button one level down, inside
+   a project's own file list — its rules are already generic enough (no
+   sidebar-specific selector) to share verbatim rather than duplicating. */
+.archived-toggle,
+.archived-files-toggle {
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -259,16 +263,19 @@ body {
   flex-shrink: 0;
 }
 
-.archived-toggle:hover {
+.archived-toggle:hover,
+.archived-files-toggle:hover {
   color: var(--cream);
 }
 
-.archived-toggle.active {
+.archived-toggle.active,
+.archived-files-toggle.active {
   color: var(--accent);
   border-top-color: var(--accent);
 }
 
-.archived-toggle:focus-visible {
+.archived-toggle:focus-visible,
+.archived-files-toggle:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -422,8 +429,10 @@ body {
   border-radius: 0 2px 2px 0;
 }
 
+/* Widened for a third action button (archive), added alongside
+   rename/delete: 3 * 30px buttons + 2 * 0.25rem gaps + reveal padding. */
 .file-item.swiped {
-  transform: translateX(-72px);
+  transform: translateX(-108px);
 }
 
 .file-checkbox {
@@ -441,6 +450,16 @@ body {
   flex-direction: column;
 }
 
+/* Archive feature (files): wraps the file name + badge inline, since
+   .file-info above is a column flex container and a bare sibling badge
+   would stack vertically instead of sitting next to the name. */
+.file-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
 .file-name {
   font-family: var(--body);
   font-size: 0.78rem;
@@ -448,6 +467,17 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Archive feature (files): badge next to the name of an archived file.
+   Needed (unlike relying on opacity/hover alone) because once a project's
+   "Mostrar arquivados" toggler is on, archived and visible files render
+   interleaved in the same list — see .project-badge above for the same
+   never-opacity-only reasoning one level up. */
+.file-badge {
+  font-size: 0.65rem;
+  line-height: 1;
+  flex-shrink: 0;
 }
 
 .file-timestamp {
@@ -464,7 +494,7 @@ body {
   display: flex;
   gap: 0.25rem;
   position: absolute;
-  right: -72px;
+  right: -108px;
   top: 50%;
   transform: translateY(-50%);
 }
@@ -505,6 +535,10 @@ body {
 
 .file-action-btn.rename {
   background: var(--c-sky);
+}
+
+.file-action-btn.archive {
+  background: var(--c-amber);
 }
 
 .file-action-btn.delete {

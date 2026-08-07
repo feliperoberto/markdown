@@ -63,6 +63,20 @@ describe('firstFileOf', () => {
     expect(model.firstFileOf(state)).toEqual({ project: 'B', file: 'b1' })
   })
 
+  it('skips files named in skipFiles (archive feature: files)', () => {
+    const state: ProjectsState = {
+      A: { a1: file('a1', ''), a2: file('a2', '') },
+    }
+    const skip = new Set([model.encodeArchivedFileKey('A', 'a1')])
+    expect(model.firstFileOf(state, undefined, skip)).toEqual({ project: 'A', file: 'a2' })
+  })
+
+  it('returns null when every file is skipped via skipFiles', () => {
+    const state: ProjectsState = { A: { a1: file('a1', '') } }
+    const skip = new Set([model.encodeArchivedFileKey('A', 'a1')])
+    expect(model.firstFileOf(state, undefined, skip)).toBeNull()
+  })
+
   it('returns null when no project holds any file', () => {
     expect(model.firstFileOf({ Empty: {} })).toBeNull()
     expect(model.firstFileOf({})).toBeNull()
@@ -115,6 +129,137 @@ describe('pruneArchived', () => {
   it('prunes a project literally named "constructor" correctly', () => {
     const state: ProjectsState = { A: { a: file('a', '') } }
     const result = model.pruneArchived(new Set(['constructor']), state)
+    expect([...result]).toEqual([])
+  })
+})
+
+describe('archived-files composite keys', () => {
+  it('round-trips a project/file pair through encode/decode', () => {
+    const key = model.encodeArchivedFileKey('My Project', 'notes')
+    expect(model.decodeArchivedFileKey(key)).toEqual({ project: 'My Project', file: 'notes' })
+  })
+
+  it('round-trips names containing slashes, since names are not sanitized at input time', () => {
+    const key = model.encodeArchivedFileKey('foo/bar', 'a/b')
+    expect(model.decodeArchivedFileKey(key)).toEqual({ project: 'foo/bar', file: 'a/b' })
+  })
+
+  it('returns null for a malformed or foreign key, never throwing', () => {
+    expect(model.decodeArchivedFileKey('not json')).toBeNull()
+    expect(model.decodeArchivedFileKey('{"kind":"file"}')).toBeNull()
+    expect(model.decodeArchivedFileKey('["only-one"]')).toBeNull()
+    expect(model.decodeArchivedFileKey('[1, 2]')).toBeNull()
+  })
+
+  it('isFileArchived checks membership by composite key', () => {
+    const archived = new Set([model.encodeArchivedFileKey('A', 'a')])
+    expect(model.isFileArchived(archived, 'A', 'a')).toBe(true)
+    expect(model.isFileArchived(archived, 'A', 'b')).toBe(false)
+    expect(model.isFileArchived(archived, 'B', 'a')).toBe(false)
+  })
+})
+
+describe('renameFileInArchivedFiles', () => {
+  it('rekeys the file segment when the old key was archived', () => {
+    const archived = new Set([model.encodeArchivedFileKey('A', 'old')])
+    const result = model.renameFileInArchivedFiles(archived, 'A', 'old', 'new')
+    expect([...result]).toEqual([model.encodeArchivedFileKey('A', 'new')])
+  })
+
+  it('returns the same reference when the old file was not archived', () => {
+    const archived = new Set([model.encodeArchivedFileKey('A', 'other')])
+    expect(model.renameFileInArchivedFiles(archived, 'A', 'old', 'new')).toBe(archived)
+  })
+})
+
+describe('moveFileInArchivedFiles', () => {
+  it('rekeys the project segment on a cross-project move', () => {
+    const archived = new Set([model.encodeArchivedFileKey('A', 'f')])
+    const result = model.moveFileInArchivedFiles(archived, 'A', 'f', 'B')
+    expect([...result]).toEqual([model.encodeArchivedFileKey('B', 'f')])
+  })
+
+  it('is a no-op for a same-project move (reorder only)', () => {
+    const archived = new Set([model.encodeArchivedFileKey('A', 'f')])
+    expect(model.moveFileInArchivedFiles(archived, 'A', 'f', 'A')).toBe(archived)
+  })
+
+  it('returns the same reference when the moved file was not archived', () => {
+    const archived = new Set([model.encodeArchivedFileKey('A', 'other')])
+    expect(model.moveFileInArchivedFiles(archived, 'A', 'f', 'B')).toBe(archived)
+  })
+})
+
+describe('renameProjectInArchivedFiles', () => {
+  it('rekeys every archived-file entry belonging to the renamed project', () => {
+    const archived = new Set([
+      model.encodeArchivedFileKey('A', 'x'),
+      model.encodeArchivedFileKey('A', 'y'),
+      model.encodeArchivedFileKey('B', 'z'),
+    ])
+    const result = model.renameProjectInArchivedFiles(archived, 'A', 'A2')
+    expect([...result].sort()).toEqual(
+      [
+        model.encodeArchivedFileKey('A2', 'x'),
+        model.encodeArchivedFileKey('A2', 'y'),
+        model.encodeArchivedFileKey('B', 'z'),
+      ].sort(),
+    )
+  })
+
+  it('returns the same reference when nothing matches the renamed project', () => {
+    const archived = new Set([model.encodeArchivedFileKey('B', 'z')])
+    expect(model.renameProjectInArchivedFiles(archived, 'A', 'A2')).toBe(archived)
+  })
+})
+
+describe('dropProjectFromArchivedFiles', () => {
+  it('drops every entry belonging to the deleted project', () => {
+    const archived = new Set([
+      model.encodeArchivedFileKey('A', 'x'),
+      model.encodeArchivedFileKey('B', 'z'),
+    ])
+    const result = model.dropProjectFromArchivedFiles(archived, 'A')
+    expect([...result]).toEqual([model.encodeArchivedFileKey('B', 'z')])
+  })
+
+  it('returns the same reference when nothing matches', () => {
+    const archived = new Set([model.encodeArchivedFileKey('B', 'z')])
+    expect(model.dropProjectFromArchivedFiles(archived, 'A')).toBe(archived)
+  })
+})
+
+describe('pruneArchivedFiles', () => {
+  it('drops entries for files that no longer exist', () => {
+    const state: ProjectsState = { A: { a: file('a', '') } }
+    const archived = new Set([
+      model.encodeArchivedFileKey('A', 'a'),
+      model.encodeArchivedFileKey('A', 'gone'),
+      model.encodeArchivedFileKey('Gone', 'x'),
+    ])
+    const result = model.pruneArchivedFiles(archived, state)
+    expect([...result]).toEqual([model.encodeArchivedFileKey('A', 'a')])
+  })
+
+  it('drops malformed entries', () => {
+    const state: ProjectsState = { A: { a: file('a', '') } }
+    const archived = new Set([model.encodeArchivedFileKey('A', 'a'), 'not json'])
+    const result = model.pruneArchivedFiles(archived, state)
+    expect([...result]).toEqual([model.encodeArchivedFileKey('A', 'a')])
+  })
+
+  it('returns the same reference when nothing is stale', () => {
+    const state: ProjectsState = { A: { a: file('a', '') } }
+    const archived = new Set([model.encodeArchivedFileKey('A', 'a')])
+    expect(model.pruneArchivedFiles(archived, state)).toBe(archived)
+  })
+
+  it('prunes a project/file literally named "constructor" correctly', () => {
+    const state: ProjectsState = { A: { a: file('a', '') } }
+    const result = model.pruneArchivedFiles(
+      new Set([model.encodeArchivedFileKey('constructor', 'constructor')]),
+      state,
+    )
     expect([...result]).toEqual([])
   })
 })

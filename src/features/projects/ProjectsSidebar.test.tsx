@@ -39,6 +39,8 @@ function Harness({
     deleteProject,
     archivedProjects,
     toggleProjectArchived,
+    archivedFiles,
+    toggleFileArchived,
   } = useProjects()
 
   return (
@@ -55,6 +57,8 @@ function Harness({
       onDeleteProject={deleteProject}
       archivedProjects={archivedProjects}
       onToggleArchived={toggleProjectArchived}
+      archivedFiles={archivedFiles}
+      onToggleFileArchived={toggleFileArchived}
       onSelectionChange={onSelectionChange}
     />
   )
@@ -249,6 +253,61 @@ describe('ProjectsSidebar + useProjects', () => {
       fireEvent.click(screen.getByRole('menuitem', { name: /Arquivar projeto/ }))
 
       await waitFor(() => expect(onSelectionChange).toHaveBeenLastCalledWith([]))
+    })
+  })
+
+  describe('archive files feature', () => {
+    it('hides an archived file within a project and reveals it via the per-project toggler', async () => {
+      renderHarness()
+
+      vi.mocked(showPromptDialog).mockResolvedValueOnce('notes')
+      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Meu Projeto/ }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Novo arquivo/ }))
+      expect(await screen.findByText('notes')).not.toBeNull()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Arquivar arquivo notes' }))
+
+      // Leaves the project's everyday file list...
+      await waitFor(() => expect(screen.queryByText('notes')).toBeNull())
+
+      // ...and a per-project toggler appears with the count.
+      const toggle = await screen.findByRole('button', { name: 'Mostrar arquivados (1)' })
+      expect(toggle.getAttribute('aria-pressed')).toBe('false')
+
+      fireEvent.click(toggle)
+      expect(await screen.findByText('notes')).not.toBeNull()
+      expect(
+        screen.getByRole('button', { name: 'Ocultar arquivados' }).getAttribute('aria-pressed'),
+      ).toBe('true')
+
+      // Non-color-only state indicator, matching the project-badge precedent.
+      expect(screen.getByRole('img', { name: 'Arquivado' })).not.toBeNull()
+    })
+
+    it('shows the all-archived-files empty state once every file in a project is archived', async () => {
+      renderHarness()
+
+      // The default seeded project has one file, "Sem título".
+      fireEvent.click(screen.getByRole('button', { name: 'Arquivar arquivo Sem título' }))
+
+      expect(
+        await screen.findByText(
+          'Todos os arquivos estão arquivados. Use o botão abaixo para mostrá-los.',
+        ),
+      ).not.toBeNull()
+    })
+
+    it('flips the button label between Arquivar/Desarquivar without a confirm dialog', async () => {
+      renderHarness()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Arquivar arquivo Sem título' }))
+      expect(showConfirmDialog).not.toHaveBeenCalled()
+
+      // Reveal it, then check the button label flipped.
+      fireEvent.click(await screen.findByRole('button', { name: 'Mostrar arquivados (1)' }))
+      expect(
+        await screen.findByRole('button', { name: 'Desarquivar arquivo Sem título' }),
+      ).not.toBeNull()
     })
   })
 })

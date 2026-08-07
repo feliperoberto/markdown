@@ -58,6 +58,13 @@ const COLLAPSED_PROJECTS_KEY = 'collapsedProjects'
 // devices, that's a real schema change (per-project metadata with an
 // `archivedAt`), not an extension of this key.
 const ARCHIVED_PROJECTS_KEY = 'archivedProjects'
+// Archive feature (files): which individual files are hidden from their
+// project's everyday list. Same local-only sidecar reasoning as
+// ARCHIVED_PROJECTS_KEY above. Entries are opaque composite keys identifying
+// a (project, file) pair — encoding/decoding is owned by model.ts's
+// encodeArchivedFileKey/decodeArchivedFileKey, this module doesn't need to
+// know the format, same separation as dnd.ts payloads being opaque here.
+const ARCHIVED_FILES_KEY = 'archivedFiles'
 
 export interface LastEditedFile {
   project: string
@@ -277,4 +284,21 @@ export function saveArchivedProjects(
   adapter: StorageAdapter = localStorageAdapter,
 ): void {
   saveNameSet(ARCHIVED_PROJECTS_KEY, names, adapter)
+}
+
+/**
+ * Reads the set of archived-file composite keys (see model.ts's
+ * encodeArchivedFileKey). Returns an empty set on anything malformed — a
+ * missing entry means "nothing archived", matching the pre-feature default.
+ */
+export function loadArchivedFiles(adapter: StorageAdapter = localStorageAdapter): Set<string> {
+  return loadNameSet(ARCHIVED_FILES_KEY, adapter)
+}
+
+/** Persists the archived-file key set. Best-effort. */
+export function saveArchivedFiles(
+  names: Iterable<string>,
+  adapter: StorageAdapter = localStorageAdapter,
+): void {
+  saveNameSet(ARCHIVED_FILES_KEY, names, adapter)
 }
