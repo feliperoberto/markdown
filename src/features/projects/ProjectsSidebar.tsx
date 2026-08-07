@@ -2,6 +2,7 @@ import type { JSX } from 'preact'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { ProjectGroup } from './ProjectGroup'
 import { showPromptDialog } from './dialogs'
+import { decodeArchivedFileKey, isFileArchived } from './model'
 import { loadCollapsedProjects, saveCollapsedProjects } from './storage'
 import type { ProjectsState } from './types'
 
@@ -9,6 +10,11 @@ import type { ProjectsState } from './types'
 // default parameter would allocate a fresh Set every render and defeat
 // ProjectGroup's memo().
 const NO_ARCHIVED: ReadonlySet<string> = new Set()
+// Same reasoning, one level down, for the archived-files sidecar.
+const NO_ARCHIVED_FILES: ReadonlySet<string> = new Set()
+// Fallback for a project with no archived files of its own, used by the
+// per-project derivation below — same stable-empty-set reasoning.
+const NO_ARCHIVED_FILE_NAMES: ReadonlySet<string> = new Set()
 
 export interface ProjectsSidebarProps {
   projects: ProjectsState
@@ -56,6 +62,11 @@ export interface ProjectsSidebarProps {
   // it up, matching this file's convention for feature-gating props.
   archivedProjects?: ReadonlySet<string>
   onToggleArchived?: (projectName: string) => void
+  // Archive feature (files): composite keys of files hidden from their
+  // project's everyday list, and the callback that flips one file's
+  // archived state. Same feature-gating convention as the props above.
+  archivedFiles?: ReadonlySet<string>
+  onToggleFileArchived?: (projectName: string, fileName: string) => void
 }
 
 // Renders the full project/file sidebar tree. Owns only tree
@@ -84,6 +95,8 @@ export function ProjectsSidebar({
   onMoveProject,
   archivedProjects = NO_ARCHIVED,
   onToggleArchived,
+  archivedFiles = NO_ARCHIVED_FILES,
+  onToggleFileArchived,
 }: ProjectsSidebarProps): JSX.Element {
   const [selectedByProject, setSelectedByProject] = useState<Record<string, Set<string>>>({})
   // Which project's "..." actions menu is open, if any — a single slot
@@ -116,6 +129,45 @@ export function ProjectsSidebar({
       showArchived ? projectNames : projectNames.filter((name) => !archivedProjects.has(name)),
     [projectNames, archivedProjects, showArchived],
   )
+  // Per-project derivation of `archivedFiles` (a global Set of composite
+  // keys, new-referenced on every single file's archive toggle anywhere in
+  // the app) into a plain Set of file names scoped to just that project.
+  // Passing the raw global Set straight through to every `ProjectGroup`
+  // instance previously defeated its memo() for every OTHER project too —
+  // archiving one file in project A gave a new `archivedFiles` reference
+  // that every project's `ProjectGroup` prop-compared as "changed", so all
+  // of them re-rendered, not just A's. A ref-based cache reuses the same
+  // per-project Set reference across renders whenever that project's own
+  // archived files didn't actually change (by content, not just by the
+  // global Set's identity), restoring memo()'s per-project isolation —
+  // mirroring how `isArchived` narrows `archivedProjects` to a boolean per
+  // project for the same reason.
+  const archivedFileNamesByProjectRef = useRef<Map<string, ReadonlySet<string>>>(new Map())
+  const archivedFileNamesByProject = useMemo(() => {
+    const cache = archivedFileNamesByProjectRef.current
+    const byProject = new Map<string, Set<string>>()
+    for (const key of archivedFiles) {
+      const decoded = decodeArchivedFileKey(key)
+      if (!decoded) continue
+      let names = byProject.get(decoded.project)
+      if (!names) {
+        names = new Set()
+        byProject.set(decoded.project, names)
+      }
+      names.add(decoded.file)
+    }
+    const next = new Map<string, ReadonlySet<string>>()
+    for (const projectName of projectNames) {
+      const names = byProject.get(projectName) ?? NO_ARCHIVED_FILE_NAMES
+      const cached = cache.get(projectName)
+      const unchanged =
+        cached && cached.size === names.size && [...names].every((name) => cached.has(name))
+      next.set(projectName, unchanged ? cached : names)
+    }
+    archivedFileNamesByProjectRef.current = next
+    return next
+  }, [projectNames, archivedFiles])
+
   const importZipInputRef = useRef<HTMLInputElement>(null)
 
   // Remembered collapsed/expanded state per project (issue #92). Seeded
@@ -163,12 +215,13 @@ export function ProjectsSidebar({
   }, [])
 
   // Prunes stale selection entries whenever the project/file set changes
-  // (rename, delete, import, restore) — and also when a project is
-  // archived: its checkboxes go off-screen behind the "Mostrar arquivados"
-  // toggler, so a file checked before archiving must not silently stay in
-  // the batch-download selection. Previously a renamed/deleted file stayed
-  // in `selectedByProject` forever: the checkbox visually stayed "checked"
-  // for a file that no longer exists under that name, and — had
+  // (rename, delete, import, restore) — and also when a project, or an
+  // individual file, is archived: its checkbox goes off-screen behind the
+  // "Mostrar arquivados" toggler (the project's or the per-project one), so
+  // a file checked before archiving must not silently stay in the
+  // batch-download selection. Previously a renamed/deleted file stayed in
+  // `selectedByProject` forever: the checkbox visually stayed "checked" for
+  // a file that no longer exists under that name, and — had
   // `batchSelectionEntries` (app.tsx) not separately filtered dead
   // entries — a batch export could silently drop a file the user believed
   // was still selected.
@@ -182,7 +235,11 @@ export function ProjectsSidebar({
           changed = true
           continue
         }
-        const survivors = new Set([...fileNames].filter((name) => name in files))
+        const survivors = new Set(
+          [...fileNames].filter(
+            (name) => name in files && !isFileArchived(archivedFiles, projectName, name),
+          ),
+        )
         if (survivors.size !== fileNames.size) changed = true
         if (survivors.size > 0) next[projectName] = survivors
       }
@@ -196,7 +253,7 @@ export function ProjectsSidebar({
       return next
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- onSelectionChange intentionally excluded: it's a per-render callback prop, not state this effect should re-run for.
-  }, [projects, archivedProjects])
+  }, [projects, archivedProjects, archivedFiles])
 
   function toggleSelected(projectName: string, fileName: string, selected: boolean) {
     setSelectedByProject((prev) => {
@@ -295,6 +352,10 @@ export function ProjectsSidebar({
                 onMoveFile={onMoveFile}
                 onMoveProject={onMoveProject}
                 onToggleArchived={onToggleArchived}
+                archivedFileNames={
+                  archivedFileNamesByProject.get(projectName) ?? NO_ARCHIVED_FILE_NAMES
+                }
+                onToggleFileArchived={onToggleFileArchived}
               />
             ))
           )}

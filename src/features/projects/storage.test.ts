@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   backupProjects,
+  loadArchivedFiles,
   loadArchivedProjects,
   loadCollapsedProjects,
   loadLastEditedFile,
   loadProjects,
+  saveArchivedFiles,
   saveArchivedProjects,
   saveCollapsedProjects,
   saveLastEditedFile,
@@ -133,6 +135,37 @@ describe('archived-projects memory', () => {
       remove: () => {},
     }
     expect(() => saveArchivedProjects(new Set(['A']), throwingAdapter)).not.toThrow()
+  })
+})
+
+describe('archived-files memory', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('round-trips a saved set of composite keys', () => {
+    saveArchivedFiles(new Set(['["A","a"]', '["B","b"]']))
+    expect([...loadArchivedFiles()].sort()).toEqual(['["A","a"]', '["B","b"]'])
+  })
+
+  it('returns an empty set when nothing is stored (nothing archived)', () => {
+    expect(loadArchivedFiles().size).toBe(0)
+  })
+
+  it('ignores non-string entries and malformed values', () => {
+    localStorage.setItem('archivedFiles', JSON.stringify(['["A","a"]', 1, null, '["B","b"]']))
+    expect([...loadArchivedFiles()].sort()).toEqual(['["A","a"]', '["B","b"]'])
+    localStorage.setItem('archivedFiles', '{"not":"an array"}')
+    expect(loadArchivedFiles().size).toBe(0)
+  })
+
+  it('does not throw when the adapter fails to save', () => {
+    const throwingAdapter: StorageAdapter = {
+      get: () => null,
+      set: () => {
+        throw new DOMException('The quota has been exceeded.', 'QuotaExceededError')
+      },
+      remove: () => {},
+    }
+    expect(() => saveArchivedFiles(new Set(['["A","a"]']), throwingAdapter)).not.toThrow()
   })
 })
 

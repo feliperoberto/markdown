@@ -39,6 +39,8 @@ function Harness({
     deleteProject,
     archivedProjects,
     toggleProjectArchived,
+    archivedFiles,
+    toggleFileArchived,
   } = useProjects()
 
   return (
@@ -55,6 +57,8 @@ function Harness({
       onDeleteProject={deleteProject}
       archivedProjects={archivedProjects}
       onToggleArchived={toggleProjectArchived}
+      archivedFiles={archivedFiles}
+      onToggleFileArchived={toggleFileArchived}
       onSelectionChange={onSelectionChange}
     />
   )
@@ -249,6 +253,100 @@ describe('ProjectsSidebar + useProjects', () => {
       fireEvent.click(screen.getByRole('menuitem', { name: /Arquivar projeto/ }))
 
       await waitFor(() => expect(onSelectionChange).toHaveBeenLastCalledWith([]))
+    })
+  })
+
+  describe('archive files feature', () => {
+    // Regression: mirrors the project-level test above ("drops a checked
+    // file from the batch selection when its project is archived") — the
+    // same off-screen-behind-the-toggler reasoning applies one level down
+    // when the individual FILE (not its project) is archived, but the
+    // pruning effect wasn't extended to check it.
+    it('drops a checked file from the batch selection when the file itself is archived', async () => {
+      const onSelectionChange = vi.fn()
+      renderHarness({ onSelectionChange })
+
+      vi.mocked(showPromptDialog).mockResolvedValueOnce('notes')
+      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Meu Projeto/ }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Novo arquivo/ }))
+      expect(await screen.findByText('notes')).not.toBeNull()
+
+      fireEvent.click(screen.getByRole('checkbox', { name: /Selecionar notes/ }))
+      await waitFor(() =>
+        expect(onSelectionChange).toHaveBeenLastCalledWith([
+          { projectName: 'Meu Projeto', fileName: 'notes' },
+        ]),
+      )
+
+      onSelectionChange.mockClear()
+      fireEvent.click(screen.getByRole('button', { name: 'Arquivar arquivo notes' }))
+
+      await waitFor(() => expect(onSelectionChange).toHaveBeenLastCalledWith([]))
+    })
+
+    it('hides an archived file within a project and reveals it via the per-project toggler', async () => {
+      renderHarness()
+
+      vi.mocked(showPromptDialog).mockResolvedValueOnce('notes')
+      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Meu Projeto/ }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Novo arquivo/ }))
+      expect(await screen.findByText('notes')).not.toBeNull()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Arquivar arquivo notes' }))
+
+      // Leaves the project's everyday file list...
+      await waitFor(() => expect(screen.queryByText('notes')).toBeNull())
+
+      // ...and a per-project toggler appears with the count. Its accessible
+      // name includes the project name (unlike its shorter visible text) so
+      // it stays unique from another project's identically-counted toggler
+      // or from the sidebar's own project-level toggler.
+      const toggle = await screen.findByRole('button', {
+        name: 'Mostrar arquivados de Meu Projeto (1)',
+      })
+      expect(toggle.getAttribute('aria-pressed')).toBe('false')
+
+      fireEvent.click(toggle)
+      expect(await screen.findByText('notes')).not.toBeNull()
+      expect(
+        screen
+          .getByRole('button', { name: 'Ocultar arquivados de Meu Projeto' })
+          .getAttribute('aria-pressed'),
+      ).toBe('true')
+
+      // Non-color-only state indicator, matching the project-badge precedent.
+      // Its own accessible name ("Arquivo arquivado") is distinct from a
+      // project's ("Projeto arquivado") so the two remain distinguishable
+      // when both are visible at once.
+      expect(screen.getByRole('img', { name: 'Arquivo arquivado' })).not.toBeNull()
+    })
+
+    it('shows the all-archived-files empty state once every file in a project is archived', async () => {
+      renderHarness()
+
+      // The default seeded project has one file, "Sem título".
+      fireEvent.click(screen.getByRole('button', { name: 'Arquivar arquivo Sem título' }))
+
+      expect(
+        await screen.findByText(
+          'Todos os arquivos estão arquivados. Use o botão abaixo para mostrá-los.',
+        ),
+      ).not.toBeNull()
+    })
+
+    it('flips the button label between Arquivar/Desarquivar without a confirm dialog', async () => {
+      renderHarness()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Arquivar arquivo Sem título' }))
+      expect(showConfirmDialog).not.toHaveBeenCalled()
+
+      // Reveal it, then check the button label flipped.
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Mostrar arquivados de Meu Projeto (1)' }),
+      )
+      expect(
+        await screen.findByRole('button', { name: 'Desarquivar arquivo Sem título' }),
+      ).not.toBeNull()
     })
   })
 })

@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   keep all their files (nothing is deleted) and stay included in ZIP export
   and Google Drive sync — only the sidebar's everyday list hides them. The
   archived state itself is local to the device and is not synced to Drive.
+- Archive/unarchive individual files: an archive/unarchive action in each
+  file row's actions, and a per-project "Mostrar arquivados" toggler to
+  reveal them again. Archived files keep their content (nothing is
+  deleted) and stay included in ZIP export and Google Drive sync — only
+  the sidebar's per-project file list hides them. Like archived projects,
+  the archived state itself is local to the device and is not synced to
+  Drive.
 
 ### Changed
 
