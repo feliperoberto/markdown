@@ -117,7 +117,12 @@ test.describe('file row actions menu (touch)', () => {
     await expect(page.getByRole('menuitem', { name: /Renomear arquivo/ })).toBeVisible()
 
     // Tapping elsewhere dismisses it, same as a desktop outside click.
-    await sidebar.getByText(projectName, { exact: true }).tap()
+    // Targets the sidebar title specifically (no onClick of its own) rather
+    // than the project name: that span sits inside .project-header, whose
+    // onClick collapses the project — which would hide the menu via CSS
+    // regardless of whether outside-click dismissal actually works,
+    // letting this assertion pass even if that logic were broken.
+    await page.locator('#sidebarTitle').tap()
     await expect(page.getByRole('menuitem', { name: /Renomear arquivo/ })).toHaveCount(0)
   })
 })

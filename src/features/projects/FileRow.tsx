@@ -126,6 +126,13 @@ export const FileRow = memo(function FileRow({
   }
 
   function handleRowKeyDown(e: KeyboardEvent) {
+    // Only when the keydown originated on the row itself, not a bubbled
+    // event from a nested interactive descendant (the checkbox, the "..."
+    // trigger) — otherwise preventDefault() here suppresses THEIR native
+    // Enter/Space activation too (the browser checks defaultPrevented
+    // against the original target, not this handler's own), so e.g. the
+    // "..." button could never be activated by keyboard at all.
+    if (e.target !== e.currentTarget) return
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
       handleRowClick()

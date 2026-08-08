@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'preact/hooks'
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { useOutsideClick } from './useOutsideClick'
 
 export interface DropdownMenuControls {
@@ -89,6 +89,13 @@ export function useDropdownMenu(
         return
       }
       if (e.key === 'Tab') {
+        // preventDefault, not just closeAndReturnFocus: without it, the
+        // browser's native Tab-advance still runs after this handler
+        // returns, pivoting off document.activeElement — which by then is
+        // already the trigger (closeAndReturnFocus focuses it
+        // synchronously, above) — so focus would land one element PAST the
+        // trigger instead of staying on it.
+        e.preventDefault()
         closeAndReturnFocus()
         return
       }
@@ -104,6 +111,24 @@ export function useDropdownMenu(
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [isOpen, triggerId])
+
+  // Clamps the menu to the viewport's bottom edge once it's actually
+  // mounted and measurable — the position set in toggleMenu above is only
+  // an estimate from the trigger's own rect, taken before the menu exists,
+  // so a trigger low in a scrolled list (routine for file rows, unlike the
+  // rarer near-bottom case this math was originally written for) can
+  // commit to a `top` that renders the menu — including its own delete
+  // item — partly or fully off-screen. useLayoutEffect, not useEffect, so
+  // the correction lands before paint instead of as a visible jump.
+  useLayoutEffect(() => {
+    if (!isOpen) return
+    const menuEl = menuRef.current
+    if (!menuEl) return
+    const overflow = menuEl.getBoundingClientRect().bottom - window.innerHeight + 8
+    if (overflow > 0) {
+      setMenuPosition((prev) => ({ ...prev, top: Math.max(4, prev.top - overflow) }))
+    }
+  }, [isOpen])
 
   // Closes on any click/tap outside the menu and its trigger — losing focus
   // to another menu's trigger, a different row, the editor, or anywhere

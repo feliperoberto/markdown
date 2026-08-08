@@ -1,6 +1,6 @@
 import type { JSX } from 'preact'
 import { memo } from 'preact/compat'
-import { useMemo, useRef, useState } from 'preact/hooks'
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { FileRow } from './FileRow'
 import { showConfirmDialog, showPromptDialog } from './dialogs'
 import { DND_MIME, getActiveDragKind, readDrag, serializeDrag, setActiveDrag } from './dnd'
@@ -30,8 +30,8 @@ export interface ProjectGroupProps {
   /**
    * Whether THIS project's "..." actions menu is open. Owned by the sidebar
    * (not local state) so opening one project's menu closes any other
-   * project's menu that was already open — see ProjectsSidebar's
-   * `openMenuProject`.
+   * project's menu — or any file's menu — that was already open. See
+   * ProjectsSidebar's single `openMenu` slot.
    */
   isMenuOpen: boolean
   /** Opens this project's menu, closing whichever other project's menu was open. */
@@ -131,8 +131,8 @@ export const ProjectGroup = memo(function ProjectGroup({
   const fileNames = useMemo(() => Object.keys(files), [files])
   // Archive feature (files): each project group independently shows/hides
   // its own archived files — deliberately not lifted into shared state like
-  // openMenuProject, since this is inline content with no cross-project
-  // exclusivity to coordinate (unlike a floating menu overlay).
+  // the sidebar's `openMenu` slot, since this is inline content with no
+  // cross-project exclusivity to coordinate (unlike a floating menu overlay).
   const [showArchivedFiles, setShowArchivedFiles] = useState(false)
   const visibleFileNames = useMemo(
     () =>
@@ -152,6 +152,17 @@ export const ProjectGroup = memo(function ProjectGroup({
     toggleMenu,
   } = useDropdownMenu(isMenuOpen, () => onOpenMenu(projectName), onCloseMenu)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // A file's dropdown menu (unlike this project's own, a sibling of the
+  // collapsible .project-files below) renders INSIDE .project-files, so
+  // collapsing this project would take it to `display: none` — hidden and
+  // unfocusable — while ProjectsSidebar's `openMenu` slot still thinks it's
+  // open. Left alone, re-expanding the project would then show the menu
+  // again at its old, possibly stale position with no further interaction.
+  // Closing it up front keeps the slot's state truthful to what's onscreen.
+  useEffect(() => {
+    if (!isExpanded && openFileMenu !== null) onCloseMenu()
+  }, [isExpanded, openFileMenu, onCloseMenu])
   const multiFileInputRef = useRef<HTMLInputElement>(null)
 
   const dragEnabled = Boolean(onMoveFile || onMoveProject)
@@ -161,6 +172,12 @@ export const ProjectGroup = memo(function ProjectGroup({
   }
 
   function handleHeaderKeyDown(e: KeyboardEvent) {
+    // Only when the keydown originated on the header itself, not a bubbled
+    // event from the nested "..." trigger — otherwise preventDefault() here
+    // suppresses the trigger's own native Enter/Space activation (the
+    // browser checks defaultPrevented against the original target, not
+    // this handler's own), making the menu unreachable by keyboard.
+    if (e.target !== e.currentTarget) return
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
       toggleExpanded()

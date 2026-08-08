@@ -15,6 +15,12 @@ const NO_ARCHIVED_FILES: ReadonlySet<string> = new Set()
 // Fallback for a project with no archived files of its own, used by the
 // per-project derivation below — same stable-empty-set reasoning.
 const NO_ARCHIVED_FILE_NAMES: ReadonlySet<string> = new Set()
+// Fallback for a project with no batch-selected files — same stable-empty-
+// set reasoning, one level down: `selectedByProject[projectName] ?? new
+// Set()` would otherwise allocate a fresh Set every render, defeating
+// ProjectGroup's memo() for every project with no selection on every
+// sidebar re-render (not just the one whose own props actually changed).
+const NO_SELECTION: ReadonlySet<string> = new Set()
 
 export interface ProjectsSidebarProps {
   projects: ProjectsState
@@ -346,7 +352,7 @@ export function ProjectsSidebar({
                 isExpanded={!collapsedProjects.has(projectName)}
                 isArchived={archivedProjects.has(projectName)}
                 currentFile={currentProject === projectName ? currentFile : null}
-                selectedFiles={selectedByProject[projectName] ?? new Set()}
+                selectedFiles={selectedByProject[projectName] ?? NO_SELECTION}
                 projectNames={projectNames}
                 onSelectFile={onSelectFile}
                 onToggleExpanded={toggleProjectCollapsed}
