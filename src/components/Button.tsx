@@ -70,7 +70,7 @@ export interface IconButtonProps {
   ariaControls?: string
   /** DOM id, so a caller can look the element up (e.g. to restore focus) without a ref. */
   id?: string
-  /** Extra class(es) appended after the component's own module classes — e.g. a global-CSS color-coding class like `file-action-btn rename`. */
+  /** Extra class(es) appended after the component's own module classes, e.g. for a caller-specific global-CSS hook (spacing, color-coding) not covered by `variant`. */
   className?: string
 }
 

@@ -208,10 +208,12 @@ instance its own local open/closed `useState` — that lets more than one
 open at once with no way for opening one to close another. Instead, lift a
 single `<T> | null` "which one is open" slot to the nearest shared parent,
 and pass down `isOpen` plus stable (`useCallback`-wrapped) `onOpen(id)` /
-`onClose()` props. See `ProjectsSidebar`'s `openMenuProject` /
+`onClose()` props. See `ProjectsSidebar`'s `openMenu` (a discriminated
+union shared by project rows AND file rows, not one slot per level) /
 `ProjectGroup`'s `isMenuOpen` for the reference implementation, and pair it
 with `useOutsideClick` (`src/lib/useOutsideClick.ts`) for dismissal on an
-outside click/tap.
+outside click/tap. The shared positioning/keyboard-nav/dismissal machinery
+itself lives in `useDropdownMenu` (`src/lib/useDropdownMenu.ts`).
 
 This is a different shape than Modal's stack (`modal-stack.ts`), which is
 for _nested_ instances of the same overlay needing topmost-only Escape

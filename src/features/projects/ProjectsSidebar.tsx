@@ -2,7 +2,7 @@ import type { JSX } from 'preact'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { ProjectGroup } from './ProjectGroup'
 import { showPromptDialog } from './dialogs'
-import { decodeArchivedFileKey, isFileArchived } from './model'
+import { decodeArchivedFileKey, fileExists, isFileArchived, projectExists } from './model'
 import { loadCollapsedProjects, saveCollapsedProjects } from './storage'
 import type { ProjectsState } from './types'
 
@@ -15,6 +15,12 @@ const NO_ARCHIVED_FILES: ReadonlySet<string> = new Set()
 // Fallback for a project with no archived files of its own, used by the
 // per-project derivation below — same stable-empty-set reasoning.
 const NO_ARCHIVED_FILE_NAMES: ReadonlySet<string> = new Set()
+// Fallback for a project with no batch-selected files — same stable-empty-
+// set reasoning, one level down: `selectedByProject[projectName] ?? new
+// Set()` would otherwise allocate a fresh Set every render, defeating
+// ProjectGroup's memo() for every project with no selection on every
+// sidebar re-render (not just the one whose own props actually changed).
+const NO_SELECTION: ReadonlySet<string> = new Set()
 
 export interface ProjectsSidebarProps {
   projects: ProjectsState
@@ -99,18 +105,28 @@ export function ProjectsSidebar({
   onToggleFileArchived,
 }: ProjectsSidebarProps): JSX.Element {
   const [selectedByProject, setSelectedByProject] = useState<Record<string, Set<string>>>({})
-  // Which project's "..." actions menu is open, if any — a single slot
-  // shared across every ProjectGroup (bug: previously each ProjectGroup
+  // Which "..." actions menu is open, if any — a single slot shared across
+  // every ProjectGroup AND every FileRow (bug: previously each ProjectGroup
   // tracked isMenuOpen as its own local state, so opening a second
   // project's menu didn't close the first, leaving multiple menus open at
-  // once). Stable callbacks so setting this doesn't defeat ProjectGroup's
-  // memo() for projects whose own isMenuOpen value doesn't change.
-  const [openMenuProject, setOpenMenuProject] = useState<string | null>(null)
-  const handleOpenMenu = useCallback((projectName: string) => {
-    setOpenMenuProject(projectName)
+  // once; file rows didn't have a menu at all, see the swipe/hover-reveal
+  // fix below). A single discriminated slot — rather than two independent
+  // ones — keeps a project's menu and a file's menu mutually exclusive too:
+  // without that, opening a file's menu while a project's menu from a
+  // DIFFERENT project was open would leave both floating at once. Stable
+  // callbacks so setting this doesn't defeat ProjectGroup's/FileRow's
+  // memo() for rows whose own isMenuOpen value doesn't change.
+  const [openMenu, setOpenMenu] = useState<
+    { kind: 'project'; project: string } | { kind: 'file'; project: string; file: string } | null
+  >(null)
+  const handleOpenProjectMenu = useCallback((projectName: string) => {
+    setOpenMenu({ kind: 'project', project: projectName })
+  }, [])
+  const handleOpenFileMenu = useCallback((projectName: string, fileName: string) => {
+    setOpenMenu({ kind: 'file', project: projectName, file: fileName })
   }, [])
   const handleCloseMenu = useCallback(() => {
-    setOpenMenuProject(null)
+    setOpenMenu(null)
   }, [])
   // The full, unfiltered list. This is what duplicate-name validation
   // (handleNewProject below, and ProjectGroup's rename validation) must see
@@ -181,12 +197,15 @@ export function ProjectsSidebar({
     saveCollapsedProjects(collapsedProjects)
   }, [collapsedProjects])
 
-  // Closes a dangling open menu if its project was deleted/renamed out from
-  // under it (e.g. via the "Excluir projeto" action inside that same menu).
+  // Closes a dangling open menu if its project (or, for a file menu, the
+  // file itself) was deleted/renamed out from under it — e.g. via the
+  // "Excluir projeto"/"Excluir arquivo" action inside that same menu.
   useEffect(() => {
-    setOpenMenuProject((prev) =>
-      prev !== null && !Object.prototype.hasOwnProperty.call(projects, prev) ? null : prev,
-    )
+    setOpenMenu((prev) => {
+      if (prev === null || !projectExists(projects, prev.project)) return null
+      if (prev.kind === 'file' && !fileExists(projects, prev.project, prev.file)) return null
+      return prev
+    })
   }, [projects])
 
   // Drop entries for projects that no longer exist (deleted/renamed) so the
@@ -333,13 +352,19 @@ export function ProjectsSidebar({
                 isExpanded={!collapsedProjects.has(projectName)}
                 isArchived={archivedProjects.has(projectName)}
                 currentFile={currentProject === projectName ? currentFile : null}
-                selectedFiles={selectedByProject[projectName] ?? new Set()}
+                selectedFiles={selectedByProject[projectName] ?? NO_SELECTION}
                 projectNames={projectNames}
                 onSelectFile={onSelectFile}
                 onToggleExpanded={toggleProjectCollapsed}
-                isMenuOpen={openMenuProject === projectName}
-                onOpenMenu={handleOpenMenu}
+                isMenuOpen={openMenu?.kind === 'project' && openMenu.project === projectName}
+                onOpenMenu={handleOpenProjectMenu}
                 onCloseMenu={handleCloseMenu}
+                openFileMenu={
+                  openMenu?.kind === 'file' && openMenu.project === projectName
+                    ? openMenu.file
+                    : null
+                }
+                onOpenFileMenu={handleOpenFileMenu}
                 onToggleSelected={toggleSelected}
                 onCreateFile={onCreateFile}
                 onRenameFile={onRenameFile}

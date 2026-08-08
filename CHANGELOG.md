@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and Google Drive sync — only the sidebar's everyday list hides them. The
   archived state itself is local to the device and is not synced to Drive.
 - Archive/unarchive individual files: an archive/unarchive action in each
-  file row's actions, and a per-project "Mostrar arquivados" toggler to
+  file's own "⋮" menu, and a per-project "Mostrar arquivados" toggler to
   reveal them again. Archived files keep their content (nothing is
   deleted) and stay included in ZIP export and Google Drive sync — only
   the sidebar's per-project file list hides them. Like archived projects,
@@ -42,6 +42,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Drive panel's separate "Sincronizar Agora" and "Restaurar do Drive"
   buttons are now a single "Sincronizar" button that does a full,
   safe, bidirectional sync.
+- A sidebar file's rename/archive/delete actions now open from a "⋮" menu
+  on the row, the same interaction already used for project actions,
+  instead of a swipe (touch) or hover (desktop) reveal. The swipe/hover
+  reveal shipped with a bug — a row-level `:focus-within` meant simply
+  opening a file could latch the actions permanently visible, and touch
+  browsers' sticky emulated `:hover` did the same on phones/tablets — so
+  it's replaced before release rather than patched, giving files and
+  projects one consistent, deliberate way to reach their actions on every
+  device.
 
 ## [0.1.0] - 2026-07-05
 

@@ -1,13 +1,13 @@
 import { test, expect } from './fixtures'
 
-// Archive feature (files): archive a file from its row's actions, verify it
-// leaves the project's everyday file list and the per-project "Mostrar
+// Archive feature (files): archive a file from its own "..." menu, verify
+// it leaves the project's everyday file list and the per-project "Mostrar
 // arquivados" toggler reveals it, then reload and confirm the archived
 // state (a localStorage sidecar key) really round-tripped through the app's
 // boot path — the one thing unit tests (which never reload a real page)
 // can't cover. Mirrors archive-projects.spec.ts one level down.
 test.describe('archive files', () => {
-  test('archive from the row, reveal via the per-project toggler, and survive a reload', async ({
+  test('archive from the menu, reveal via the per-project toggler, and survive a reload', async ({
     page,
   }) => {
     await page.goto('/app.html')
@@ -31,13 +31,15 @@ test.describe('archive files', () => {
       await expect(page.getByText(fileName)).toBeVisible()
     }
 
-    // Reveal the swipe/hover-revealed row actions, then archive the file.
+    // Open the file's own "..." menu, then archive it.
     // exact: true — the row itself is also role="button" and its accessible
     // name is computed from its descendants, so a substring match would
     // ambiguously also match the row (see archive-projects.spec.ts's
     // "Mais opções do projeto" locators for the same precedent).
-    await page.getByText(archiveFile).hover()
-    await page.getByRole('button', { name: `Arquivar arquivo ${archiveFile}`, exact: true }).click()
+    await page
+      .getByRole('button', { name: `Mais opções do arquivo ${archiveFile}`, exact: true })
+      .click()
+    await page.getByRole('menuitem', { name: /Arquivar arquivo/ }).click()
 
     // It leaves the project's everyday file list; the other file stays.
     await expect(page.getByText(archiveFile)).toBeHidden()
@@ -65,10 +67,10 @@ test.describe('archive files', () => {
 
     // Unarchive it and confirm it's back in the everyday file list.
     await toggle.click()
-    await page.getByText(archiveFile).hover()
     await page
-      .getByRole('button', { name: `Desarquivar arquivo ${archiveFile}`, exact: true })
+      .getByRole('button', { name: `Mais opções do arquivo ${archiveFile}`, exact: true })
       .click()
+    await page.getByRole('menuitem', { name: /Desarquivar arquivo/ }).click()
     await expect(page.getByText(archiveFile)).toBeVisible()
     await expect(page.getByRole('button', { name: /arquivados/i })).toBeHidden()
   })

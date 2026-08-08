@@ -6,7 +6,7 @@ import { showConfirmDialog, showPromptDialog } from './dialogs'
 import { DND_MIME, getActiveDragKind, readDrag, serializeDrag, setActiveDrag } from './dnd'
 import type { ProjectFiles } from './types'
 import { IconButton } from '@/components'
-import { useOutsideClick } from '@/lib/useOutsideClick'
+import { useDropdownMenu } from '@/lib/useDropdownMenu'
 
 // Stable empty-set default for the `archivedFileNames` prop: a `= new Set()`
 // default parameter would allocate a fresh Set every render and defeat
@@ -30,14 +30,24 @@ export interface ProjectGroupProps {
   /**
    * Whether THIS project's "..." actions menu is open. Owned by the sidebar
    * (not local state) so opening one project's menu closes any other
-   * project's menu that was already open — see ProjectsSidebar's
-   * `openMenuProject`.
+   * project's menu — or any file's menu — that was already open. See
+   * ProjectsSidebar's single `openMenu` slot.
    */
   isMenuOpen: boolean
   /** Opens this project's menu, closing whichever other project's menu was open. */
   onOpenMenu: (projectName: string) => void
-  /** Closes the menu, regardless of which project currently owns it. */
+  /** Closes the menu, regardless of which project or file currently owns it. */
   onCloseMenu: () => void
+  /**
+   * Name of the file (within THIS project) whose "..." actions menu is
+   * open, or null. Same single-slot ownership as `isMenuOpen` above, one
+   * level down — a project's own menu and one of its files' menus can't be
+   * open at once either, since both live in the sidebar's single `openMenu`
+   * slot.
+   */
+  openFileMenu: string | null
+  /** Opens a file's menu, closing whichever other project/file menu was open. */
+  onOpenFileMenu: (projectName: string, fileName: string) => void
   onToggleSelected: (projectName: string, fileName: string, selected: boolean) => void
   onCreateFile: (projectName: string, fileName: string) => void
   onRenameFile: (projectName: string, oldFileName: string, newFileName: string) => void
@@ -94,6 +104,8 @@ export const ProjectGroup = memo(function ProjectGroup({
   isMenuOpen,
   onOpenMenu,
   onCloseMenu,
+  openFileMenu,
+  onOpenFileMenu,
   onToggleSelected,
   onCreateFile,
   onRenameFile,
@@ -109,7 +121,6 @@ export const ProjectGroup = memo(function ProjectGroup({
   archivedFileNames = NO_ARCHIVED_FILES,
   onToggleFileArchived,
 }: ProjectGroupProps): JSX.Element {
-  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 })
   // True while a compatible drag hovers this project — drives the drop
   // highlight without touching global state.
   const [isDropTarget, setIsDropTarget] = useState(false)
@@ -120,8 +131,8 @@ export const ProjectGroup = memo(function ProjectGroup({
   const fileNames = useMemo(() => Object.keys(files), [files])
   // Archive feature (files): each project group independently shows/hides
   // its own archived files — deliberately not lifted into shared state like
-  // openMenuProject, since this is inline content with no cross-project
-  // exclusivity to coordinate (unlike a floating menu overlay).
+  // the sidebar's `openMenu` slot, since this is inline content with no
+  // cross-project exclusivity to coordinate (unlike a floating menu overlay).
   const [showArchivedFiles, setShowArchivedFiles] = useState(false)
   const visibleFileNames = useMemo(
     () =>
@@ -133,10 +144,25 @@ export const ProjectGroup = memo(function ProjectGroup({
     [fileNames, archivedFileNames],
   )
 
-  const menuId = `project-menu-${projectName}`
-  const menuButtonId = `project-menu-button-${projectName}`
-  const menuRef = useRef<HTMLDivElement>(null)
+  const {
+    triggerId: menuButtonId,
+    menuId,
+    menuRef,
+    menuPosition,
+    toggleMenu,
+  } = useDropdownMenu(isMenuOpen, () => onOpenMenu(projectName), onCloseMenu)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // A file's dropdown menu (unlike this project's own, a sibling of the
+  // collapsible .project-files below) renders INSIDE .project-files, so
+  // collapsing this project would take it to `display: none` — hidden and
+  // unfocusable — while ProjectsSidebar's `openMenu` slot still thinks it's
+  // open. Left alone, re-expanding the project would then show the menu
+  // again at its old, possibly stale position with no further interaction.
+  // Closing it up front keeps the slot's state truthful to what's onscreen.
+  useEffect(() => {
+    if (!isExpanded && openFileMenu !== null) onCloseMenu()
+  }, [isExpanded, openFileMenu, onCloseMenu])
   const multiFileInputRef = useRef<HTMLInputElement>(null)
 
   const dragEnabled = Boolean(onMoveFile || onMoveProject)
@@ -146,6 +172,12 @@ export const ProjectGroup = memo(function ProjectGroup({
   }
 
   function handleHeaderKeyDown(e: KeyboardEvent) {
+    // Only when the keydown originated on the header itself, not a bubbled
+    // event from the nested "..." trigger — otherwise preventDefault() here
+    // suppresses the trigger's own native Enter/Space activation (the
+    // browser checks defaultPrevented against the original target, not
+    // this handler's own), making the menu unreachable by keyboard.
+    if (e.target !== e.currentTarget) return
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
       toggleExpanded()
@@ -208,83 +240,6 @@ export const ProjectGroup = memo(function ProjectGroup({
       onMoveFile?.(payload.project, payload.file, projectName, null)
     }
   }
-
-  // Computes the dropdown's position from the trigger button's own
-  // bounding box (issue: the menu previously had no positioning logic at
-  // all — it relied solely on `position: fixed` with no top/left, so it
-  // rendered wherever an offset-less fixed box defaults to, and its items
-  // used the generic Button component instead of `.dropdown-item`,
-  // producing a ~3x-oversized horizontal strip instead of an anchored
-  // vertical menu). Matches the prototype's showProjectMenu() math
-  // exactly: anchored just below-left of the trigger, clamped to the
-  // viewport's left edge.
-  function toggleMenu(e: MouseEvent) {
-    e.stopPropagation()
-    if (isMenuOpen) {
-      onCloseMenu()
-      return
-    }
-    const buttonEl = document.getElementById(menuButtonId)
-    const rect = buttonEl?.getBoundingClientRect()
-    if (rect) {
-      setMenuPosition({ top: rect.bottom + 4, left: Math.max(4, rect.left - 180) })
-    }
-    onOpenMenu(projectName)
-  }
-
-  // Keyboard-navigable dropdown menu (issue: the menu rendered role="menu"
-  // but had no focus management at all — no focus-on-open, no arrow-key
-  // cycling, no Escape/Tab close, no focus-return to the trigger). Mirrors
-  // the prototype's handleMenuKeydown.
-  useEffect(() => {
-    if (!isMenuOpen) return
-
-    const menuEl = menuRef.current
-    if (!menuEl) return
-
-    const items = Array.from(menuEl.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
-    items[0]?.focus()
-
-    function closeAndReturnFocus() {
-      onCloseMenu()
-      document.getElementById(menuButtonId)?.focus()
-    }
-
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        closeAndReturnFocus()
-        return
-      }
-      if (e.key === 'Tab') {
-        closeAndReturnFocus()
-        return
-      }
-      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
-      e.preventDefault()
-
-      const current = items.indexOf(document.activeElement as HTMLButtonElement)
-      const delta = e.key === 'ArrowDown' ? 1 : -1
-      const next = (current + delta + items.length) % items.length
-      items[next]?.focus()
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isMenuOpen, menuButtonId, onCloseMenu])
-
-  // Closes on any click/tap outside the menu and its trigger — losing focus
-  // to another project's "..." button, a file row, the editor, or anywhere
-  // else on the page should dismiss this menu rather than leaving it
-  // floating open.
-  useOutsideClick(
-    isMenuOpen,
-    (target) => {
-      if (menuRef.current?.contains(target)) return true
-      return Boolean(document.getElementById(menuButtonId)?.contains(target))
-    },
-    onCloseMenu,
-  )
 
   async function handleNewFile(e: MouseEvent) {
     e.stopPropagation()
@@ -535,6 +490,9 @@ export const ProjectGroup = memo(function ProjectGroup({
               isArchived={archivedFileNames.has(fileName)}
               fileNames={fileNames}
               onSelectFile={onSelectFile}
+              isMenuOpen={openFileMenu === fileName}
+              onOpenMenu={onOpenFileMenu}
+              onCloseMenu={onCloseMenu}
               onToggleSelected={onToggleSelected}
               onRenameFile={onRenameFile}
               onDeleteFile={onDeleteFile}
