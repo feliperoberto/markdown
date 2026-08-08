@@ -113,14 +113,16 @@ describe('ProjectsSidebar + useProjects', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /Novo arquivo/ }))
     expect(await screen.findByText('notes')).not.toBeNull()
 
-    // Rename the file.
+    // Rename the file, via its own "..." actions menu.
     vi.mocked(showPromptDialog).mockResolvedValueOnce('renamed-notes')
-    fireEvent.click(screen.getByRole('button', { name: 'Renomear arquivo notes' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo notes' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /Renomear arquivo/ }))
     await waitFor(() => expect(screen.queryByText('renamed-notes')).not.toBeNull())
     expect(screen.queryByText('notes')).toBeNull()
 
     // Delete the file.
-    fireEvent.click(screen.getByRole('button', { name: 'Excluir arquivo renamed-notes' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo renamed-notes' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /Excluir arquivo/ }))
     await waitFor(() => expect(screen.queryByText('renamed-notes')).toBeNull())
   })
 
@@ -279,7 +281,8 @@ describe('ProjectsSidebar + useProjects', () => {
       )
 
       onSelectionChange.mockClear()
-      fireEvent.click(screen.getByRole('button', { name: 'Arquivar arquivo notes' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo notes' }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Arquivar arquivo/ }))
 
       await waitFor(() => expect(onSelectionChange).toHaveBeenLastCalledWith([]))
     })
@@ -292,7 +295,8 @@ describe('ProjectsSidebar + useProjects', () => {
       fireEvent.click(screen.getByRole('menuitem', { name: /Novo arquivo/ }))
       expect(await screen.findByText('notes')).not.toBeNull()
 
-      fireEvent.click(screen.getByRole('button', { name: 'Arquivar arquivo notes' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo notes' }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Arquivar arquivo/ }))
 
       // Leaves the project's everyday file list...
       await waitFor(() => expect(screen.queryByText('notes')).toBeNull())
@@ -325,7 +329,8 @@ describe('ProjectsSidebar + useProjects', () => {
       renderHarness()
 
       // The default seeded project has one file, "Sem título".
-      fireEvent.click(screen.getByRole('button', { name: 'Arquivar arquivo Sem título' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo Sem título' }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Arquivar arquivo/ }))
 
       expect(
         await screen.findByText(
@@ -334,19 +339,21 @@ describe('ProjectsSidebar + useProjects', () => {
       ).not.toBeNull()
     })
 
-    it('flips the button label between Arquivar/Desarquivar without a confirm dialog', async () => {
+    it('flips the menu item label between Arquivar/Desarquivar without a confirm dialog', async () => {
       renderHarness()
 
-      fireEvent.click(screen.getByRole('button', { name: 'Arquivar arquivo Sem título' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo Sem título' }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Arquivar arquivo/ }))
       expect(showConfirmDialog).not.toHaveBeenCalled()
 
-      // Reveal it, then check the button label flipped.
+      // Reveal it, reopen its menu, then check the item label flipped.
       fireEvent.click(
         await screen.findByRole('button', { name: 'Mostrar arquivados de Meu Projeto (1)' }),
       )
-      expect(
-        await screen.findByRole('button', { name: 'Desarquivar arquivo Sem título' }),
-      ).not.toBeNull()
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Mais opções do arquivo Sem título' }),
+      )
+      expect(await screen.findByRole('menuitem', { name: /Desarquivar arquivo/ })).not.toBeNull()
     })
   })
 })
