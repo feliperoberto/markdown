@@ -1,9 +1,8 @@
 import type { JSX } from 'preact'
 import { memo } from 'preact/compat'
-import { useState } from 'preact/hooks'
 import type { ProjectFile } from './types'
 import { showPromptDialog } from './dialogs'
-import { DND_MIME, getActiveDragKind, readDrag, serializeDrag, setActiveDrag } from './dnd'
+import { stepBefore } from './dnd'
 import { Checkbox, IconButton } from '@/components'
 import { formatRelativeTime } from '@/lib/formatRelativeTime'
 import { useDropdownMenu } from '@/lib/useDropdownMenu'
@@ -16,6 +15,21 @@ export interface FileRowProps {
   /** Archive feature: hidden from the project's everyday list, shown via ProjectGroup's "Mostrar arquivados" toggler. */
   isArchived: boolean
   fileNames: string[]
+  /**
+   * This project's currently VISIBLE file order (already filtered to what's
+   * on screen — archived files excluded unless revealed) — used by the
+   * "Mover para cima/baixo" menu items to compute a step, matching what the
+   * user actually sees move. Computed and memoized by ProjectGroup.
+   */
+  visibleFileNames: string[]
+  /**
+   * Every OTHER project's name (this file's own project excluded), for the
+   * "Mover para <project>" menu items — the keyboard/non-drag path drag &
+   * drop needs alongside it (WCAG 2.1 SC 2.5.7/2.1.1: dragging needs a
+   * single-pointer, non-dragging alternative). Computed and memoized by
+   * ProjectGroup.
+   */
+  otherProjectNames: string[]
   onSelectFile: (projectName: string, fileName: string) => void
   /**
    * Whether THIS file's "..." actions menu is open. Owned by the sidebar
@@ -34,9 +48,12 @@ export interface FileRowProps {
   /** Archive feature: flips this file's archived state. */
   onToggleArchived?: (projectName: string, fileName: string) => void
   /**
-   * Drag & drop (issue #92). When provided, the row becomes draggable and
-   * a drop target: dropping a file here inserts the dragged file directly
-   * before this one (moving it across projects if needed).
+   * Drag & drop (issue #92, and its mobile follow-up: a Pointer Events
+   * rewrite so this also works from a touch gesture, not just a mouse).
+   * When provided, the row's drag handle is active and the "Mover"
+   * menu items render — see `useSidebarDnd`/`./dnd.ts`, which own the
+   * actual gesture/drop-resolution logic; this component only supplies the
+   * `data-dnd-*` identity attributes the delegated pointer handler reads.
    */
   onMoveFile?: (
     fromProject: string,
@@ -50,9 +67,9 @@ export interface FileRowProps {
 // menu (rename/archive/delete) and the multi-select checkbox used for
 // batch download. Wrapped in memo() so editing the active file's content
 // doesn't reconcile every OTHER file row in the sidebar on every
-// keystroke — effective only as long as `fileNames` is itself a stable
-// reference (see ProjectGroup, which memoizes it), since a fresh array
-// every render would defeat this.
+// keystroke — effective only as long as `fileNames`/`visibleFileNames`/
+// `otherProjectNames` are themselves stable references (see ProjectGroup,
+// which memoizes them), since a fresh array every render would defeat this.
 export const FileRow = memo(function FileRow({
   projectName,
   file,
@@ -60,6 +77,8 @@ export const FileRow = memo(function FileRow({
   isSelected,
   isArchived,
   fileNames,
+  visibleFileNames,
+  otherProjectNames,
   onSelectFile,
   isMenuOpen,
   onOpenMenu,
@@ -70,8 +89,6 @@ export const FileRow = memo(function FileRow({
   onToggleArchived,
   onMoveFile,
 }: FileRowProps): JSX.Element {
-  const [isDropTarget, setIsDropTarget] = useState(false)
-
   const {
     triggerId: menuButtonId,
     menuId,
@@ -79,47 +96,6 @@ export const FileRow = memo(function FileRow({
     menuPosition,
     toggleMenu,
   } = useDropdownMenu(isMenuOpen, () => onOpenMenu(projectName, file.name), onCloseMenu)
-
-  // --- Drag & drop (issue #92) ---
-  function handleDragStart(e: DragEvent) {
-    if (!onMoveFile) return
-    const payload = { kind: 'file' as const, project: projectName, file: file.name }
-    e.dataTransfer?.setData(DND_MIME, serializeDrag(payload))
-    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
-    setActiveDrag(payload)
-  }
-
-  function handleDragEnd() {
-    setActiveDrag(null)
-  }
-
-  function handleDragOver(e: DragEvent) {
-    // Only a file drag can land on a row (insert-before-me). Ignoring every
-    // other drag — a project drag, or a foreign OS-file/text drag — means
-    // this row never opts in as a drop target for them, so it neither shows
-    // a misleading indicator nor swallows/derails the drop.
-    if (!onMoveFile || getActiveDragKind() !== 'file') return
-    e.preventDefault()
-    // Stop the parent project group from also claiming this as a plain
-    // "append to project" drop — a row means "insert before me".
-    e.stopPropagation()
-    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
-    if (!isDropTarget) setIsDropTarget(true)
-  }
-
-  function handleDragLeave() {
-    setIsDropTarget(false)
-  }
-
-  function handleDrop(e: DragEvent) {
-    if (!onMoveFile) return
-    setIsDropTarget(false)
-    const payload = readDrag(e)
-    if (!payload || payload.kind !== 'file') return
-    e.preventDefault()
-    e.stopPropagation()
-    onMoveFile(payload.project, payload.file, projectName, file.name)
-  }
 
   function handleRowClick() {
     onSelectFile(projectName, file.name)
@@ -171,6 +147,33 @@ export const FileRow = memo(function FileRow({
     onToggleArchived?.(projectName, file.name)
   }
 
+  // --- "Mover" menu items (issue: mobile drag & drop) — the keyboard/
+  // non-drag path alongside the pointer drag handle below. Precomputed
+  // (rather than inside each handler) so the same stepBefore() result
+  // both decides whether to render the item and what to move to.
+  const moveUp = onMoveFile ? stepBefore(visibleFileNames, file.name, -1) : null
+  const moveDown = onMoveFile ? stepBefore(visibleFileNames, file.name, 1) : null
+
+  function handleMoveUp(e: MouseEvent) {
+    e.stopPropagation()
+    onCloseMenu()
+    if (moveUp) onMoveFile?.(projectName, file.name, projectName, moveUp.before)
+  }
+
+  function handleMoveDown(e: MouseEvent) {
+    e.stopPropagation()
+    onCloseMenu()
+    if (moveDown) onMoveFile?.(projectName, file.name, projectName, moveDown.before)
+  }
+
+  function handleMoveToProject(targetProject: string) {
+    return (e: MouseEvent) => {
+      e.stopPropagation()
+      onCloseMenu()
+      onMoveFile?.(projectName, file.name, targetProject, null)
+    }
+  }
+
   return (
     // Fragment, not a single wrapped div: the menu below is a SIBLING of
     // .file-item, not nested inside it — mirroring ProjectGroup's own
@@ -182,19 +185,27 @@ export const FileRow = memo(function FileRow({
     // never bubbles into the row's onClick and opens the file.
     <>
       <div
-        className={`file-item${isActive ? ' active' : ''}${isDropTarget ? ' drop-target' : ''}`}
+        className={`file-item${isActive ? ' active' : ''}`}
         role="button"
         tabIndex={0}
         aria-current={isActive ? 'true' : undefined}
-        draggable={Boolean(onMoveFile)}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
+        data-dnd-file={onMoveFile ? file.name : undefined}
+        data-dnd-file-project={onMoveFile ? projectName : undefined}
         onClick={handleRowClick}
         onKeyDown={handleRowKeyDown}
       >
+        {onMoveFile && (
+          // Pointer-only affordance (issue: mobile drag & drop) — a plain
+          // touch-target grip, not a focusable control. `aria-hidden` +
+          // no `tabindex`: keyboard users reach the same capability via
+          // the "Mover" menu items below, so this adds zero new Tab
+          // stops to every row (see docs/accessibility-notes.md).
+          // `touch-action: none` (global.css) is what keeps a finger here
+          // from also panning the sidebar while dragging.
+          <span className="drag-handle" data-dnd-handle="file" aria-hidden="true">
+            ⠿
+          </span>
+        )}
         <span role="presentation" onClick={(e) => e.stopPropagation()}>
           <Checkbox
             checked={isSelected}
@@ -230,6 +241,7 @@ export const FileRow = memo(function FileRow({
         <IconButton
           id={menuButtonId}
           variant="compact"
+          className="file-menu-trigger"
           icon="⋮"
           label={`Mais opções do arquivo ${file.name}`}
           ariaHasPopup="menu"
@@ -249,7 +261,7 @@ export const FileRow = memo(function FileRow({
           style={{ top: `${menuPosition.top}px`, left: `${menuPosition.left}px` }}
         >
           <button type="button" className="dropdown-item" role="menuitem" onClick={handleRename}>
-            ✏️ Renomear arquivo
+            ✏️ Renomear
           </button>
           {onToggleArchived && (
             <button
@@ -258,16 +270,43 @@ export const FileRow = memo(function FileRow({
               role="menuitem"
               onClick={handleToggleArchived}
             >
-              {isArchived ? '📂 Desarquivar arquivo' : '📦 Arquivar arquivo'}
+              {isArchived ? '📂 Desarquivar' : '📦 Arquivar'}
             </button>
           )}
+          {moveUp && (
+            <button type="button" className="dropdown-item" role="menuitem" onClick={handleMoveUp}>
+              ⬆ Mover para cima
+            </button>
+          )}
+          {moveDown && (
+            <button
+              type="button"
+              className="dropdown-item"
+              role="menuitem"
+              onClick={handleMoveDown}
+            >
+              ⬇ Mover para baixo
+            </button>
+          )}
+          {onMoveFile &&
+            otherProjectNames.map((targetProject) => (
+              <button
+                key={targetProject}
+                type="button"
+                className="dropdown-item"
+                role="menuitem"
+                onClick={handleMoveToProject(targetProject)}
+              >
+                {`📁 Mover para "${targetProject}"`}
+              </button>
+            ))}
           <button
             type="button"
             className="dropdown-item danger"
             role="menuitem"
             onClick={handleDelete}
           >
-            🗑 Excluir arquivo
+            🗑 Excluir
           </button>
         </div>
       )}

@@ -3,7 +3,7 @@ import { memo } from 'preact/compat'
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { FileRow } from './FileRow'
 import { showConfirmDialog, showPromptDialog } from './dialogs'
-import { DND_MIME, getActiveDragKind, readDrag, serializeDrag, setActiveDrag } from './dnd'
+import { stepBefore } from './dnd'
 import type { ProjectFiles } from './types'
 import { IconButton } from '@/components'
 import { useDropdownMenu } from '@/lib/useDropdownMenu'
@@ -24,6 +24,14 @@ export interface ProjectGroupProps {
   currentFile: string | null
   selectedFiles: ReadonlySet<string>
   projectNames: string[]
+  /**
+   * The sidebar's currently VISIBLE project order (already filtered to
+   * what's on screen — archived projects excluded unless revealed) — used
+   * by this project's own "Mover projeto para cima/baixo" menu items to
+   * compute a step, matching what the user actually sees move. Computed
+   * and memoized by ProjectsSidebar.
+   */
+  visibleProjectNames: string[]
   onSelectFile: (projectName: string, fileName: string) => void
   /** Toggles this project's expanded state; takes the name so the callback stays memo-stable. */
   onToggleExpanded: (projectName: string) => void
@@ -64,7 +72,9 @@ export interface ProjectGroupProps {
    * capability regression, not a fix.
    */
   onUploadMultipleFiles?: (projectName: string, files: File[]) => void
-  // Drag & drop (issue #92): reorder/move files and reorder projects.
+  // Drag & drop (issue #92, and its mobile follow-up: a Pointer Events
+  // rewrite — see useSidebarDnd.ts/dnd.ts) — reorder/move files and
+  // reorder projects.
   onMoveFile?: (
     fromProject: string,
     fileName: string,
@@ -99,6 +109,7 @@ export const ProjectGroup = memo(function ProjectGroup({
   currentFile,
   selectedFiles,
   projectNames,
+  visibleProjectNames,
   onSelectFile,
   onToggleExpanded,
   isMenuOpen,
@@ -121,9 +132,6 @@ export const ProjectGroup = memo(function ProjectGroup({
   archivedFileNames = NO_ARCHIVED_FILES,
   onToggleFileArchived,
 }: ProjectGroupProps): JSX.Element {
-  // True while a compatible drag hovers this project — drives the drop
-  // highlight without touching global state.
-  const [isDropTarget, setIsDropTarget] = useState(false)
   // Memoized so FileRow's memo() isn't defeated by a fresh array every
   // render (Object.keys always returns a new array reference). Kept
   // unfiltered — still feeds handleNewFile's/FileRow's rename-collision
@@ -142,6 +150,13 @@ export const ProjectGroup = memo(function ProjectGroup({
   const archivedFileCount = useMemo(
     () => fileNames.filter((name) => archivedFileNames.has(name)).length,
     [fileNames, archivedFileNames],
+  )
+  // Every OTHER project, for each file row's "Mover para <project>" menu
+  // items — memoized so a fresh array every render doesn't defeat FileRow's
+  // memo() for every row in this project on every unrelated re-render.
+  const otherProjectNames = useMemo(
+    () => projectNames.filter((name) => name !== projectName),
+    [projectNames, projectName],
   )
 
   const {
@@ -165,8 +180,6 @@ export const ProjectGroup = memo(function ProjectGroup({
   }, [isExpanded, openFileMenu, onCloseMenu])
   const multiFileInputRef = useRef<HTMLInputElement>(null)
 
-  const dragEnabled = Boolean(onMoveFile || onMoveProject)
-
   function toggleExpanded() {
     onToggleExpanded(projectName)
   }
@@ -181,63 +194,6 @@ export const ProjectGroup = memo(function ProjectGroup({
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
       toggleExpanded()
-    }
-  }
-
-  // --- Drag & drop (issue #92) ---
-  // The project header is the drag handle for reordering projects; the
-  // whole group is a drop zone that accepts either a project (reorder,
-  // dropping before this one) or a file (move into this project, appended).
-  function handleHeaderDragStart(e: DragEvent) {
-    if (!onMoveProject || isArchived) return
-    const payload = { kind: 'project' as const, project: projectName }
-    e.dataTransfer?.setData(DND_MIME, serializeDrag(payload))
-    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
-    setActiveDrag(payload)
-  }
-
-  function handleHeaderDragEnd() {
-    setActiveDrag(null)
-  }
-
-  function handleGroupDragOver(e: DragEvent) {
-    // Opt in only for one of our own drags (a file to move in, or a project
-    // to reorder). getData is unreadable here, so the drop handler still
-    // re-validates by kind — but consulting the active-drag flag first keeps
-    // foreign OS-file/text drags from highlighting the group or triggering a
-    // navigating drop.
-    if (!dragEnabled || getActiveDragKind() === null) return
-    // Archived projects sit outside project-reorder (see handleHeaderDragStart
-    // and handleGroupDrop below) but still accept incoming file drops.
-    if (isArchived && getActiveDragKind() === 'project') return
-    e.preventDefault()
-    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
-    if (!isDropTarget) setIsDropTarget(true)
-  }
-
-  function handleGroupDragLeave(e: DragEvent) {
-    // Ignore leaves fired while moving between this group's own children.
-    if (e.currentTarget instanceof Node && e.relatedTarget instanceof Node) {
-      if ((e.currentTarget as Node).contains(e.relatedTarget as Node)) return
-    }
-    setIsDropTarget(false)
-  }
-
-  function handleGroupDrop(e: DragEvent) {
-    if (!dragEnabled) return
-    setIsDropTarget(false)
-    const payload = readDrag(e)
-    if (!payload) return
-    // Archived projects sit outside reordering — dropping a dragged project
-    // "before" a hidden one is not a placement the user can see happen.
-    if (payload.kind === 'project' && isArchived) return
-    e.preventDefault()
-    if (payload.kind === 'project') {
-      onMoveProject?.(payload.project, projectName)
-    } else {
-      // Append into this project (no specific before-file when dropping on
-      // the group itself rather than a row).
-      onMoveFile?.(payload.project, payload.file, projectName, null)
     }
   }
 
@@ -332,25 +288,50 @@ export const ProjectGroup = memo(function ProjectGroup({
     void handleRenameProject(e)
   }
 
+  // --- "Mover projeto" menu items (issue: mobile drag & drop) — the
+  // keyboard/non-drag path alongside the pointer drag handle below.
+  // Archived projects sit outside reordering, same as the drag handle
+  // being disabled for them (see the header's data-dnd-handle below).
+  const moveUp =
+    onMoveProject && !isArchived ? stepBefore(visibleProjectNames, projectName, -1) : null
+  const moveDown =
+    onMoveProject && !isArchived ? stepBefore(visibleProjectNames, projectName, 1) : null
+
+  function handleMoveProjectUp(e: MouseEvent) {
+    e.stopPropagation()
+    onCloseMenu()
+    if (moveUp) onMoveProject?.(projectName, moveUp.before)
+  }
+
+  function handleMoveProjectDown(e: MouseEvent) {
+    e.stopPropagation()
+    onCloseMenu()
+    if (moveDown) onMoveProject?.(projectName, moveDown.before)
+  }
+
   return (
     <div
-      className={`project-group${isArchived ? ' archived' : ''}${isDropTarget ? ' drop-target' : ''}`}
-      onDragOver={handleGroupDragOver}
-      onDragLeave={handleGroupDragLeave}
-      onDrop={handleGroupDrop}
+      className={`project-group${isArchived ? ' archived' : ''}`}
+      data-dnd-group={onMoveFile || onMoveProject ? projectName : undefined}
+      data-dnd-archived={isArchived ? '1' : undefined}
     >
       <div
         className={`project-header${isActiveProject ? ' active' : ''}`}
         role="button"
         tabIndex={0}
         aria-expanded={isExpanded}
-        draggable={Boolean(onMoveProject) && !isArchived}
-        onDragStart={handleHeaderDragStart}
-        onDragEnd={handleHeaderDragEnd}
         onClick={toggleExpanded}
         onDblClick={handleHeaderDoubleClick}
         onKeyDown={handleHeaderKeyDown}
       >
+        {onMoveProject && !isArchived && (
+          // Pointer-only affordance — see FileRow's identical handle for
+          // the full reasoning (aria-hidden, no tabindex, the "Mover
+          // projeto" menu items below are the keyboard-equivalent path).
+          <span className="drag-handle" data-dnd-handle="project" aria-hidden="true">
+            ⠿
+          </span>
+        )}
         <span className={`project-toggle${isExpanded ? ' expanded' : ''}`} aria-hidden="true">
           ▶
         </span>
@@ -440,6 +421,26 @@ export const ProjectGroup = memo(function ProjectGroup({
               {isArchived ? '📂 Desarquivar projeto' : '📦 Arquivar projeto'}
             </button>
           )}
+          {moveUp && (
+            <button
+              type="button"
+              className="dropdown-item"
+              role="menuitem"
+              onClick={handleMoveProjectUp}
+            >
+              ⬆ Mover projeto para cima
+            </button>
+          )}
+          {moveDown && (
+            <button
+              type="button"
+              className="dropdown-item"
+              role="menuitem"
+              onClick={handleMoveProjectDown}
+            >
+              ⬇ Mover projeto para baixo
+            </button>
+          )}
           <button
             type="button"
             className="dropdown-item danger"
@@ -489,6 +490,8 @@ export const ProjectGroup = memo(function ProjectGroup({
               isSelected={selectedFiles.has(fileName)}
               isArchived={archivedFileNames.has(fileName)}
               fileNames={fileNames}
+              visibleFileNames={visibleFileNames}
+              otherProjectNames={otherProjectNames}
               onSelectFile={onSelectFile}
               isMenuOpen={openFileMenu === fileName}
               onOpenMenu={onOpenFileMenu}

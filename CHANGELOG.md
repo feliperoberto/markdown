@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Reordering files and projects in the sidebar: drag a file's or project's
+  handle to a new position, or use the "⬆ Mover para cima"/"⬇ Mover para
+  baixo"/"📁 Mover para" items in its "⋮" menu — the menu path also covers
+  moving a file into another project without a drag.
+
+### Changed
+
+- Sidebar drag & drop is rewritten on Pointer Events instead of HTML5
+  Drag-and-Drop, so reordering files and projects now works on touch
+  devices, not just with a mouse. A small `⠿` grip on each row/header is
+  the drag affordance; the rest of the row still taps to open/expand and
+  scrolls normally. Every "⋮" menu also gained "Mover" items as a
+  non-drag, keyboard-accessible equivalent (WCAG 2.1 SC 2.5.7/2.1.1).
+- A file's "⋮" actions menu trigger is now hidden unless that file is the
+  active one (or its menu is open), revealing on hover only on
+  pointer-capable/hover-capable devices — cutting down on visual noise
+  from a permanently-visible "⋮" on every row.
+- Shortened the file "⋮" menu's item labels ("Renomear", "Arquivar"/
+  "Desarquivar", "Excluir") by dropping the redundant word "arquivo" —
+  the menu itself is already announced as "Ações do arquivo <nome>".
+
 - A notice when a new version of the app is available, with an "Atualizar"
   action, instead of the app updating itself silently in the background.
   The installed app version is now shown in the Google Drive/Config panel.
@@ -51,6 +72,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it's replaced before release rather than patched, giving files and
   projects one consistent, deliberate way to reach their actions on every
   device.
+
+### Fixed
+
+- Creating a new file now selects it immediately, so the editor shows the
+  new file instead of leaving whatever was open before. A collapsed
+  project auto-expands and the mobile drawer closes so the newly active
+  file is actually visible. Importing multiple files at once still leaves
+  the current selection alone.
+- Renaming or moving a file (or renaming a project), followed by a Google
+  Drive sync, no longer resurrects the old name as a duplicate. The sync
+  merge previously had no way to tell "deleted on this device" apart from
+  "never seen this device's edit yet", so a stale remote copy under the
+  old name kept winning the union and syncing back
+  ([ADR-0004](./docs/adr/0004-sync-tombstones.md)).
 
 ## [0.1.0] - 2026-07-05
 

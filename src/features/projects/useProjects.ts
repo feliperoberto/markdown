@@ -6,14 +6,32 @@ import {
   loadArchivedProjects,
   loadLastEditedFile,
   loadProjects,
+  loadTombstones,
   saveArchivedFiles,
   saveArchivedProjects,
   saveLastEditedFile,
   saveProjects,
+  saveTombstones,
 } from './storage'
+import {
+  clearFileTombstone,
+  clearProjectTombstone,
+  mergeTombstones,
+  normalizeTombstones,
+  pruneTombstones,
+  recordFileTombstone,
+  recordProjectTombstone,
+  type Tombstones,
+} from './tombstones'
 import { normalizeProjectsState } from './validate'
 import type { ProjectsState } from './types'
 import { useToast } from '@/components'
+
+// A tombstone only needs to outlive the longest plausible gap between two
+// devices syncing — not the life of the app — so the sidecar doesn't grow
+// forever. Generous on purpose: a device that's been offline for weeks
+// should still have its deletions propagate correctly on reconnect.
+const TOMBSTONE_TTL_MS = 90 * 24 * 60 * 60 * 1000
 
 // Resolves which file to open on mount (issue #92): the last-edited file if
 // it's still present, otherwise the first available file. `null` only when
@@ -62,7 +80,12 @@ export interface UseProjectsResult {
   createProject: (name: string) => void
   renameProject: (oldName: string, newName: string) => void
   deleteProject: (name: string) => void
-  createFile: (projectName: string, fileName: string, content?: string) => void
+  createFile: (
+    projectName: string,
+    fileName: string,
+    content?: string,
+    options?: { select?: boolean },
+  ) => void
   renameFile: (projectName: string, oldFileName: string, newFileName: string) => void
   deleteFile: (projectName: string, fileName: string) => void
   updateFileContent: (projectName: string, fileName: string, content: string) => void
@@ -89,13 +112,20 @@ export interface UseProjectsResult {
   /** Flips a file's archived state (archive if visible, unarchive if archived). */
   toggleFileArchived: (projectName: string, fileName: string) => void
   importProjects: (incoming: ProjectsState) => void
-  // Accepts `unknown` (not `ProjectsState`) because the caller's source is
-  // untrusted external data (a Drive pull) — normalizeProjectsState
-  // validates the shape internally rather than the caller casting past
-  // the type system before this even sees it. Returns the merged result
-  // (always, even when only the remote side needed catching up) so the
-  // caller can push it straight back without a second round-trip.
-  reconcileWithRemote: (remote: unknown) => ProjectsState
+  // Accepts `unknown` (not `ProjectsState`/`Tombstones`) because the
+  // caller's source is untrusted external data (a Drive pull) —
+  // normalizeProjectsState/normalizeTombstones validate the shape
+  // internally rather than the caller casting past the type system before
+  // this even sees it. Returns the merged result (always, even when only
+  // the remote side needed catching up) so the caller can push it straight
+  // back without a second round-trip; the returned tombstones are the
+  // combined set (local + remote, latest `deletedAt` wins), which the
+  // caller must push alongside `projects` for a deletion to actually
+  // propagate to a device that hasn't seen it yet.
+  reconcileWithRemote: (
+    remote: unknown,
+    remoteTombstones?: unknown,
+  ) => { projects: ProjectsState; tombstones: Tombstones }
 }
 
 // Owns the projects/files state for the app and persists every mutation
@@ -113,16 +143,19 @@ export function useProjects(): UseProjectsResult {
     projects: ProjectsState
     archived: Set<string>
     archivedFiles: Set<string>
+    tombstones: Tombstones
     selection: { project: string | null; file: string | null }
   } | null>(null)
   if (initialRef.current === null) {
     const loaded = loadProjects()
     const archived = new Set(model.pruneArchived(loadArchivedProjects(), loaded))
     const archivedFiles = new Set(model.pruneArchivedFiles(loadArchivedFiles(), loaded))
+    const tombstones = pruneTombstones(loadTombstones(), new Date().toISOString(), TOMBSTONE_TTL_MS)
     initialRef.current = {
       projects: loaded,
       archived,
       archivedFiles,
+      tombstones,
       selection: resolveInitialSelection(loaded, archived, archivedFiles),
     }
   }
@@ -134,6 +167,11 @@ export function useProjects(): UseProjectsResult {
   const [currentFile, setCurrentFile] = useState<string | null>(initialRef.current.selection.file)
   const [archivedProjects, setArchivedProjects] = useState<Set<string>>(initialRef.current.archived)
   const [archivedFiles, setArchivedFiles] = useState<Set<string>>(initialRef.current.archivedFiles)
+  // Rename/delete tombstones (issue: a renamed or deleted file/project
+  // reappearing as a duplicate after Drive sync) — see tombstones.ts and
+  // model.mergeProjectsByFreshness's `tombstones` param, the only place
+  // this is actually read.
+  const [tombstones, setTombstones] = useState<Tombstones>(initialRef.current.tombstones)
   const showToast = useToast()
 
   // Write-through persistence for the archived set, mirroring
@@ -167,6 +205,13 @@ export function useProjects(): UseProjectsResult {
       return next === prev ? prev : new Set(next)
     })
   }, [projects])
+
+  // Write-through persistence for tombstones, mirroring the archived-files
+  // effect above — best-effort, since losing this only risks a rename/
+  // delete not propagating to Drive, never local data.
+  useEffect(() => {
+    saveTombstones(tombstones)
+  }, [tombstones])
 
   // Remember the open file across visits (issue #92). Runs on every
   // selection change — including the setCurrentFile updates that rename/
@@ -269,6 +314,15 @@ export function useProjects(): UseProjectsResult {
           const next = model.renameProjectInArchivedFiles(prev, oldName, newName)
           return next === prev ? prev : new Set(next)
         })
+        // A rename is a key move (project identity is the object key) — the
+        // old key survives in Drive until the next sync tells it otherwise,
+        // and without a tombstone `mergeProjectsByFreshness` would resurrect
+        // it as a duplicate the next time it's pulled. See tombstones.ts.
+        const deletedAt = new Date().toISOString()
+        setTombstones((prev) => {
+          const cleared = clearProjectTombstone(prev, newName)
+          return recordProjectTombstone(cleared, oldName, deletedAt)
+        })
       }
       showToast('✅ Projeto renomeado', 'success')
     },
@@ -278,7 +332,8 @@ export function useProjects(): UseProjectsResult {
   const deleteProject = useCallback(
     (name: string) => {
       backupProjects(projects)
-      const saved = persist(model.deleteProject(projects, name))
+      const next = model.deleteProject(projects, name)
+      const saved = persist(next)
       // Both updaters read the same functional-update mechanism so they
       // can't disagree about whether `name` was the active project —
       // previously `setCurrentFile` compared against the closed-over
@@ -297,7 +352,7 @@ export function useProjects(): UseProjectsResult {
       // (e.g. quota exceeded) still un-archives a project that was never
       // actually removed from `projects`, and it silently reappears in the
       // everyday list on the next render.
-      if (saved) {
+      if (saved && next !== projects) {
         setArchivedProjects((prev) => {
           if (!prev.has(name)) return prev
           const next = new Set(prev)
@@ -310,6 +365,10 @@ export function useProjects(): UseProjectsResult {
           const next = model.dropProjectFromArchivedFiles(prev, name)
           return next === prev ? prev : new Set(next)
         })
+        // Same reasoning as renameProject's tombstone: without it, a Drive
+        // pull that still has this project (not yet told about the
+        // deletion) would resurrect it via mergeProjectsByFreshness's union.
+        setTombstones((prev) => recordProjectTombstone(prev, name, new Date().toISOString()))
       }
       showToast('🗑 Projeto excluído', 'success')
     },
@@ -405,8 +464,33 @@ export function useProjects(): UseProjectsResult {
   )
 
   const createFile = useCallback(
-    (projectName: string, fileName: string, content = '') => {
-      persist(model.createFile(projects, projectName, fileName, content))
+    (projectName: string, fileName: string, content = '', options?: { select?: boolean }) => {
+      const next = model.createFile(projects, projectName, fileName, content)
+      // Same reference back means the model refused (unknown project, empty
+      // or duplicate name) — nothing to persist, and no toast for a create
+      // that didn't happen.
+      if (next === projects) return
+      // Gated on the write actually landing — same precedent as every
+      // other mutator here. Previously this ran unconditionally and
+      // discarded persist()'s return value, so the success toast fired
+      // even when the save failed (persist() already shows its own error
+      // toast in that case).
+      if (!persist(next)) return
+      // A new file becomes the active one by default — matching
+      // createProject below — so it's immediately visible instead of
+      // leaving the editor on whatever was open before. Multi-file
+      // callers (e.g. importing several files at once) opt out with
+      // `{ select: false }` so selection doesn't jump to whichever
+      // file happened to import last.
+      if (options?.select !== false) {
+        setCurrentProject(projectName)
+        setCurrentFile(fileName)
+      }
+      // Belt-and-braces (see tombstones.ts's clearFileTombstone doc
+      // comment): if this name was deleted earlier and still carries a
+      // tombstone, drop it so the sidecar doesn't keep a stale entry for a
+      // key that's live again.
+      setTombstones((prev) => clearFileTombstone(prev, projectName, fileName))
       showToast('✅ Novo arquivo', 'success')
     },
     [projects, persist, showToast],
@@ -433,6 +517,15 @@ export function useProjects(): UseProjectsResult {
           const next = model.renameFileInArchivedFiles(prev, projectName, oldFileName, newFileName)
           return next === prev ? prev : new Set(next)
         })
+        // Same reasoning as renameProject's tombstone, one level down: a
+        // rename is a key move, so the old (project, oldFileName) key
+        // survives in Drive until the next sync — without a tombstone it
+        // resurrects as a duplicate (the reported bug this fixes).
+        const deletedAt = new Date().toISOString()
+        setTombstones((prev) => {
+          const cleared = clearFileTombstone(prev, projectName, newFileName)
+          return recordFileTombstone(cleared, projectName, oldFileName, deletedAt)
+        })
       }
       showToast('✅ Arquivo renomeado', 'success')
     },
@@ -442,7 +535,8 @@ export function useProjects(): UseProjectsResult {
   const deleteFile = useCallback(
     (projectName: string, fileName: string) => {
       backupProjects(projects)
-      const saved = persist(model.deleteFile(projects, projectName, fileName))
+      const next = model.deleteFile(projects, projectName, fileName)
+      const saved = persist(next)
       if (currentProject === projectName && currentFile === fileName) {
         setCurrentFile(null)
       }
@@ -450,7 +544,7 @@ export function useProjects(): UseProjectsResult {
       // deleteProject's inline archivedProjects drop. Gated on the write
       // actually landing — otherwise a failed delete still un-archives a
       // file that was never actually removed.
-      if (saved) {
+      if (saved && next !== projects) {
         const key = model.encodeArchivedFileKey(projectName, fileName)
         setArchivedFiles((prev) => {
           if (!prev.has(key)) return prev
@@ -458,6 +552,12 @@ export function useProjects(): UseProjectsResult {
           next.delete(key)
           return next
         })
+        // Same reasoning as renameFile's tombstone: without it, a Drive
+        // pull that still has this file (not yet told about the deletion)
+        // would resurrect it via mergeProjectsByFreshness's union.
+        setTombstones((prev) =>
+          recordFileTombstone(prev, projectName, fileName, new Date().toISOString()),
+        )
       }
       showToast('🗑 Arquivo excluído', 'success')
     },
@@ -506,6 +606,17 @@ export function useProjects(): UseProjectsResult {
           const rekeyed = model.moveFileInArchivedFiles(prev, fromProject, fileName, toProject)
           return rekeyed === prev ? prev : new Set(rekeyed)
         })
+        // A cross-project move is also a key move (the file leaves
+        // fromProject's key space) — same reasoning as renameFile's
+        // tombstone. A same-project move is a pure reorder, not a key
+        // move, so it needs none.
+        if (fromProject !== toProject) {
+          const deletedAt = new Date().toISOString()
+          setTombstones((prev) => {
+            const cleared = clearFileTombstone(prev, toProject, fileName)
+            return recordFileTombstone(cleared, fromProject, fileName, deletedAt)
+          })
+        }
       }
     },
     [projects, persist, currentFile, showToast],
@@ -533,25 +644,39 @@ export function useProjects(): UseProjectsResult {
   // Smart-sync reconciliation: merges a just-pulled remote snapshot into
   // local state by per-file freshness (newer `timestamp` wins; files
   // unique to either side are always kept) instead of blindly favoring
-  // one side — see `model.mergeProjectsByFreshness`. `remote` is
-  // untrusted external data (a Drive pull, possibly hand-edited or
-  // written by a different schema version), so it's normalized first:
-  // malformed projects/files are dropped, names are structurally
-  // sanitized, and `file.name`/`size` are recomputed rather than trusted.
+  // one side — see `model.mergeProjectsByFreshness`. `remote`/
+  // `remoteTombstones` are untrusted external data (a Drive pull, possibly
+  // hand-edited or written by a different schema version), so both are
+  // normalized first: malformed projects/files are dropped, names are
+  // structurally sanitized, `file.name`/`size` are recomputed rather than
+  // trusted, and tombstone entries that don't decode or parse as an ISO
+  // timestamp are dropped. Tombstones from both sides are combined (latest
+  // `deletedAt` wins per key) before merging, so a deletion recorded on
+  // either device — this one or whichever last pushed — is what suppresses
+  // a stale remote-only entry from resurrecting; see model.
+  // mergeProjectsByFreshness's `tombstones` param, the actual fix for a
+  // renamed/deleted file or project reappearing as a duplicate after sync.
   // Always returns the merged result — even when only the remote side
   // needed catching up — so the caller (the Drive sync panel) can push it
   // straight back without a second pull/merge round-trip.
   const reconcileWithRemote = useCallback(
-    (remote: unknown) => {
+    (remote: unknown, remoteTombstones?: unknown) => {
       backupProjects(projects)
+      const combinedTombstones = pruneTombstones(
+        mergeTombstones(tombstones, normalizeTombstones(remoteTombstones)),
+        new Date().toISOString(),
+        TOMBSTONE_TTL_MS,
+      )
       const { merged, localChanged } = model.mergeProjectsByFreshness(
         projects,
         normalizeProjectsState(remote),
+        combinedTombstones,
       )
       if (localChanged) persist(merged)
-      return merged
+      if (combinedTombstones !== tombstones) setTombstones(combinedTombstones)
+      return { projects: merged, tombstones: combinedTombstones }
     },
-    [projects, persist],
+    [projects, persist, tombstones],
   )
 
   return {

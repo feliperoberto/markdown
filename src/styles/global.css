@@ -300,9 +300,17 @@ body {
   border-color: rgba(255, 255, 255, 0.13);
 }
 
-/* Drag & drop feedback (issue #92): highlight the project group or file
-   row currently under a compatible drag. */
-.project-group.drop-target {
+/* Drag & drop feedback (issue #92, and its mobile follow-up — see
+   useSidebarDnd.ts). `[data-drop-target]` (an attribute the component
+   never renders in JSX), not a className: useSidebarDnd sets/clears it
+   imperatively on the raw DOM element during a drag, entirely outside
+   Preact's render cycle. A className computed from props would get wiped
+   by the very next re-render — and autosave bumps a file's `timestamp` on
+   every keystroke, so re-renders happen mid-drag routinely — silently
+   dropping the highlight. An attribute Preact never touches survives that
+   reconciliation because it's simply absent from both the old and new
+   vnode being diffed. */
+.project-group[data-drop-target] {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent) inset;
 }
@@ -319,18 +327,9 @@ body {
   opacity: 1;
 }
 
-.file-item.drop-target {
+.file-item[data-drop-target] {
   background: rgba(255, 255, 255, 0.08);
   box-shadow: 0 -2px 0 -1px var(--accent) inset;
-}
-
-/* The project header doubles as the drag handle for reordering projects. */
-.project-header[draggable='true'] {
-  cursor: grab;
-}
-
-.project-header[draggable='true']:active {
-  cursor: grabbing;
 }
 
 .project-header {
@@ -395,6 +394,45 @@ body {
   opacity: 0.7;
 }
 
+/* Pointer-based drag handle (issue: mobile DnD) — shared by file rows and
+   project headers. `touch-action: none` is what lets a finger elsewhere on
+   the row/header keep panning the sidebar natively while a finger ON the
+   handle starts a drag instead; the `-webkit-*` pair stops iOS Safari's
+   text-selection magnifier/callout from claiming a press-and-hold here.
+   Sized to WCAG 2.2 SC 2.5.8's 24x24px minimum touch target. */
+.drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  color: var(--cream-soft);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+body[data-dragging] {
+  cursor: grabbing;
+  user-select: none;
+}
+
+/* The imperatively-created drag ghost (useSidebarDnd.ts) — appended to
+   document.body, not inside the sidebar, so it isn't clipped by
+   .projects-sidebar's overflow:hidden or mispositioned by its transform
+   when hidden on mobile (a transformed ancestor becomes the containing
+   block for a `position: fixed` descendant). */
+.drag-ghost {
+  pointer-events: none;
+}
+
 .file-item {
   display: flex;
   align-items: center;
@@ -425,6 +463,30 @@ body {
   height: 60%;
   background: var(--accent);
   border-radius: 0 2px 2px 0;
+}
+
+/* The "..." trigger only shows on the active row by default — visibility,
+   not opacity/transform, so it's removed from hit testing and Playwright's
+   toBeVisible() reports it correctly (the old clipped-chip bug this
+   sidesteps, see the file-row-actions e2e spec). Layout stays reserved, so
+   rows don't reflow as the active file changes. */
+.file-item .file-menu-trigger {
+  visibility: hidden;
+}
+
+.file-item.active .file-menu-trigger,
+.file-item .file-menu-trigger[aria-expanded='true'],
+.file-item .file-menu-trigger:focus-visible {
+  visibility: visible;
+}
+
+/* Guarded to real pointer devices only: an unguarded :hover is what let
+   touch's sticky emulated hover latch the old swipe/hover reveal open
+   (the #104 regression) — this is the root-cause fix, not a patch. */
+@media (hover: hover) and (pointer: fine) {
+  .file-item:hover .file-menu-trigger {
+    visibility: visible;
+  }
 }
 
 .file-checkbox {

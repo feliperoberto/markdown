@@ -432,4 +432,110 @@ describe('mergeProjectsByFreshness (smart sync)', () => {
     expect(result.localChanged).toBe(false)
     expect(result.remoteChanged).toBe(false)
   })
+
+  // Tombstones (issue: a renamed/deleted file or project reappearing as a
+  // duplicate after Drive sync). A rename is a key move — the old key
+  // survives remotely until the next sync, so plain union (the tests
+  // above) would resurrect it forever; a tombstone lets the merge tell
+  // "never told about the deletion" apart from "genuinely recreated since".
+  describe('with tombstones', () => {
+    it('drops a remote-only file whose tombstone is newer than the remote content', () => {
+      const local: ProjectsState = { A: {} }
+      const remote: ProjectsState = {
+        A: { old: fileAt('old', 'stale', '2026-01-01T00:00:00.000Z') },
+      }
+      const tombstones = { [model.encodeArchivedFileKey('A', 'old')]: '2026-01-02T00:00:00.000Z' }
+
+      const result = model.mergeProjectsByFreshness(local, remote, tombstones)
+
+      expect(result.merged.A).toEqual({})
+      expect(result.remoteChanged).toBe(true)
+      expect(result.localChanged).toBe(false)
+    })
+
+    it('keeps a remote-only file whose content is newer than its tombstone (recreated/edited since)', () => {
+      const local: ProjectsState = { A: {} }
+      const remote: ProjectsState = {
+        A: { old: fileAt('old', 'fresh', '2026-01-03T00:00:00.000Z') },
+      }
+      const tombstones = { [model.encodeArchivedFileKey('A', 'old')]: '2026-01-02T00:00:00.000Z' }
+
+      const result = model.mergeProjectsByFreshness(local, remote, tombstones)
+
+      expect(result.merged.A?.old?.content).toBe('fresh')
+      expect(result.localChanged).toBe(true)
+    })
+
+    it('never filters a local-only entry, even with a tombstone for its key', () => {
+      const local: ProjectsState = {
+        A: { mine: fileAt('mine', 'kept', '2026-01-01T00:00:00.000Z') },
+      }
+      const remote: ProjectsState = { A: {} }
+      // A stale/unrelated tombstone for the same key must not suppress the
+      // local file — tombstones only ever suppress remote-only entries.
+      const tombstones = { [model.encodeArchivedFileKey('A', 'mine')]: '9999-01-01T00:00:00.000Z' }
+
+      const result = model.mergeProjectsByFreshness(local, remote, tombstones)
+
+      expect(result.merged.A?.mine?.content).toBe('kept')
+      expect(result.remoteChanged).toBe(true)
+    })
+
+    it('drops a whole remote-only project whose tombstone postdates every one of its remote files', () => {
+      const local: ProjectsState = {}
+      const remote: ProjectsState = {
+        Old: {
+          a: fileAt('a', 'stale', '2026-01-01T00:00:00.000Z'),
+          b: fileAt('b', 'also stale', '2026-01-01T00:00:00.000Z'),
+        },
+      }
+      const tombstones = { [model.encodeProjectTombstoneKey('Old')]: '2026-01-02T00:00:00.000Z' }
+
+      const result = model.mergeProjectsByFreshness(local, remote, tombstones)
+
+      expect(result.merged.Old).toBeUndefined()
+      expect(result.remoteChanged).toBe(true)
+    })
+
+    it('resurrects a remote-only project whose tombstone predates a later edit to one of its files', () => {
+      const local: ProjectsState = {}
+      const remote: ProjectsState = {
+        Old: {
+          a: fileAt('a', 'stale', '2026-01-01T00:00:00.000Z'),
+          b: fileAt('b', 'edited after deletion', '2026-01-03T00:00:00.000Z'),
+        },
+      }
+      const tombstones = { [model.encodeProjectTombstoneKey('Old')]: '2026-01-02T00:00:00.000Z' }
+
+      const result = model.mergeProjectsByFreshness(local, remote, tombstones)
+
+      expect(result.merged.Old).toBeDefined()
+      expect(Object.keys(result.merged.Old ?? {}).sort()).toEqual(['a', 'b'])
+    })
+
+    it('a project tombstone never suppresses a project that still exists locally', () => {
+      const local: ProjectsState = {
+        Renamed: { a: fileAt('a', 'local', '2026-01-01T00:00:00.000Z') },
+      }
+      const remote: ProjectsState = {}
+      const tombstones = {
+        [model.encodeProjectTombstoneKey('Renamed')]: '9999-01-01T00:00:00.000Z',
+      }
+
+      const result = model.mergeProjectsByFreshness(local, remote, tombstones)
+
+      expect(result.merged.Renamed?.a?.content).toBe('local')
+    })
+
+    it('with no tombstones argument, behaves exactly as the untombstoned tests above (default empty)', () => {
+      const local: ProjectsState = { A: {} }
+      const remote: ProjectsState = {
+        A: { old: fileAt('old', 'stale', '2026-01-01T00:00:00.000Z') },
+      }
+
+      const result = model.mergeProjectsByFreshness(local, remote)
+
+      expect(result.merged.A?.old?.content).toBe('stale')
+    })
+  })
 })

@@ -348,6 +348,9 @@ export class GoogleDriveSyncProvider implements SyncProvider {
         version: 1,
         exportedAt: new Date().toISOString(),
         projects: snapshot.projects,
+        // Optional field on an older backup this build reads back — see
+        // ProjectsSnapshot's doc comment on why it's safe to omit/ignore.
+        tombstones: snapshot.tombstones ?? {},
       },
       null,
       2,
@@ -454,7 +457,7 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     // ("Unexpected token…") instead of the same clear
     // "Formato de backup inválido" message a missing `projects` field
     // already produces below.
-    let data: { projects?: unknown }
+    let data: { projects?: unknown; tombstones?: unknown }
     try {
       data = await res.json()
     } catch {
@@ -462,7 +465,13 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     }
     if (!data.projects) throw new Error('Formato de backup inválido')
 
-    return { projects: data.projects as Record<string, unknown> }
+    return {
+      projects: data.projects as Record<string, unknown>,
+      // Absent on a backup written before this field existed — the caller
+      // (reconcileWithRemote) treats `undefined` the same as "nothing to
+      // merge in", not an error.
+      tombstones: data.tombstones as Record<string, unknown> | undefined,
+    }
   }
 
   /**

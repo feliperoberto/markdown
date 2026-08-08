@@ -107,6 +107,29 @@ export function App(): JSX.Element {
   const showToast = useToast()
   const { cycleFontSize } = useEditorFontSize()
 
+  // A newly created file becomes the active one (useProjects.createFile) —
+  // on a narrow viewport the drawer is an absolute overlay covering the
+  // editor (see global.css's `@media (max-width: 768px)`, same breakpoint
+  // used here), so without this the file becomes active behind the
+  // sidebar and nothing appears to happen. Checked at call time rather
+  // than tracked as state: `.sidebar-hidden` applies at every viewport
+  // width (see sidebarHiddenOnMobile's own comment above), so this must
+  // stay scoped to genuinely narrow viewports or it would also close the
+  // sidebar on desktop on every create, where it isn't overlapping
+  // anything and closing it is just disruptive. Only wired to paths that
+  // actually select the new file: the create-file dialog and single-file
+  // upload, not the multi-file import loop below (which deliberately
+  // opts out of selection, so there's nothing here yet worth revealing,
+  // and closing/reopening the drawer once per file would just flicker).
+  // Deliberately not on plain file selection — that would fight the
+  // drag-to-reorder handle, which lives in the sidebar.
+  const handleCreateFile = (projectName: string, fileName: string, content?: string) => {
+    createFile(projectName, fileName, content)
+    if (window.matchMedia('(max-width: 768px)').matches) {
+      setSidebarHiddenOnMobile(true)
+    }
+  }
+
   const activeContent =
     currentProject && currentFile ? (projects[currentProject]?.[currentFile]?.content ?? '') : ''
 
@@ -156,7 +179,7 @@ export function App(): JSX.Element {
   const handleUploadFileToProject = async (projectName: string, file: File) => {
     try {
       const entry = await importFile(file)
-      createFile(projectName, entry.name, entry.content)
+      handleCreateFile(projectName, entry.name, entry.content)
       showToast(`Arquivo "${entry.name}" importado`, 'success')
     } catch (error) {
       showToast(`Erro ao importar arquivo: ${(error as Error).message}`, 'error')
@@ -171,7 +194,11 @@ export function App(): JSX.Element {
     for (const file of files) {
       try {
         const entry = await importFile(file)
-        createFile(projectName, entry.name, entry.content)
+        // Doesn't select each file as it lands — createFile now selects by
+        // default (issue: a newly created file should become active), but
+        // with several files importing in a loop that would just mean
+        // selection jumps to whichever one happened to land last.
+        createFile(projectName, entry.name, entry.content, { select: false })
         successCount++
       } catch (error) {
         showToast(`Erro ao importar "${file.name}": ${(error as Error).message}`, 'error')
@@ -249,9 +276,10 @@ export function App(): JSX.Element {
           </div>
           <div className="header-right">
             <DriveSyncPanel
-              reconcile={(remote) => ({
-                projects: reconcileWithRemote(remote?.projects ?? null),
-              })}
+              reconcile={(remote) => {
+                const result = reconcileWithRemote(remote?.projects ?? null, remote?.tombstones)
+                return { projects: result.projects, tombstones: result.tombstones }
+              }}
               openSignal={driveConfigOpenSignal}
             />
             <FontSizeButton onCycle={cycleFontSize} />
@@ -267,7 +295,7 @@ export function App(): JSX.Element {
             currentFile={currentFile}
             onSelectFile={selectFile}
             onCreateProject={createProject}
-            onCreateFile={createFile}
+            onCreateFile={handleCreateFile}
             onRenameFile={renameFile}
             onDeleteFile={deleteFile}
             onRenameProject={renameProject}

@@ -5,6 +5,7 @@ import { showPromptDialog } from './dialogs'
 import { decodeArchivedFileKey, fileExists, isFileArchived, projectExists } from './model'
 import { loadCollapsedProjects, saveCollapsedProjects } from './storage'
 import type { ProjectsState } from './types'
+import { useSidebarDnd } from './useSidebarDnd'
 
 // Stable empty-set default for the `archivedProjects` prop: a `= new Set()`
 // default parameter would allocate a fresh Set every render and defeat
@@ -128,6 +129,17 @@ export function ProjectsSidebar({
   const handleCloseMenu = useCallback(() => {
     setOpenMenu(null)
   }, [])
+  // Pointer-based drag & drop (issue: mobile DnD — HTML5 Drag-and-Drop
+  // never fires from a touch gesture). One delegated pointerdown listener
+  // on the sidebar root; see useSidebarDnd.ts/dnd.ts for the actual
+  // gesture/drop-resolution logic. `onDragStart` closes any open "..."
+  // menu the moment a drag activates — a floating menu's pre-computed
+  // position has nothing to do with an in-progress drag.
+  const { rootRef: dndRootRef } = useSidebarDnd({
+    onMoveFile,
+    onMoveProject,
+    onDragStart: handleCloseMenu,
+  })
   // The full, unfiltered list. This is what duplicate-name validation
   // (handleNewProject below, and ProjectGroup's rename validation) must see
   // — filtering it would let a user create/rename into a name collision
@@ -199,7 +211,7 @@ export function ProjectsSidebar({
 
   // Closes a dangling open menu if its project (or, for a file menu, the
   // file itself) was deleted/renamed out from under it — e.g. via the
-  // "Excluir projeto"/"Excluir arquivo" action inside that same menu.
+  // "Excluir projeto"/"Excluir" (file) action inside that same menu.
   useEffect(() => {
     setOpenMenu((prev) => {
       if (prev === null || !projectExists(projects, prev.project)) return null
@@ -232,6 +244,23 @@ export function ProjectsSidebar({
       return next
     })
   }, [])
+
+  // A newly created file becomes the active one (useProjects.createFile),
+  // so it needs to actually be visible: expand the project first if it was
+  // collapsed, otherwise the now-active file is selected inside a folded
+  // group and nothing appears to change.
+  const handleCreateFile = useCallback(
+    (projectName: string, fileName: string) => {
+      setCollapsedProjects((prev) => {
+        if (!prev.has(projectName)) return prev
+        const next = new Set(prev)
+        next.delete(projectName)
+        return next
+      })
+      onCreateFile(projectName, fileName)
+    },
+    [onCreateFile],
+  )
 
   // Prunes stale selection entries whenever the project/file set changes
   // (rename, delete, import, restore) — and also when a project, or an
@@ -320,6 +349,7 @@ export function ProjectsSidebar({
 
   return (
     <nav
+      ref={dndRootRef}
       className={`projects-sidebar${mobileHidden ? ' sidebar-hidden' : ''}`}
       id="projectsSidebar"
       aria-label="Projetos e arquivos"
@@ -335,6 +365,7 @@ export function ProjectsSidebar({
           id="projectsList"
           role="region"
           aria-labelledby="sidebarTitle"
+          data-dnd-scroll
         >
           {projectNames.length === 0 ? (
             <div className="projects-list-empty">Nenhum projeto ainda. Marque o primeiro.</div>
@@ -354,6 +385,7 @@ export function ProjectsSidebar({
                 currentFile={currentProject === projectName ? currentFile : null}
                 selectedFiles={selectedByProject[projectName] ?? NO_SELECTION}
                 projectNames={projectNames}
+                visibleProjectNames={visibleProjectNames}
                 onSelectFile={onSelectFile}
                 onToggleExpanded={toggleProjectCollapsed}
                 isMenuOpen={openMenu?.kind === 'project' && openMenu.project === projectName}
@@ -366,7 +398,7 @@ export function ProjectsSidebar({
                 }
                 onOpenFileMenu={handleOpenFileMenu}
                 onToggleSelected={toggleSelected}
-                onCreateFile={onCreateFile}
+                onCreateFile={handleCreateFile}
                 onRenameFile={onRenameFile}
                 onDeleteFile={onDeleteFile}
                 onRenameProject={onRenameProject}

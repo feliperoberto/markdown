@@ -1,5 +1,4 @@
-import { devices } from '@playwright/test'
-import { test, expect } from './fixtures'
+import { test, expect, ensureSidebarOpen } from './fixtures'
 
 // Regression coverage for the file row actions being permanently visible
 // (issue: the swipe/hover-revealed rename/archive/delete chips relied on a
@@ -12,9 +11,21 @@ import { test, expect } from './fixtures'
 // old chips had a non-empty, merely-clipped bounding box that
 // `toBeVisible()` couldn't tell apart from "shown", so this bug could not
 // have been caught by that assertion; a plain menuitem count is a real one.
+//
+// The follow-up (the "..." trigger being permanently visible on every row,
+// not just the previous swipe/hover bug) narrowed visibility further: the
+// trigger itself is now hidden by default, shown only on the active row,
+// on real-mouse hover, or while its own menu is open. This file runs
+// under both the `chromium` and `mobile` (Pixel 5) Playwright projects
+// (see playwright.config.ts) — the trigger-visibility assertions apply on
+// both, since they're plain DOM/CSS; only the hover-reveal assertion is
+// desktop-only, since the CSS rule is deliberately guarded to
+// `(hover: hover) and (pointer: fine)` so a touch device's sticky emulated
+// hover can never latch it open again.
 test.describe('file row actions menu', () => {
-  test('opening or hovering a file reveals no actions; the "..." menu opens them deliberately', async ({
+  test('the "..." trigger is hidden by default, shown on the active row, and no click/hover latches actions open', async ({
     page,
+    isMobile,
   }) => {
     await page.goto('/app.html')
 
@@ -25,64 +36,95 @@ test.describe('file row actions menu', () => {
 
     const projectName = `E2E Row Actions ${Date.now()}`
     const fileName = 'row-actions-file'
+    const otherFileName = 'row-actions-other-file'
 
     await page.getByRole('button', { name: 'Criar novo projeto' }).click()
     await page.getByLabel('Nome do novo projeto').fill(projectName)
     await page.getByRole('button', { name: 'Criar', exact: true }).click()
     await expect(sidebar.getByText(projectName)).toBeVisible()
 
-    await page
-      .getByRole('button', { name: `Mais opções do projeto ${projectName}`, exact: true })
-      .click()
-    await page.getByRole('menuitem', { name: /Novo arquivo/ }).click()
-    await page.getByLabel('Nome do arquivo').fill(fileName)
-    await page.getByRole('button', { name: 'Criar', exact: true }).click()
-    await expect(sidebar.getByText(fileName)).toBeVisible()
+    for (const name of [fileName, otherFileName]) {
+      // Creating a file closes the mobile drawer (it becomes the active
+      // file, and on a narrow viewport the drawer is an overlay covering
+      // the editor) — reopen it before the next iteration's "..." click.
+      await ensureSidebarOpen(page)
+      await page
+        .getByRole('button', { name: `Mais opções do projeto ${projectName}`, exact: true })
+        .click()
+      await page.getByRole('menuitem', { name: /Novo arquivo/ }).click()
+      await page.getByLabel('Nome do arquivo').fill(name)
+      await page.getByRole('button', { name: 'Criar', exact: true }).click()
+      await expect(sidebar.getByText(name)).toBeVisible()
+    }
 
-    // Click the row to open the file — the reported bug: this used to
-    // focus the row and leave rename/archive/delete permanently visible.
-    await sidebar.getByText(fileName, { exact: true }).click()
-    await expect(page.getByRole('menuitem', { name: /Renomear arquivo/ })).toHaveCount(0)
-    await expect(page.getByRole('menuitem', { name: /Excluir arquivo/ })).toHaveCount(0)
+    // otherFileName's creation closed the mobile drawer; reopen it before
+    // the visibility assertions below.
+    await ensureSidebarOpen(page)
 
-    // Hovering the row reveals nothing either — the old desktop
-    // hover-to-reveal rule is gone along with the swipe path it stood in for.
-    await sidebar.getByText(fileName, { exact: true }).hover()
-    await expect(page.getByRole('menuitem', { name: /Renomear arquivo/ })).toHaveCount(0)
-
-    // The "..." trigger opens the menu; Escape closes it and returns focus.
     const trigger = page.getByRole('button', {
       name: `Mais opções do arquivo ${fileName}`,
       exact: true,
     })
+    const otherTrigger = page.getByRole('button', {
+      name: `Mais opções do arquivo ${otherFileName}`,
+      exact: true,
+    })
+
+    // otherFileName was created last, so it's the active file by default
+    // (issue: creating a file selects it) — its trigger is already
+    // visible, and fileName's (not active) is not.
+    await expect(trigger).toBeHidden()
+    await expect(otherTrigger).toBeVisible()
+
+    // Click the OTHER row to open it — the original reported bug: this
+    // used to focus the row and leave rename/archive/delete permanently
+    // visible. Opening it also makes IT the active file, swapping which
+    // trigger is revealed.
+    await sidebar.getByText(fileName, { exact: true }).click()
+    await expect(trigger).toBeVisible()
+    await expect(otherTrigger).toBeHidden()
+    await expect(page.getByRole('menuitem', { name: /Renomear$/ })).toHaveCount(0)
+    await expect(page.getByRole('menuitem', { name: /Excluir$/ })).toHaveCount(0)
+
+    // Hovering the OTHER (non-active) row: on desktop, a real mouse hover
+    // reveals its trigger; on touch, the hover rule is guarded out of the
+    // media query entirely, so nothing reveals — regardless of any
+    // sticky-hover quirk a real tap might otherwise trigger.
+    await sidebar.getByText(otherFileName, { exact: true }).hover()
+    if (isMobile) {
+      await expect(otherTrigger).toBeHidden()
+    } else {
+      await expect(otherTrigger).toBeVisible()
+    }
+    await expect(page.getByRole('menuitem', { name: /Renomear$/ })).toHaveCount(0)
+
+    // The "..." trigger opens the menu, and stays visible itself while its
+    // own menu is open even after the pointer moves elsewhere.
     await trigger.click()
-    await expect(page.getByRole('menuitem', { name: /Renomear arquivo/ })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: /Renomear$/ })).toBeVisible()
+    await page.mouse.move(0, 0)
+    await expect(trigger).toBeVisible()
+
+    // Escape closes it and returns focus to the trigger.
     await page.keyboard.press('Escape')
-    await expect(page.getByRole('menuitem', { name: /Renomear arquivo/ })).toHaveCount(0)
+    await expect(page.getByRole('menuitem', { name: /Renomear$/ })).toHaveCount(0)
     await expect(trigger).toBeFocused()
   })
-})
 
-// Half the original report was mobile: tapping a row used to reveal the
-// same stuck-open chips via a sticky emulated `:hover`. Desktop testing
-// can't exercise that path at all, so this runs under real touch/mobile
-// emulation rather than a mouse-driven `.hover()`/`.click()`.
-test.describe('file row actions menu (touch)', () => {
-  // Listed explicitly rather than `...devices['Pixel 5']`: that preset also
-  // carries `defaultBrowserType`, and switching browser type is only legal
-  // at the top level/in config (it forces a new worker) — not inside a
-  // describe block. This suite's one configured project is already
-  // Chromium, which is what Pixel 5's own `defaultBrowserType` would have
-  // picked anyway, so nothing is lost by leaving it out.
-  const { viewport, userAgent, deviceScaleFactor, isMobile, hasTouch, screen } = devices['Pixel 5']
-  test.use({ viewport, userAgent, deviceScaleFactor, isMobile, hasTouch, screen })
-
+  // Half the original report was mobile: tapping a row used to reveal the
+  // same stuck-open chips via a sticky emulated `:hover`. The assertion
+  // above already proves the CSS rule can't latch regardless of input
+  // method; this test additionally exercises the actual tap gesture
+  // (rather than Playwright's mouse-driven `.click()`/`.hover()`), the one
+  // thing desktop testing can't cover at all.
   test('tapping a row opens the file without revealing actions; the "..." trigger still works', async ({
     page,
+    isMobile,
   }) => {
+    test.skip(!isMobile, 'covers real touch tap semantics — see the desktop assertion above')
     await page.goto('/app.html')
 
-    // Scoped to the sidebar — see the desktop test above for why.
+    // Scoped to the sidebar — see the test above for why.
     const sidebar = page.locator('#projectsSidebar')
 
     const projectName = `E2E Row Actions Touch ${Date.now()}`
@@ -99,22 +141,28 @@ test.describe('file row actions menu (touch)', () => {
     await page.getByRole('menuitem', { name: /Novo arquivo/ }).click()
     await page.getByLabel('Nome do arquivo').fill(fileName)
     await page.getByRole('button', { name: 'Criar', exact: true }).click()
+    // Creating the file also selected it, which on this narrow viewport
+    // closed the drawer (it's an overlay covering the editor) — reopen it
+    // before interacting with the row again.
+    await ensureSidebarOpen(page)
     await expect(sidebar.getByText(fileName)).toBeVisible()
 
     // Tapping the row opens the file (no swipe gesture exists anymore, and
-    // none is needed) with no actions revealed.
+    // none is needed) and, since it's already the active file, its own
+    // trigger is already visible — but no actions menu.
     await sidebar.getByText(fileName, { exact: true }).tap()
-    await expect(page.getByRole('menuitem', { name: /Renomear arquivo/ })).toHaveCount(0)
-
-    // The same "..." trigger used on desktop opens the menu on touch too —
-    // the whole point of replacing the old two-mechanism (swipe + hover)
-    // design with one.
     const trigger = page.getByRole('button', {
       name: `Mais opções do arquivo ${fileName}`,
       exact: true,
     })
+    await expect(trigger).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: /Renomear$/ })).toHaveCount(0)
+
+    // The same "..." trigger used on desktop opens the menu on touch too —
+    // the whole point of replacing the old two-mechanism (swipe + hover)
+    // design with one.
     await trigger.tap()
-    await expect(page.getByRole('menuitem', { name: /Renomear arquivo/ })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: /Renomear$/ })).toBeVisible()
 
     // Tapping elsewhere dismisses it, same as a desktop outside click.
     // Targets the sidebar title specifically (no onClick of its own) rather
@@ -123,6 +171,6 @@ test.describe('file row actions menu (touch)', () => {
     // regardless of whether outside-click dismissal actually works,
     // letting this assertion pass even if that logic were broken.
     await page.locator('#sidebarTitle').tap()
-    await expect(page.getByRole('menuitem', { name: /Renomear arquivo/ })).toHaveCount(0)
+    await expect(page.getByRole('menuitem', { name: /Renomear$/ })).toHaveCount(0)
   })
 })

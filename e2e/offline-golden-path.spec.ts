@@ -32,11 +32,8 @@ test.describe('offline golden path', () => {
     await page.getByLabel('Nome do arquivo').fill(fileName)
     await page.getByRole('button', { name: 'Criar', exact: true }).click()
 
-    // Creating a file doesn't auto-select it, so open it explicitly (while
-    // still online — this is just navigating to the file, not the part
-    // under test).
-    await page.getByText(fileName).click()
-
+    // A freshly created file becomes the active one, so the editor already
+    // shows it — no explicit click needed.
     await context.setOffline(true)
 
     const editor = page.locator('#editor')

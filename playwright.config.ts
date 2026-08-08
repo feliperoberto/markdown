@@ -33,6 +33,20 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
+    // A standing touch target, not an opt-in-per-spec one: mobile-only
+    // regressions (e.g. sticky emulated `:hover` latching an action menu
+    // open, or HTML5 drag-and-drop simply never firing from a touch
+    // gesture) previously had no coverage unless a spec hand-rolled its own
+    // Pixel 5 `describe` block — easy to skip when writing a new spec, and
+    // exactly how "works on desktop" and "dead on mobile" both stayed
+    // green. Every spec in this project runs on both `chromium` and
+    // `mobile` by default; a spec that has nothing device-specific to
+    // assert doesn't need to opt out, and one that does (e.g. a hover-only
+    // assertion) uses `test.skip(({ isMobile }) => isMobile)`.
+    {
+      name: 'mobile',
+      use: { ...devices['Pixel 5'] },
+    },
   ],
   webServer: {
     command: 'npm run build && npm run preview -- --port 4173 --strictPort',

@@ -35,6 +35,12 @@ function Harness() {
       <button onClick={() => createFile('Segundo', 'later', 'other 2')}>
         create-file2-segundo
       </button>
+      <button onClick={() => createFile('Meu Projeto', 'silent', 'x', { select: false })}>
+        create-file-no-select
+      </button>
+      <button onClick={() => createFile('Meu Projeto', 'Sem título', 'dup')}>
+        create-file-duplicate
+      </button>
       <button onClick={() => toggleFileArchived('Segundo', 'notes')}>
         toggle-archive-file-segundo-notes
       </button>
@@ -197,6 +203,63 @@ describe('useProjects', () => {
     await waitFor(() => {
       const text = stateText()
       expect(text.indexOf('Segundo')).toBeLessThan(text.indexOf('Meu Projeto'))
+    })
+  })
+
+  describe('createFile selects the new file', () => {
+    // Issue: creating a file previously left currentProject/currentFile
+    // pointing at whatever was open before — the editor never showed the
+    // file you just created unless you clicked it. createFile now selects
+    // by default, matching createProject's existing behavior.
+    it('a freshly created file becomes the active project/file', async () => {
+      const { container } = renderHarness()
+      const stateText = () => container.querySelector('pre')?.textContent ?? ''
+
+      fireEvent.click(screen.getByText('create-file')) // Meu Projeto/notes
+
+      await waitFor(() => {
+        expect(stateText()).toContain('"currentProject":"Meu Projeto"')
+        expect(stateText()).toContain('"currentFile":"notes"')
+      })
+    })
+
+    // Multi-file callers (e.g. importing several files in a loop) opt out
+    // so selection doesn't jump to whichever file happened to land last.
+    it('{ select: false } leaves the current selection alone', async () => {
+      const { container } = renderHarness()
+      const stateText = () => container.querySelector('pre')?.textContent ?? ''
+
+      fireEvent.click(screen.getByText('select-sem-titulo'))
+      await waitFor(() => expect(stateText()).toContain('"currentFile":"Sem título"'))
+
+      fireEvent.click(screen.getByText('create-file-no-select')) // Meu Projeto/silent
+
+      // The new file exists...
+      await waitFor(() => expect(stateText()).toContain('"silent"'))
+      // ...but selection never moved to it.
+      expect(stateText()).toContain('"currentFile":"Sem título"')
+    })
+
+    // model.createFile silently no-ops on a duplicate name (never
+    // overwrites) — createFile must bail before persisting or toasting,
+    // the same same-reference-on-no-op guard every other mutator here
+    // follows (see e.g. the no-op rename guards below).
+    it('a create the model refuses changes nothing and does not select', async () => {
+      const { container } = renderHarness()
+      const stateText = () => container.querySelector('pre')?.textContent ?? ''
+
+      fireEvent.click(screen.getByText('select-sem-titulo'))
+      await waitFor(() => expect(stateText()).toContain('"currentFile":"Sem título"'))
+      const before = stateText()
+
+      // "Sem título" already exists in "Meu Projeto" — the model refuses it.
+      fireEvent.click(screen.getByText('create-file-duplicate'))
+
+      // Give any (incorrect) async update a chance to land before asserting
+      // nothing changed.
+      await Promise.resolve()
+      expect(stateText()).toBe(before)
+      expect(screen.queryByText('✅ Novo arquivo')).toBeNull()
     })
   })
 

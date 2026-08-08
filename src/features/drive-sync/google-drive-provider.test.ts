@@ -141,6 +141,45 @@ describe('GoogleDriveSyncProvider', () => {
 
       expect(calls).toEqual(['PATCH'])
     })
+
+    // Regression coverage for the tombstones wiring (issue: a renamed/
+    // deleted file reappearing as a duplicate after sync) — `push` must
+    // actually upload `snapshot.tombstones`, not just `snapshot.projects`,
+    // or a deletion recorded locally never reaches Drive for another
+    // device to see.
+    it('uploads snapshot.tombstones alongside projects', async () => {
+      const provider = await connectedProvider()
+      let uploadedBody: string | null = null
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string, init?: RequestInit) => {
+          // Routes to the PATCH branch (an existing file), whose body is
+          // the raw JSON Blob — the POST/multipart "create" branch wraps it
+          // in a FormData instead, which isn't what this test needs to
+          // inspect.
+          if (url.startsWith(FILES_LIST_URL)) {
+            return jsonResponse({ files: [{ id: 'existing-id', name: 'x', modifiedTime: 't' }] })
+          }
+          if (
+            url.startsWith(
+              'https://www.googleapis.com/upload/drive/v3/files/existing-id?uploadType=media',
+            )
+          ) {
+            uploadedBody = await (init?.body as Blob).text()
+            return jsonResponse({ id: 'existing-id' })
+          }
+          throw new Error(`Unmocked fetch: ${url}`)
+        }),
+      )
+
+      await provider.push({
+        projects: { A: {} },
+        tombstones: { '["A","old"]': '2026-01-01T00:00:00.000Z' },
+      })
+
+      const uploaded = JSON.parse(uploadedBody as unknown as string)
+      expect(uploaded.tombstones).toEqual({ '["A","old"]': '2026-01-01T00:00:00.000Z' })
+    })
   })
 
   describe('pull', () => {
@@ -199,6 +238,40 @@ describe('GoogleDriveSyncProvider', () => {
       })
 
       await expect(provider.pull()).resolves.toEqual({ projects: { A: { f: { name: 'f' } } } })
+    })
+
+    // Regression coverage for the tombstones wiring, symmetric with the
+    // upload test above — a backup written by an older build has no
+    // `tombstones` field at all, and pull() must surface that as
+    // `undefined` (the caller treats it as "nothing to merge in"), not
+    // throw or silently coerce it into something else.
+    it('resolves with tombstones from a backup that has them, and undefined for one that does not', async () => {
+      const provider = await connectedProvider()
+      stubFetch({
+        [FILES_LIST_URL]: () =>
+          jsonResponse({ files: [{ id: 'file-id', name: 'x', modifiedTime: 't' }] }),
+        'https://www.googleapis.com/drive/v3/files/file-id?alt=media': () =>
+          jsonResponse({
+            version: 1,
+            projects: { A: {} },
+            tombstones: { '["A","old"]': '2026-01-01T00:00:00.000Z' },
+          }),
+      })
+
+      await expect(provider.pull()).resolves.toEqual({
+        projects: { A: {} },
+        tombstones: { '["A","old"]': '2026-01-01T00:00:00.000Z' },
+      })
+
+      stubFetch({
+        [FILES_LIST_URL]: () =>
+          jsonResponse({ files: [{ id: 'file-id', name: 'x', modifiedTime: 't' }] }),
+        'https://www.googleapis.com/drive/v3/files/file-id?alt=media': () =>
+          jsonResponse({ version: 1, projects: { A: {} } }),
+      })
+
+      const result = await provider.pull()
+      expect(result?.tombstones).toBeUndefined()
     })
   })
 

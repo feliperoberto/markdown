@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures'
+import { test, expect, ensureSidebarOpen } from './fixtures'
 
 // Golden path #2 (issue #33): export a project as a ZIP, then re-import it
 // and verify the file content survives the round trip. The project is
@@ -24,9 +24,14 @@ test.describe('export/import golden path', () => {
     await page.getByLabel('Nome do arquivo').fill(fileName)
     await page.getByRole('button', { name: 'Criar', exact: true }).click()
 
-    // Creating a file doesn't auto-select it, so open it explicitly.
-    await page.getByText(fileName).click()
+    // A freshly created file becomes the active one, so the editor is
+    // already showing it — no explicit click needed.
     await page.locator('#editor').fill(content)
+
+    // Creating the file also selected it, which on a narrow viewport
+    // closed the drawer (it's an overlay covering the editor) — reopen it
+    // before interacting with the project menu again.
+    await ensureSidebarOpen(page)
 
     const downloadPromise = page.waitForEvent('download')
     await page
