@@ -124,7 +124,7 @@ describe('useSidebarDnd', () => {
     fireEvent(handleA, pointerEvent('pointermove', { clientX: 10, clientY: 30 })) // into row B
     fireEvent(handleA, pointerEvent('pointerup', { clientX: 10, clientY: 30 }))
 
-    expect(onMoveFile).toHaveBeenCalledExactlyOnceWith('P', 'a', 'P', 'b')
+    expect(onMoveFile).toHaveBeenCalledExactlyOnceWith('P', 'a', 'b')
   })
 
   it('a sub-threshold move never activates: no move is committed', () => {

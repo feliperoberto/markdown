@@ -22,14 +22,6 @@ export interface FileRowProps {
    * user actually sees move. Computed and memoized by ProjectGroup.
    */
   visibleFileNames: string[]
-  /**
-   * Every OTHER project's name (this file's own project excluded), for the
-   * "Mover para <project>" menu items — the keyboard/non-drag path drag &
-   * drop needs alongside it (WCAG 2.1 SC 2.5.7/2.1.1: dragging needs a
-   * single-pointer, non-dragging alternative). Computed and memoized by
-   * ProjectGroup.
-   */
-  otherProjectNames: string[]
   onSelectFile: (projectName: string, fileName: string) => void
   /**
    * Whether THIS file's "..." actions menu is open. Owned by the sidebar
@@ -50,26 +42,23 @@ export interface FileRowProps {
   /**
    * Drag & drop (issue #92, and its mobile follow-up: a Pointer Events
    * rewrite so this also works from a touch gesture, not just a mouse).
-   * When provided, the row's drag handle is active and the "Mover"
-   * menu items render — see `useSidebarDnd`/`./dnd.ts`, which own the
-   * actual gesture/drop-resolution logic; this component only supplies the
-   * `data-dnd-*` identity attributes the delegated pointer handler reads.
+   * When provided, the row's drag handle is active and the "Mover para
+   * cima/baixo" menu items render — see `useSidebarDnd`/`./dnd.ts`, which
+   * own the actual gesture/drop-resolution logic; this component only
+   * supplies the `data-dnd-*` identity attributes the delegated pointer
+   * handler reads. Moving a file to a DIFFERENT project was removed (see
+   * CHANGELOG) — a move only ever reorders within `projectName`.
    */
-  onMoveFile?: (
-    fromProject: string,
-    fileName: string,
-    toProject: string,
-    beforeFile?: string | null,
-  ) => void
+  onMoveFile?: (projectName: string, fileName: string, beforeFile?: string | null) => void
 }
 
 // Renders one file row in the sidebar tree, including its "..." actions
 // menu (rename/archive/delete) and the multi-select checkbox used for
 // batch download. Wrapped in memo() so editing the active file's content
 // doesn't reconcile every OTHER file row in the sidebar on every
-// keystroke — effective only as long as `fileNames`/`visibleFileNames`/
-// `otherProjectNames` are themselves stable references (see ProjectGroup,
-// which memoizes them), since a fresh array every render would defeat this.
+// keystroke — effective only as long as `fileNames`/`visibleFileNames` are
+// themselves stable references (see ProjectGroup, which memoizes them),
+// since a fresh array every render would defeat this.
 export const FileRow = memo(function FileRow({
   projectName,
   file,
@@ -78,7 +67,6 @@ export const FileRow = memo(function FileRow({
   isArchived,
   fileNames,
   visibleFileNames,
-  otherProjectNames,
   onSelectFile,
   isMenuOpen,
   onOpenMenu,
@@ -157,21 +145,13 @@ export const FileRow = memo(function FileRow({
   function handleMoveUp(e: MouseEvent) {
     e.stopPropagation()
     onCloseMenu()
-    if (moveUp) onMoveFile?.(projectName, file.name, projectName, moveUp.before)
+    if (moveUp) onMoveFile?.(projectName, file.name, moveUp.before)
   }
 
   function handleMoveDown(e: MouseEvent) {
     e.stopPropagation()
     onCloseMenu()
-    if (moveDown) onMoveFile?.(projectName, file.name, projectName, moveDown.before)
-  }
-
-  function handleMoveToProject(targetProject: string) {
-    return (e: MouseEvent) => {
-      e.stopPropagation()
-      onCloseMenu()
-      onMoveFile?.(projectName, file.name, targetProject, null)
-    }
+    if (moveDown) onMoveFile?.(projectName, file.name, moveDown.before)
   }
 
   return (
@@ -288,18 +268,6 @@ export const FileRow = memo(function FileRow({
               ⬇ Mover para baixo
             </button>
           )}
-          {onMoveFile &&
-            otherProjectNames.map((targetProject) => (
-              <button
-                key={targetProject}
-                type="button"
-                className="dropdown-item"
-                role="menuitem"
-                onClick={handleMoveToProject(targetProject)}
-              >
-                {`📁 Mover para "${targetProject}"`}
-              </button>
-            ))}
           <button
             type="button"
             className="dropdown-item danger"

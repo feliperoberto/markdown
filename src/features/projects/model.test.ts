@@ -172,24 +172,6 @@ describe('renameFileInArchivedFiles', () => {
   })
 })
 
-describe('moveFileInArchivedFiles', () => {
-  it('rekeys the project segment on a cross-project move', () => {
-    const archived = new Set([model.encodeArchivedFileKey('A', 'f')])
-    const result = model.moveFileInArchivedFiles(archived, 'A', 'f', 'B')
-    expect([...result]).toEqual([model.encodeArchivedFileKey('B', 'f')])
-  })
-
-  it('is a no-op for a same-project move (reorder only)', () => {
-    const archived = new Set([model.encodeArchivedFileKey('A', 'f')])
-    expect(model.moveFileInArchivedFiles(archived, 'A', 'f', 'A')).toBe(archived)
-  })
-
-  it('returns the same reference when the moved file was not archived', () => {
-    const archived = new Set([model.encodeArchivedFileKey('A', 'other')])
-    expect(model.moveFileInArchivedFiles(archived, 'A', 'f', 'B')).toBe(archived)
-  })
-})
-
 describe('renameProjectInArchivedFiles', () => {
   it('rekeys every archived-file entry belonging to the renamed project', () => {
     const archived = new Set([
@@ -302,34 +284,21 @@ describe('fileExists', () => {
 describe('moveFile', () => {
   it('reorders a file within its project, inserting before the target', () => {
     const state: ProjectsState = { A: { a: file('a', ''), b: file('b', ''), c: file('c', '') } }
-    const result = model.moveFile(state, 'A', 'c', 'A', 'a')
+    const result = model.moveFile(state, 'A', 'c', 'a')
     expect(Object.keys(result.A ?? {})).toEqual(['c', 'a', 'b'])
   })
 
   it('appends within a project when beforeFile is null', () => {
     const state: ProjectsState = { A: { a: file('a', ''), b: file('b', '') } }
-    const result = model.moveFile(state, 'A', 'a', 'A', null)
+    const result = model.moveFile(state, 'A', 'a', null)
     expect(Object.keys(result.A ?? {})).toEqual(['b', 'a'])
   })
 
-  it('moves a file to another project, inserting before the target', () => {
-    const state: ProjectsState = { A: { a: file('a', 'x') }, B: { b: file('b', '') } }
-    const result = model.moveFile(state, 'A', 'a', 'B', 'b')
-    expect(Object.keys(result.A ?? {})).toEqual([])
-    expect(Object.keys(result.B ?? {})).toEqual(['a', 'b'])
-    expect(result.B?.a?.content).toBe('x')
-  })
-
-  it('refuses a move that would overwrite a same-named file in the target project', () => {
-    const state: ProjectsState = { A: { dup: file('dup', 'a') }, B: { dup: file('dup', 'b') } }
-    expect(model.moveFile(state, 'A', 'dup', 'B')).toBe(state)
-  })
-
-  it('returns the same reference for unknown file/project or a self-reorder', () => {
+  it('returns the same reference for an unknown project/file or a self-reorder', () => {
     const state: ProjectsState = { A: { a: file('a', '') } }
-    expect(model.moveFile(state, 'A', 'missing', 'A')).toBe(state)
-    expect(model.moveFile(state, 'A', 'a', 'Nope')).toBe(state)
-    expect(model.moveFile(state, 'A', 'a', 'A', 'a')).toBe(state)
+    expect(model.moveFile(state, 'A', 'missing', null)).toBe(state)
+    expect(model.moveFile(state, 'Nope', 'a', null)).toBe(state)
+    expect(model.moveFile(state, 'A', 'a', 'a')).toBe(state)
   })
 })
 

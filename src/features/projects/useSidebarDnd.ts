@@ -22,12 +22,7 @@ import {
 } from './dnd'
 
 export interface SidebarDndOptions {
-  onMoveFile?: (
-    fromProject: string,
-    fileName: string,
-    toProject: string,
-    beforeFile?: string | null,
-  ) => void
+  onMoveFile?: (projectName: string, fileName: string, beforeFile?: string | null) => void
   onMoveProject?: (projectName: string, beforeProject?: string | null) => void
   /** Called the moment a gesture activates (crosses the drag threshold) — closes any open "..." menu, since a floating menu's pre-computed position has nothing to do with an in-progress drag. */
   onDragStart?: () => void
@@ -77,23 +72,31 @@ function defaultMeasureZones(root: HTMLElement): MeasuredZone[] {
   return zones
 }
 
-/** Maps a resolved intent back to the zone/element it came from, so the caller knows what to highlight. */
+/**
+ * Maps a resolved intent back to the zone/element it came from, so the
+ * caller knows what to highlight. A file's `DropIntent` no longer carries
+ * a target project (moving a file to a different project is a removed
+ * feature — see CHANGELOG; the only valid target is the source file's own
+ * project), so `source` supplies it here instead.
+ */
 function findHighlightZone(
   zones: readonly MeasuredZone[],
   intent: DropIntent | null,
+  source: DragSource,
 ): MeasuredZone | null {
   if (!intent) return null
   if (intent.kind === 'project') {
     return zones.find((z) => z.kind === 'group' && z.project === intent.beforeProject) ?? null
   }
+  if (source.kind !== 'file') return null
   if (intent.beforeFile !== null) {
     return (
       zones.find(
-        (z) => z.kind === 'file' && z.project === intent.toProject && z.file === intent.beforeFile,
+        (z) => z.kind === 'file' && z.project === source.project && z.file === intent.beforeFile,
       ) ?? null
     )
   }
-  return zones.find((z) => z.kind === 'group' && z.project === intent.toProject) ?? null
+  return zones.find((z) => z.kind === 'group' && z.project === source.project) ?? null
 }
 
 function resolveSource(handleEl: HTMLElement): { source: DragSource; rowEl: HTMLElement } | null {
@@ -179,7 +182,7 @@ export function useSidebarDnd(options: SidebarDndOptions): SidebarDndControls {
           ghostElRef.current.style.transform = `translate3d(${point.x}px, ${point.y}px, 0)`
         }
         const intent = resolveDropIntent(zonesRef.current, point, source)
-        setHighlight(findHighlightZone(zonesRef.current, intent)?.el ?? null)
+        setHighlight(findHighlightZone(zonesRef.current, intent, source)?.el ?? null)
       })
     }
 

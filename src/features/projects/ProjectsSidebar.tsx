@@ -53,15 +53,10 @@ export interface ProjectsSidebarProps {
   onImportZip?: (file: File) => void
   /** Sidebar-footer "⚙️ Config" — opens the Drive/Config modal (app.tsx owns it). */
   onOpenConfig?: () => void
-  // Drag & drop (issue #92): reorder files within a project / move them
-  // across projects, and reorder the projects themselves. Optional so the
-  // tree still renders (without DnD) when a caller doesn't wire them.
-  onMoveFile?: (
-    fromProject: string,
-    fileName: string,
-    toProject: string,
-    beforeFile?: string | null,
-  ) => void
+  // Drag & drop (issue #92): reorder files within a project, and reorder
+  // the projects themselves. Optional so the tree still renders (without
+  // DnD) when a caller doesn't wire them.
+  onMoveFile?: (projectName: string, fileName: string, beforeFile?: string | null) => void
   onMoveProject?: (projectName: string, beforeProject?: string | null) => void
   // Archive feature: names of projects hidden from the everyday list, and
   // the callback that flips one project's archived state. Optional so the
@@ -181,14 +176,10 @@ export function ProjectsSidebar({
   )
   const handleUploadFile = onUploadFile ? handleUploadFileImpl : undefined
 
-  const handleMoveFileImpl = useCallback(
-    (fromProject: string, fileName: string, toProject: string, beforeFile?: string | null) => {
-      revealProject(toProject)
-      onMoveFile?.(fromProject, fileName, toProject, beforeFile)
-    },
-    [onMoveFile, revealProject],
-  )
-  const handleMoveFile = onMoveFile ? handleMoveFileImpl : undefined
+  // No `revealProject` wrapper for `onMoveFile` — moving a file to a
+  // different project was removed (see CHANGELOG), so a move can never
+  // change which project a file is visible under; the project the row
+  // lives in was already expanded enough to interact with it.
 
   // Pointer-based drag & drop (issue: mobile DnD — HTML5 Drag-and-Drop
   // never fires from a touch gesture). One delegated pointerdown listener
@@ -197,7 +188,7 @@ export function ProjectsSidebar({
   // menu the moment a drag activates — a floating menu's pre-computed
   // position has nothing to do with an in-progress drag.
   const { rootRef: dndRootRef } = useSidebarDnd({
-    onMoveFile: handleMoveFile,
+    onMoveFile,
     onMoveProject,
     onDragStart: handleCloseMenu,
   })
@@ -464,7 +455,7 @@ export function ProjectsSidebar({
                 onExportProject={onExportProject}
                 onUploadFile={handleUploadFile}
                 onUploadMultipleFiles={onUploadMultipleFiles}
-                onMoveFile={handleMoveFile}
+                onMoveFile={onMoveFile}
                 onMoveProject={onMoveProject}
                 onToggleArchived={onToggleArchived}
                 archivedFileNames={

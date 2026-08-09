@@ -103,7 +103,10 @@ test.describe('sidebar reorder (mouse)', () => {
     await expect.poll(fileNamesInOrder).toEqual(['c', 'a', 'b'])
   })
 
-  test('moves a file into another project by dropping on its group padding', async ({ page, isMobile }) => {
+  // Moving a file to a different project was removed (see CHANGELOG) — a
+  // file's drag handle can only ever reorder it within its own project's
+  // group; dropping it on another project's group/rows is now a no-op.
+  test('dropping a file onto a DIFFERENT project is a no-op', async ({ page, isMobile }) => {
     test.skip(isMobile, 'mouse-specific — see sidebar-reorder-touch.spec.ts')
     await page.goto('/app.html')
     const sidebar = page.locator('#projectsSidebar')
@@ -111,7 +114,7 @@ test.describe('sidebar reorder (mouse)', () => {
     const sourceProject = `E2E Source ${Date.now()}`
     const targetProject = `E2E Target ${Date.now()}`
     await createProject(page, sourceProject)
-    await createFile(page, sourceProject, 'movable')
+    await createFile(page, sourceProject, 'stays-put')
     await createProject(page, targetProject)
     await expect(sidebar.getByText(targetProject)).toBeVisible()
 
@@ -121,45 +124,15 @@ test.describe('sidebar reorder (mouse)', () => {
     const targetGroup = page.locator(`[data-dnd-group="${targetProject}"]`)
     const targetBox = await targetGroup.boundingBox()
     if (!targetBox) throw new Error('target group not found')
-    await dragFileHandleTo(page, sourceProject, 'movable', {
+    await dragFileHandleTo(page, sourceProject, 'stays-put', {
       x: targetBox.x + targetBox.width / 2,
       y: targetBox.y + targetBox.height / 2,
     })
 
     const targetFiles = page.locator(`[data-dnd-group="${targetProject}"] .file-name`)
-    await expect(targetFiles).toHaveText(['movable'])
+    await expect(targetFiles).toHaveCount(0)
     const sourceFiles = page.locator(`[data-dnd-group="${sourceProject}"] .file-name`)
-    await expect(sourceFiles).toHaveCount(0)
-  })
-
-  test('dropping onto a project that already has a same-named file is rejected with a warning toast', async ({
-    page,
-    isMobile,
-  }) => {
-    test.skip(isMobile, 'mouse-specific — see sidebar-reorder-touch.spec.ts')
-    await page.goto('/app.html')
-    const sidebar = page.locator('#projectsSidebar')
-
-    const projectA = `E2E Collide A ${Date.now()}`
-    const projectB = `E2E Collide B ${Date.now()}`
-    await createProject(page, projectA)
-    await createFile(page, projectA, 'dup')
-    await createProject(page, projectB)
-    await createFile(page, projectB, 'dup')
-    await expect(sidebar.getByText(projectB)).toBeVisible()
-
-    const groupB = page.locator(`[data-dnd-group="${projectB}"]`)
-    const boxB = await groupB.boundingBox()
-    if (!boxB) throw new Error('group B not found')
-    await dragFileHandleTo(page, projectA, 'dup', {
-      x: boxB.x + boxB.width / 2,
-      y: boxB.y + boxB.height / 2,
-    })
-
-    await expect(page.getByText(`Já existe um arquivo "dup" em "${projectB}".`)).toBeVisible()
-    // Nothing moved: each project still has exactly its own 'dup'.
-    await expect(page.locator(`[data-dnd-group="${projectA}"] .file-name`)).toHaveText(['dup'])
-    await expect(page.locator(`[data-dnd-group="${projectB}"] .file-name`)).toHaveText(['dup'])
+    await expect(sourceFiles).toHaveText(['stays-put'])
   })
 
   test('reorders projects by dragging the header handle', async ({ page, isMobile }) => {
