@@ -80,11 +80,30 @@ export interface ProjectGroupProps {
   /**
    * Reordering (see ProjectsSidebar's own doc comment on its `pickedItem`
    * state for the full picture): the single project- or file-scoped item
-   * currently "picked" via the handle, or null. Drives the handle's
-   * `aria-pressed`, and whether this header (or one of this project's
-   * files) renders as a tappable pick target.
+   * currently "picked" via the handle, or null. Narrowed to null by
+   * ProjectsSidebar whenever the pick belongs to a DIFFERENT project — this
+   * component and `FileRow` only ever need the real object to compute their
+   * OWN handle's `aria-pressed` and a row's/header's own `isRowPickTarget`/
+   * `isHeaderPickTarget`, both of which are `matchZone` calls that already
+   * return null for anything outside this project. That narrowing keeps an
+   * unrelated project's memo() from being defeated by every pick/cancel/
+   * commit — passing the raw object through unfiltered would give every
+   * ProjectGroup a changed prop reference regardless of which project the
+   * pick actually concerns. See `hasPickedItem` below for the (separate,
+   * necessarily project-agnostic) "is anything picked at all" signal.
    */
   pickedItem: DragSource | null
+  /**
+   * Whether ANY project/file is currently picked, anywhere in the sidebar —
+   * unlike `pickedItem` above, deliberately NOT narrowed per project: a
+   * click on this header while picking is active must resolve the pick (via
+   * `onRowActivateWhilePicked`, which itself decides commit vs. cancel)
+   * instead of the normal expand/collapse, even when the pick belongs to a
+   * different project entirely — that's exactly the "click a different
+   * project's header cancels the pick" case. `pickedItem` can't answer this
+   * on its own once narrowed to null for every other project.
+   */
+  hasPickedItem: boolean
   /** Tap or Enter/Space on this project's own handle — toggles picking it. */
   onTapHandle: (source: DragSource) => void
   /**
@@ -140,6 +159,7 @@ export const ProjectGroup = memo(function ProjectGroup({
   onMoveFile,
   onMoveProject,
   pickedItem,
+  hasPickedItem,
   onTapHandle,
   onRowActivateWhilePicked,
   onToggleArchived,
@@ -193,13 +213,14 @@ export const ProjectGroup = memo(function ProjectGroup({
   const isHandlePicked = pickedItem?.kind === 'project' && pickedItem.project === projectName
   const isHeaderPickTarget = pickedItem !== null && matchZone(headerZone, pickedItem) !== null
 
-  // While something is picked, the header's click resolves the pick
-  // (commit if it's a legal target, cancel otherwise) instead of its usual
-  // expand/collapse — a plain click while picked shouldn't silently do the
-  // normal thing, since that would leave the user unsure whether their tap
-  // landed on the pick or on the toggle.
+  // While something is picked — anywhere, not just in this project, hence
+  // `hasPickedItem` rather than the (per-project-narrowed) `pickedItem` — the
+  // header's click resolves the pick (commit if it's a legal target, cancel
+  // otherwise) instead of its usual expand/collapse — a plain click while
+  // picked shouldn't silently do the normal thing, since that would leave
+  // the user unsure whether their tap landed on the pick or on the toggle.
   function handleHeaderClick() {
-    if (pickedItem) {
+    if (hasPickedItem) {
       onRowActivateWhilePicked(headerZone)
       return
     }
@@ -368,7 +389,7 @@ export const ProjectGroup = memo(function ProjectGroup({
           // no-tabindex version), since it's now a real keyboard control,
           // not just a pointer-only affordance.
           <span
-            className={`drag-handle${isHandlePicked ? ' picked' : ''}`}
+            className="drag-handle"
             data-dnd-handle="project"
             role="button"
             tabIndex={0}
@@ -532,6 +553,7 @@ export const ProjectGroup = memo(function ProjectGroup({
               onToggleArchived={onToggleFileArchived}
               onMoveFile={onMoveFile}
               pickedItem={pickedItem}
+              hasPickedItem={hasPickedItem}
               onTapHandle={onTapHandle}
               onRowActivateWhilePicked={onRowActivateWhilePicked}
             />

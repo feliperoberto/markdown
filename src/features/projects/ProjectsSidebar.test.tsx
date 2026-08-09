@@ -488,5 +488,91 @@ describe('ProjectsSidebar + useProjects', () => {
       fireEvent.click(await screen.findByRole('button', { name: 'Mostrar arquivados (1)' }))
       expect(screen.queryByRole('button', { name: 'Mover projeto Segundo' })).toBeNull()
     })
+
+    // Regression: deleting/renaming/archiving the picked file (or project)
+    // out from under an active pick, via its own still-open "..." menu,
+    // used to leave `pickedItem` pointing at a source that no longer
+    // visibly exists — every other same-project row kept rendering as a
+    // legal drop target for nothing. ProjectsSidebar now clears the pick in
+    // that case, mirroring the equivalent effect it already had for a
+    // dangling `openMenu`.
+    it('deleting the picked file via its own "..." menu clears the pick', async () => {
+      renderHarness()
+
+      const handle = screen.getByRole('button', { name: 'Mover arquivo Sem título' })
+      fireEvent.keyDown(handle, { key: 'Enter' })
+      expect(handle.getAttribute('aria-pressed')).toBe('true')
+
+      fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo Sem título' }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Excluir$/ }))
+      await waitFor(() => expect(screen.queryByText('Sem título')).toBeNull())
+
+      expect(screen.queryByRole('button', { name: /selecionado para mover/ })).toBeNull()
+    })
+
+    it('archiving the picked file via its own "..." menu clears the pick', async () => {
+      renderHarness()
+
+      const handle = screen.getByRole('button', { name: 'Mover arquivo Sem título' })
+      fireEvent.keyDown(handle, { key: 'Enter' })
+      expect(handle.getAttribute('aria-pressed')).toBe('true')
+
+      fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo Sem título' }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Arquivar$/ }))
+      await waitFor(() =>
+        expect(screen.queryByRole('button', { name: 'Mover arquivo Sem título' })).toBeNull(),
+      )
+
+      expect(screen.queryByRole('button', { name: /selecionado para mover/ })).toBeNull()
+    })
+
+    it('archiving the picked project via its own "..." menu clears the pick', async () => {
+      renderHarness()
+
+      const handle = screen.getByRole('button', { name: 'Mover projeto Meu Projeto' })
+      fireEvent.keyDown(handle, { key: 'Enter' })
+      expect(handle.getAttribute('aria-pressed')).toBe('true')
+
+      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Meu Projeto/ }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Arquivar projeto/ }))
+      await waitFor(() =>
+        expect(screen.queryByRole('button', { name: 'Mover projeto Meu Projeto' })).toBeNull(),
+      )
+
+      expect(screen.queryByRole('button', { name: /selecionado para mover/ })).toBeNull()
+    })
+
+    // Regression: `matchZone` used to match a zone against ITSELF (a picked
+    // file's own row, or a picked project's own header), so the picked
+    // source highlighted as if it were also a legal drop target for itself.
+    it("a picked file's own row is never highlighted as a drop target for itself", async () => {
+      renderHarness()
+
+      vi.mocked(showPromptDialog).mockResolvedValueOnce('segundo-arquivo')
+      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Meu Projeto/ }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Novo arquivo/ }))
+      expect(await screen.findByText('segundo-arquivo')).not.toBeNull()
+
+      const handle = screen.getByRole('button', { name: 'Mover arquivo Sem título' })
+      fireEvent.keyDown(handle, { key: 'Enter' })
+
+      const ownRow = document
+        .querySelector('.file-name')
+        ?.closest('.file-item') as HTMLElement | null
+      expect(ownRow?.getAttribute('data-drop-target')).toBeNull()
+
+      const otherRow = screen.getByText('segundo-arquivo').closest('.file-item')
+      expect(otherRow?.getAttribute('data-drop-target')).toBe('true')
+    })
+
+    it("a picked project's own header is never highlighted as a drop target for itself", async () => {
+      renderHarness()
+
+      const handle = screen.getByRole('button', { name: 'Mover projeto Meu Projeto' })
+      fireEvent.keyDown(handle, { key: 'Enter' })
+
+      const ownGroup = handle.closest('.project-group')
+      expect(ownGroup?.getAttribute('data-drop-target')).toBeNull()
+    })
   })
 })

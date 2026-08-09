@@ -32,9 +32,10 @@ export type DropIntent =
  * Whether/how `source` could land on `zone`, independent of any point/rect —
  * the pure eligibility rule shared by the pointer-drag path
  * (`resolveDropIntent`, which additionally hit-tests a point) and pick mode
- * (`resolvePickTargets`/`resolveTapOnHandle`, which has no pointer position
- * at all — a zone is either a valid tap target for the current pick or it
- * isn't):
+ * (`resolveTapOnHandle`, and each row/header's own `isRowPickTarget`/
+ * `isHeaderPickTarget` in `FileRow`/`ProjectGroup`, which have no pointer
+ * position at all — a zone is either a valid tap target for the current pick
+ * or it isn't):
  *
  * | zone               | source `file`, SAME project                 | source `file`, OTHER project | source `project`        |
  * |--------------------|-----------------------------------------------|-------------------------------|--------------------------|
@@ -46,17 +47,26 @@ export type DropIntent =
  * DIFFERENT project is a removed feature (see CHANGELOG), so any zone
  * belonging to another project is not a match for a file source at all,
  * exactly like a project source landing on a file row isn't.
+ *
+ * A zone that IS the source itself is also never a match — a file's own row,
+ * or a project's own (unarchived) header — even though "insert before
+ * itself" would be a harmless no-op move if applied. Pick mode renders every
+ * match as a highlighted, tappable "legal target" (see `FileRow`/
+ * `ProjectGroup`'s own `isRowPickTarget`/`isHeaderPickTarget`), so without
+ * this a picked item would highlight itself as a place to drop it.
  */
 export function matchZone(zone: ZoneIdentity, source: DragSource): DropIntent | null {
   if (zone.kind === 'file') {
     if (source.kind !== 'file') return null
     if (zone.project !== source.project) return null
+    if (zone.file === source.file) return null
     return { kind: 'file', beforeFile: zone.file }
   }
 
   // zone.kind === 'group'
   if (source.kind === 'project') {
     if (zone.archived) return null
+    if (zone.project === source.project) return null
     return { kind: 'project', beforeProject: zone.project }
   }
   if (zone.project !== source.project) return null
@@ -99,20 +109,6 @@ export function resolveDropIntent(
     // means stop.
   }
   return null
-}
-
-/**
- * Every zone (no rect needed — pick mode has no pointer position, only "is
- * this row/group a valid place to put the picked item") that `source` could
- * legally land on. Used to decide which OTHER rows/groups render a tappable
- * "drop here" affordance while something is picked (see `FileRow`/
- * `ProjectGroup`'s `onTogglePick`/pick-mode rendering).
- */
-export function resolvePickTargets(
-  zones: readonly ZoneIdentity[],
-  source: DragSource,
-): ZoneIdentity[] {
-  return zones.filter((zone) => matchZone(zone, source) !== null)
 }
 
 function sourcesEqual(a: DragSource, b: DragSource): boolean {

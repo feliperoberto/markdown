@@ -3,11 +3,9 @@ import {
   applyDropIntent,
   matchZone,
   resolveDropIntent,
-  resolvePickTargets,
   resolveTapOnHandle,
   stepBefore,
   type DropZone,
-  type ZoneIdentity,
 } from './dnd'
 
 const fileZone = (
@@ -185,29 +183,6 @@ describe('matchZone', () => {
     expect(
       matchZone({ kind: 'file', project: 'A', file: 'a' }, { kind: 'project', project: 'A' }),
     ).toBeNull()
-  })
-})
-
-describe('resolvePickTargets', () => {
-  it('returns only the zones the picked source could legally land on', () => {
-    const zones: ZoneIdentity[] = [
-      { kind: 'file', project: 'A', file: 'b' },
-      { kind: 'file', project: 'A', file: 'c' },
-      { kind: 'file', project: 'B', file: 'x' },
-      { kind: 'group', project: 'A', archived: false },
-      { kind: 'group', project: 'B', archived: false },
-    ]
-    const targets = resolvePickTargets(zones, { kind: 'file', project: 'A', file: 'a' })
-    expect(targets).toEqual([
-      { kind: 'file', project: 'A', file: 'b' },
-      { kind: 'file', project: 'A', file: 'c' },
-      { kind: 'group', project: 'A', archived: false },
-    ])
-  })
-
-  it('returns an empty list when nothing matches', () => {
-    const zones: ZoneIdentity[] = [{ kind: 'file', project: 'B', file: 'x' }]
-    expect(resolvePickTargets(zones, { kind: 'file', project: 'A', file: 'a' })).toEqual([])
   })
 })
 

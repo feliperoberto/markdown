@@ -43,6 +43,7 @@ function renderRow(overrides: Partial<Parameters<typeof FileRow>[0]> = {}) {
       onRenameFile={vi.fn()}
       onDeleteFile={vi.fn()}
       pickedItem={null}
+      hasPickedItem={false}
       onTapHandle={vi.fn()}
       onRowActivateWhilePicked={vi.fn()}
       {...overrides}
@@ -87,6 +88,7 @@ describe('FileRow', () => {
         onRenameFile={vi.fn()}
         onDeleteFile={vi.fn()}
         pickedItem={null}
+        hasPickedItem={false}
         onTapHandle={vi.fn()}
         onRowActivateWhilePicked={vi.fn()}
       />,
@@ -181,6 +183,33 @@ describe('FileRow', () => {
         onSelectFile,
         onRowActivateWhilePicked,
         pickedItem,
+        hasPickedItem: true,
+      })
+      fireEvent.click(getRow(container))
+      expect(onSelectFile).not.toHaveBeenCalled()
+      expect(onRowActivateWhilePicked).toHaveBeenCalledWith({
+        kind: 'file',
+        project: 'Project',
+        file: 'notes',
+      })
+    })
+
+    // Regression: ProjectsSidebar narrows `pickedItem` to null for every
+    // project other than the one the pick belongs to (to avoid defeating
+    // memo() sidebar-wide on every pick), but `hasPickedItem` is
+    // deliberately NOT narrowed — a click on a row in a DIFFERENT project
+    // than the one being picked must still resolve (here: cancel) the pick
+    // instead of silently opening the file, exactly as if `pickedItem`
+    // itself were visible to this row.
+    it('clicking the row still calls onRowActivateWhilePicked when hasPickedItem is true even though pickedItem is null (pick belongs to another project)', () => {
+      const onSelectFile = vi.fn()
+      const onRowActivateWhilePicked = vi.fn()
+      const { container } = renderRow({
+        onMoveFile: vi.fn(),
+        onSelectFile,
+        onRowActivateWhilePicked,
+        pickedItem: null,
+        hasPickedItem: true,
       })
       fireEvent.click(getRow(container))
       expect(onSelectFile).not.toHaveBeenCalled()

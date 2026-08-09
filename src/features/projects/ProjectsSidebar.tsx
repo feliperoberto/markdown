@@ -378,6 +378,33 @@ export function ProjectsSidebar({
     })
   }, [projects])
 
+  // Clears a dangling pick the same way, and for the same reason: a picked
+  // file/project can be deleted, renamed, or archived out from under it via
+  // its own still-open "..." menu (that menu's trigger stops propagation
+  // before reaching the row's onClick, so opening it doesn't itself cancel
+  // the pick). Left uncleared, every other same-project row keeps rendering
+  // as a legal drop target for a source that no longer visibly exists — and
+  // worse, if a new file/project later reuses the same name, a subsequent
+  // tap could silently resolve against that stale identity and move it.
+  // Archiving is included, not just delete/rename: an archived project's
+  // handle stops rendering entirely (see ProjectGroup's `!isArchived`
+  // guard), and an archived file's row leaves view behind its project's
+  // "Mostrar arquivados" toggler — either way the picked handle itself is
+  // no longer there to re-tap or Escape away from.
+  useEffect(() => {
+    setPickedItem((prev) => {
+      if (prev === null) return null
+      if (prev.kind === 'file') {
+        if (!fileExists(projects, prev.project, prev.file)) return null
+        if (isFileArchived(archivedFiles, prev.project, prev.file)) return null
+        return prev
+      }
+      if (!projectExists(projects, prev.project)) return null
+      if (archivedProjects.has(prev.project)) return null
+      return prev
+    })
+  }, [projects, archivedFiles, archivedProjects])
+
   // Drop entries for projects that no longer exist (deleted/renamed) so the
   // persisted set doesn't accumulate stale names forever.
   useEffect(() => {
@@ -549,7 +576,25 @@ export function ProjectsSidebar({
                 onUploadMultipleFiles={onUploadMultipleFiles}
                 onMoveFile={onMoveFile}
                 onMoveProject={onMoveProject}
-                pickedItem={pickedItem}
+                // Narrowed to null for every OTHER project, same reasoning
+                // as `openFileMenu` right above — passing the raw
+                // `pickedItem` through unfiltered would give every
+                // ProjectGroup a changed prop reference on every pick/
+                // cancel/commit regardless of which project it belongs to,
+                // defeating memo() for the whole sidebar tree instead of
+                // just the project the pick actually concerns. Both
+                // `DragSource` variants share a `project` field, so this one
+                // comparison covers a picked file and a picked project alike.
+                // `hasPickedItem` (unnarrowed) is what every project's
+                // header/rows use instead to decide whether a plain click
+                // should resolve the pick — narrowing `pickedItem` itself
+                // for that purpose would make an unrelated project's click
+                // silently fall through to its normal expand/select
+                // behavior instead of cancelling the active pick.
+                pickedItem={
+                  pickedItem !== null && pickedItem.project === projectName ? pickedItem : null
+                }
+                hasPickedItem={pickedItem !== null}
                 onTapHandle={handleTapHandle}
                 onRowActivateWhilePicked={handleRowActivateWhilePicked}
                 onToggleArchived={onToggleArchived}

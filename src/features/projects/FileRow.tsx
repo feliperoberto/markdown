@@ -54,11 +54,24 @@ export interface FileRowProps {
   /**
    * Reordering: the single project- or file-scoped item currently "picked"
    * via a handle, or null — see ProjectsSidebar's own doc comment on its
-   * `pickedItem` state for the full picture. Drives this row's handle's
-   * `aria-pressed`, and whether the row itself renders as a tappable pick
-   * target.
+   * `pickedItem` state for the full picture. Narrowed to null by
+   * ProjectsSidebar (via ProjectGroup) whenever the pick belongs to a
+   * DIFFERENT project, to avoid defeating memo() sidebar-wide on every pick.
+   * Drives this row's handle's `aria-pressed`, and whether the row itself
+   * renders as a tappable pick target. See `hasPickedItem` below for the
+   * separate, project-agnostic "is anything picked" signal this narrowing
+   * can't answer on its own.
    */
   pickedItem: DragSource | null
+  /**
+   * Whether ANY project/file is currently picked, anywhere in the sidebar —
+   * unlike `pickedItem` above, NOT narrowed per project: clicking this row
+   * while picking is active must resolve the pick instead of opening the
+   * file, even when the pick belongs to a different project (that's the
+   * "click a different project cancels the pick" case) — `pickedItem` alone
+   * can't signal that once it's narrowed to null for every other project.
+   */
+  hasPickedItem: boolean
   /** Tap or Enter/Space on this file's own handle — toggles picking it. */
   onTapHandle: (source: DragSource) => void
   /**
@@ -94,6 +107,7 @@ export const FileRow = memo(function FileRow({
   onToggleArchived,
   onMoveFile,
   pickedItem,
+  hasPickedItem,
   onTapHandle,
   onRowActivateWhilePicked,
 }: FileRowProps): JSX.Element {
@@ -115,11 +129,13 @@ export const FileRow = memo(function FileRow({
     pickedItem.file === file.name
   const isRowPickTarget = pickedItem !== null && matchZone(rowZone, pickedItem) !== null
 
-  // While something is picked, the row's click resolves the pick (commit if
-  // it's a legal target, cancel otherwise) instead of its usual open-file —
-  // same reasoning as ProjectGroup's identical header-click branching.
+  // While something is picked — anywhere, not just in this project, hence
+  // `hasPickedItem` rather than the (per-project-narrowed) `pickedItem` —
+  // the row's click resolves the pick (commit if it's a legal target,
+  // cancel otherwise) instead of its usual open-file — same reasoning as
+  // ProjectGroup's identical header-click branching.
   function handleRowClick() {
-    if (pickedItem) {
+    if (hasPickedItem) {
       onRowActivateWhilePicked(rowZone)
       return
     }
@@ -225,7 +241,7 @@ export const FileRow = memo(function FileRow({
           // (global.css) is what keeps a finger here from also panning the
           // sidebar while dragging.
           <span
-            className={`drag-handle${isHandlePicked ? ' picked' : ''}`}
+            className="drag-handle"
             data-dnd-handle="file"
             role="button"
             tabIndex={0}

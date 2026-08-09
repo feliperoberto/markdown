@@ -323,26 +323,22 @@ describe('useSidebarDnd', () => {
     expect(onDragStart).toHaveBeenCalledOnce()
   })
 
-  it('the project handle drag calls onMoveProject, not onMoveFile', () => {
+  it('dropping a project handle back onto its own (only) group is a no-op — never calls onMoveFile or onMoveProject', () => {
     const onMoveFile = vi.fn()
     const onMoveProject = vi.fn()
     const { container } = renderHarness({ onMoveFile, onMoveProject })
     const handleProject = container.querySelector('[data-dnd-handle="project"]') as HTMLElement
 
-    // Dropped back onto the same group's own zone (the only group present)
-    // — kind mismatch (project source over a group hit by a project) still
-    // resolves to a project-move intent in dnd.ts's table.
+    // The only group zone in this harness belongs to the SAME project the
+    // handle is dragging — `matchZone` excludes a zone that IS the source
+    // itself (dnd.ts), so this resolves to no intent at all, not merely a
+    // same-position "move" that the model layer would then have to no-op.
     fireEvent(handleProject, pointerEvent('pointerdown', { clientX: 10, clientY: 10 }))
     fireEvent(handleProject, pointerEvent('pointermove', { clientX: 10, clientY: 150 }))
     fireEvent(handleProject, pointerEvent('pointerup', { clientX: 10, clientY: 150 }))
 
     expect(onMoveFile).not.toHaveBeenCalled()
-    // Dropping a project onto itself resolves to `beforeProject: 'P'` per
-    // dnd.ts's table (there's only one project zone in this harness); the
-    // model layer (untouched by this hook) is what actually no-ops a
-    // project dropped onto itself — this test only asserts the hook wires
-    // the call through with the right shape.
-    expect(onMoveProject).toHaveBeenCalledExactlyOnceWith('P', 'P')
+    expect(onMoveProject).not.toHaveBeenCalled()
   })
 
   it('does not start a gesture when the matching handler was not provided', () => {
