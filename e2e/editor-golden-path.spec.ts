@@ -22,10 +22,8 @@ test.describe('editor golden path', () => {
     await page.getByLabel('Nome do arquivo').fill(fileName)
     await page.getByRole('button', { name: 'Criar', exact: true }).click()
 
-    // Creating a file doesn't auto-select it, so open it explicitly before
-    // expecting the editor pane to be usable.
-    await page.getByText(fileName).click()
-
+    // A freshly created file becomes the active one, so the editor is
+    // already showing it — no explicit click needed.
     const editor = page.locator('#editor')
     await expect(editor).toBeVisible()
     await editor.fill('# Hello E2E\n\nThis is **bold** text.')

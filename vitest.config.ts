@@ -27,11 +27,18 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
-      // Scope the coverage gate to `src/lib/` for now (issue #31): this is
-      // the highest-value, dependency-light code (markdown render/sanitize
-      // pipeline, storage schema versioning). Project-wide coverage,
-      // including components/UI, is out of scope here (see issue #32).
-      include: ['src/lib/**/*.{ts,tsx}'],
+      // Scoped to `src/lib/` (issue #31: the highest-value, dependency-
+      // light code — markdown render/sanitize pipeline, storage schema
+      // versioning) plus `src/features/projects/` — the projects sidebar's
+      // file-management surface, brought under the gate alongside the
+      // mobile drag & drop / tombstone-sync work that touched it (a
+      // regression-analysis finding: this whole directory was previously
+      // outside the gate, so an untested file there cost nothing, which is
+      // exactly the gap that let drag & drop's mobile handlers and the
+      // rename/sync duplicate bug both ship uncaught). Project-wide
+      // coverage beyond these two directories is still out of scope (see
+      // issue #32).
+      include: ['src/lib/**/*.{ts,tsx}', 'src/features/projects/**/*.{ts,tsx}'],
       // useOnlineStatus.ts: a thin browser-API hook, same reasoning as
       // pwa-register.ts below.
       // pwa-register.ts: imports the build-time `virtual:pwa-register`

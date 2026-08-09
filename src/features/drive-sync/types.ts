@@ -12,6 +12,17 @@
 export interface ProjectsSnapshot {
   /** Arbitrary JSON-serializable project data, keyed by project name. */
   projects: Record<string, unknown>
+  /**
+   * Rename/delete tombstones (composite key -> ISO deletedAt; see
+   * `src/features/projects/tombstones.ts`), synced alongside `projects` so
+   * a deletion actually propagates instead of the old key silently
+   * resurrecting the next time this snapshot is pulled — see
+   * `mergeProjectsByFreshness`'s `tombstones` param, the only place this is
+   * read. Optional so an older snapshot (written before this field
+   * existed) still parses; a provider that doesn't receive one treats it
+   * as empty.
+   */
+  tombstones?: Record<string, unknown>
 }
 
 export interface SyncStatus {

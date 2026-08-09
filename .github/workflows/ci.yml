@@ -45,8 +45,13 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Unit tests
-        run: npm run test
+      # Runs the full unit suite under coverage instrumentation and enforces
+      # the thresholds in vitest.config.ts (currently scoped to src/lib/ and
+      # src/features/projects/ — see that file's comment) — previously
+      # `npm run coverage` was never invoked by any workflow, so those
+      # thresholds never actually gated a PR.
+      - name: Unit tests + coverage
+        run: npm run coverage
 
       - name: Build
         run: npm run build

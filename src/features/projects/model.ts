@@ -265,6 +265,13 @@ export interface FreshnessMergeResult {
   remoteChanged: boolean
 }
 
+// Stable empty-object default for `mergeProjectsByFreshness`'s `tombstones`
+// param — a `= {}` default parameter would allocate a fresh object every
+// call, which doesn't matter for correctness here but breaks the pattern
+// every other stable-empty-default in this codebase follows (see
+// ProjectsSidebar.tsx's NO_ARCHIVED etc.).
+const NO_TOMBSTONES: Readonly<Record<string, string>> = {}
+
 /**
  * Freshness-based merge for smart sync (issue: eliminate blind-overwrite
  * sync). For a file present on both sides, keeps whichever has the newer
@@ -275,14 +282,26 @@ export interface FreshnessMergeResult {
  * files, unlike `mergeProjects` (incoming always wins) or
  * `mergeRestoredProjects` (local always wins).
  *
- * Known limitation, same as `mergeRestoredProjects`: no tombstones. A file
- * deleted on one side but still present in the other's last-synced
- * snapshot reappears after merging — this function has no way to
- * distinguish "never existed there" from "existed and was deleted".
+ * `tombstones` (composite key -> ISO deletedAt, see tombstones.ts) closes
+ * the gap that union alone leaves open: identity here is the object key
+ * (`encodeArchivedFileKey`-shaped for a file, `encodeProjectTombstoneKey`-
+ * shaped for a whole project), so a rename is a key move — the old key
+ * survives in whichever side hasn't synced the rename yet, and a plain
+ * union would resurrect it forever. A **remote-only** entry (never a local
+ * one — local edits always survive a sync, matching every other merge
+ * function in this file) is dropped when a tombstone for its key is newer
+ * than the remote content it would otherwise restore; a remote edit made
+ * *after* the deletion is still newer than the tombstone and wins normally,
+ * which is what actually distinguishes "reappeared because it was never
+ * told about the deletion" from "was genuinely recreated/edited elsewhere
+ * since". A whole remote-only project is dropped the same way, checked
+ * against the newest of its remote files so a single post-deletion edit
+ * anywhere in it is enough to resurrect the rest.
  */
 export function mergeProjectsByFreshness(
   local: ProjectsState,
   remote: ProjectsState,
+  tombstones: Readonly<Record<string, string>> = NO_TOMBSTONES,
 ): FreshnessMergeResult {
   const merged: ProjectsState = {}
   let localChanged = false
@@ -290,8 +309,34 @@ export function mergeProjectsByFreshness(
 
   const projectNames = new Set([...Object.keys(local), ...Object.keys(remote)])
   for (const projectName of projectNames) {
-    const localFiles = local[projectName] ?? {}
     const remoteFiles = remote[projectName] ?? {}
+
+    if (!projectExists(local, projectName)) {
+      const projectTombstone = tombstones[encodeProjectTombstoneKey(projectName)]
+      if (projectTombstone) {
+        const remoteFileList = Object.values(remoteFiles)
+        // `.every()` on an empty array is vacuously true, so an EMPTY
+        // remote project would otherwise always count as "untouched since
+        // deletion" regardless of how old the tombstone is — including
+        // when the empty project is a legitimate fresh recreation of that
+        // name on another device (no per-file timestamp exists yet to
+        // prove otherwise). Requiring at least one file keeps the tombstone
+        // meaningful only where it has actual evidence to compare against;
+        // an ambiguous empty project is kept, matching this function's
+        // general bias toward not discarding data it can't be sure about.
+        const untouchedSinceDeletion =
+          remoteFileList.length > 0 &&
+          remoteFileList.every((file) => file.timestamp <= projectTombstone)
+        if (untouchedSinceDeletion) {
+          // The whole project is dropped — never added to `merged` at all,
+          // not even as an empty project — and remote must catch up.
+          remoteChanged = true
+          continue
+        }
+      }
+    }
+
+    const localFiles = local[projectName] ?? {}
     const files: ProjectFiles = {}
 
     const fileNames = new Set([...Object.keys(localFiles), ...Object.keys(remoteFiles)])
@@ -311,6 +356,11 @@ export function mergeProjectsByFreshness(
         files[fileName] = localFile
         remoteChanged = true
       } else if (remoteFile) {
+        const fileTombstone = tombstones[encodeArchivedFileKey(projectName, fileName)]
+        if (fileTombstone && fileTombstone > remoteFile.timestamp) {
+          remoteChanged = true
+          continue
+        }
         files[fileName] = remoteFile
         localChanged = true
       }
@@ -362,8 +412,8 @@ export function pruneArchived(
  * bare name set won't do — but user-typed names aren't sanitized against
  * containing arbitrary characters either (only the ZIP-import/Drive-restore
  * boundary does that), so a hand-rolled delimiter scheme would be unsafe.
- * JSON-array encoding sidesteps that entirely, matching the precedent in
- * `dnd.ts`'s `serializeDrag`/`readDrag` for the same reason.
+ * JSON-array encoding sidesteps that entirely; `encodeProjectTombstoneKey`
+ * below and `tombstones.ts` reuse the same reasoning.
  */
 export function encodeArchivedFileKey(projectName: string, fileName: string): string {
   return JSON.stringify([projectName, fileName])
@@ -380,6 +430,31 @@ export function decodeArchivedFileKey(key: string): { project: string; file: str
       typeof parsed[1] === 'string'
     ) {
       return { project: parsed[0], file: parsed[1] }
+    }
+  } catch {
+    // Not our key (or malformed) — ignore.
+  }
+  return null
+}
+
+/**
+ * Project-level tombstone key (see tombstones.ts). Same JSON-array
+ * encoding as `encodeArchivedFileKey` for the same reason — project names
+ * aren't sanitized against arbitrary characters outside the ZIP-import/
+ * Drive-restore boundary, so a hand-rolled delimiter would be unsafe — but
+ * a single-element array, which is what distinguishes a whole-project
+ * tombstone from a per-file one sharing the same key space.
+ */
+export function encodeProjectTombstoneKey(projectName: string): string {
+  return JSON.stringify([projectName])
+}
+
+/** Never throws — a hand-edited/corrupt entry decodes to `null`, matching this file's defensive-parsing convention. */
+export function decodeProjectTombstoneKey(key: string): { project: string } | null {
+  try {
+    const parsed = JSON.parse(key) as unknown
+    if (Array.isArray(parsed) && parsed.length === 1 && typeof parsed[0] === 'string') {
+      return { project: parsed[0] }
     }
   } catch {
     // Not our key (or malformed) — ignore.

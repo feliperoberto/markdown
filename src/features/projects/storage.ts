@@ -65,6 +65,17 @@ const ARCHIVED_PROJECTS_KEY = 'archivedProjects'
 // encodeArchivedFileKey/decodeArchivedFileKey, this module doesn't need to
 // know the format, same separation as dnd.ts payloads being opaque here.
 const ARCHIVED_FILES_KEY = 'archivedFiles'
+// Rename/delete tombstones (issue: a renamed or deleted file/project
+// reappearing as a duplicate after a Drive sync). Deliberately NOT the
+// same device-local pattern as ARCHIVED_PROJECTS_KEY/ARCHIVED_FILES_KEY
+// above — the whole point is that a tombstone travels WITH the Drive
+// snapshot (see google-drive-provider.ts's uploadSnapshot/pull) so a
+// deletion actually propagates to a device that hasn't seen it yet; the
+// local copy here is this device's own view, merged with whatever the
+// last pull brought back (see tombstones.ts's mergeTombstones). Entries
+// are opaque composite keys owned by model.ts's encodeArchivedFileKey/
+// encodeProjectTombstoneKey — same opacity convention as ARCHIVED_FILES_KEY.
+const TOMBSTONES_KEY = 'tombstones'
 
 export interface LastEditedFile {
   project: string
@@ -301,4 +312,42 @@ export function saveArchivedFiles(
   adapter: StorageAdapter = localStorageAdapter,
 ): void {
   saveNameSet(ARCHIVED_FILES_KEY, names, adapter)
+}
+
+/**
+ * Reads the tombstone map (see tombstones.ts). Returns an empty object on
+ * anything missing or malformed — a missing/corrupt entry means "nothing
+ * remembered as deleted", the neutral default, matching every other
+ * sidecar here.
+ */
+export function loadTombstones(
+  adapter: StorageAdapter = localStorageAdapter,
+): Record<string, string> {
+  const raw = adapter.get(TOMBSTONES_KEY)
+  if (!raw) return {}
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+      const result: Record<string, string> = {}
+      for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+        if (typeof value === 'string') result[key] = value
+      }
+      return result
+    }
+  } catch (error) {
+    console.error(`Failed to parse "${TOMBSTONES_KEY}"; ignoring it.`, error)
+  }
+  return {}
+}
+
+/** Persists the tombstone map. Best-effort. */
+export function saveTombstones(
+  tombstones: Readonly<Record<string, string>>,
+  adapter: StorageAdapter = localStorageAdapter,
+): void {
+  try {
+    adapter.set(TOMBSTONES_KEY, JSON.stringify(tombstones))
+  } catch (error) {
+    console.error(`Failed to persist "${TOMBSTONES_KEY}"; continuing.`, error)
+  }
 }

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/preact'
+import { render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/preact'
 import { useProjects } from './useProjects'
 import { ProjectsSidebar } from './ProjectsSidebar'
 import { ToastProvider } from '@/components'
@@ -41,6 +41,8 @@ function Harness({
     toggleProjectArchived,
     archivedFiles,
     toggleFileArchived,
+    moveFile,
+    moveProject,
   } = useProjects()
 
   return (
@@ -60,6 +62,8 @@ function Harness({
       archivedFiles={archivedFiles}
       onToggleFileArchived={toggleFileArchived}
       onSelectionChange={onSelectionChange}
+      onMoveFile={moveFile}
+      onMoveProject={moveProject}
     />
   )
 }
@@ -116,13 +120,13 @@ describe('ProjectsSidebar + useProjects', () => {
     // Rename the file, via its own "..." actions menu.
     vi.mocked(showPromptDialog).mockResolvedValueOnce('renamed-notes')
     fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo notes' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: /Renomear arquivo/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /Renomear$/ }))
     await waitFor(() => expect(screen.queryByText('renamed-notes')).not.toBeNull())
     expect(screen.queryByText('notes')).toBeNull()
 
     // Delete the file.
     fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo renamed-notes' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: /Excluir arquivo/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /Excluir$/ }))
     await waitFor(() => expect(screen.queryByText('renamed-notes')).toBeNull())
   })
 
@@ -282,7 +286,7 @@ describe('ProjectsSidebar + useProjects', () => {
 
       onSelectionChange.mockClear()
       fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo notes' }))
-      fireEvent.click(screen.getByRole('menuitem', { name: /Arquivar arquivo/ }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Arquivar$/ }))
 
       await waitFor(() => expect(onSelectionChange).toHaveBeenLastCalledWith([]))
     })
@@ -296,7 +300,7 @@ describe('ProjectsSidebar + useProjects', () => {
       expect(await screen.findByText('notes')).not.toBeNull()
 
       fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo notes' }))
-      fireEvent.click(screen.getByRole('menuitem', { name: /Arquivar arquivo/ }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Arquivar$/ }))
 
       // Leaves the project's everyday file list...
       await waitFor(() => expect(screen.queryByText('notes')).toBeNull())
@@ -330,7 +334,7 @@ describe('ProjectsSidebar + useProjects', () => {
 
       // The default seeded project has one file, "Sem título".
       fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo Sem título' }))
-      fireEvent.click(screen.getByRole('menuitem', { name: /Arquivar arquivo/ }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Arquivar$/ }))
 
       expect(
         await screen.findByText(
@@ -343,7 +347,7 @@ describe('ProjectsSidebar + useProjects', () => {
       renderHarness()
 
       fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo Sem título' }))
-      fireEvent.click(screen.getByRole('menuitem', { name: /Arquivar arquivo/ }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Arquivar$/ }))
       expect(showConfirmDialog).not.toHaveBeenCalled()
 
       // Reveal it, reopen its menu, then check the item label flipped.
@@ -353,7 +357,154 @@ describe('ProjectsSidebar + useProjects', () => {
       fireEvent.click(
         await screen.findByRole('button', { name: 'Mais opções do arquivo Sem título' }),
       )
-      expect(await screen.findByRole('menuitem', { name: /Desarquivar arquivo/ })).not.toBeNull()
+      expect(await screen.findByRole('menuitem', { name: /Desarquivar$/ })).not.toBeNull()
+    })
+  })
+
+  // Coverage-reachability fix (regression-analysis cause b): the harness now
+  // wires `onMoveFile`/`onMoveProject` through to `useProjects`, so these
+  // "Mover" menu items — the keyboard/non-drag alternative to the pointer
+  // drag handle — are reachable from a component-level test, not just the
+  // pure `dnd.ts`/`useSidebarDnd.ts` unit suites.
+  describe('"Mover" menu items', () => {
+    it('shows a "Mover para" target for another project, and moves the file there', async () => {
+      renderHarness()
+
+      vi.mocked(showPromptDialog).mockResolvedValueOnce('Outro')
+      fireEvent.click(screen.getByRole('button', { name: 'Criar novo projeto' }))
+      expect(await screen.findByText('Outro')).not.toBeNull()
+
+      // The default seeded project ("Meu Projeto") already has one file,
+      // "Sem título".
+      fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo Sem título' }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Mover para "Outro"/ }))
+
+      const outroGroup = (await screen.findByText('Outro')).closest('.project-group')
+      expect(outroGroup).not.toBeNull()
+      await waitFor(() =>
+        expect(within(outroGroup as HTMLElement).queryByText('Sem título')).not.toBeNull(),
+      )
+
+      const meuProjetoGroup = screen.getByText('Meu Projeto').closest('.project-group')
+      expect(within(meuProjetoGroup as HTMLElement).queryByText('Sem título')).toBeNull()
+    })
+
+    it('does not list a file\'s own project as a "Mover para" target', async () => {
+      renderHarness()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo Sem título' }))
+      expect(screen.queryByRole('menuitem', { name: /Mover para "Meu Projeto"/ })).toBeNull()
+    })
+
+    // Regression: only the create-file dialog path expanded a collapsed
+    // destination project so the newly active/moved file stays visible —
+    // moving a file into a collapsed project via this menu item selected
+    // it without expanding the project, leaving it selected but hidden.
+    it('expands a collapsed project when a file is moved into it', async () => {
+      renderHarness()
+
+      vi.mocked(showPromptDialog).mockResolvedValueOnce('Outro')
+      fireEvent.click(screen.getByRole('button', { name: 'Criar novo projeto' }))
+      expect(await screen.findByText('Outro')).not.toBeNull()
+
+      const outroHeader = screen.getByText('Outro').closest('.project-header')
+      expect(outroHeader).not.toBeNull()
+
+      // Collapse it.
+      fireEvent.click(outroHeader as HTMLElement)
+      expect(outroHeader?.getAttribute('aria-expanded')).toBe('false')
+
+      // Move the seeded file into it via the "Mover para" menu item.
+      fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo Sem título' }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Mover para "Outro"/ }))
+
+      await waitFor(() => expect(outroHeader?.getAttribute('aria-expanded')).toBe('true'))
+    })
+
+    // Regression: the "Mover para" menu previously listed every OTHER
+    // project including hidden/archived ones — the equivalent pointer-drag
+    // path can only ever drop onto a project that's actually rendered on
+    // screen (unarchived, or archived-and-revealed), so an archived,
+    // hidden project wasn't a reachable drag target but WAS a reachable
+    // "Mover para" menu target, silently moving a file somewhere the user
+    // couldn't see without any indication it was archived.
+    it('does not list an archived (hidden) project as a "Mover para" target', async () => {
+      renderHarness()
+
+      vi.mocked(showPromptDialog).mockResolvedValueOnce('Arquivado')
+      fireEvent.click(screen.getByRole('button', { name: 'Criar novo projeto' }))
+      expect(await screen.findByText('Arquivado')).not.toBeNull()
+
+      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Arquivado/ }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Arquivar projeto/ }))
+      await waitFor(() => expect(screen.queryByText('Arquivado')).toBeNull())
+
+      fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo Sem título' }))
+      expect(screen.queryByRole('menuitem', { name: /Mover para "Arquivado"/ })).toBeNull()
+
+      // Once revealed via "Mostrar arquivados", it becomes a legitimate
+      // target again — matching what the drag path can also now reach.
+      fireEvent.click(screen.getByRole('button', { name: 'Mostrar arquivados (1)' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo Sem título' }))
+      expect(await screen.findByRole('menuitem', { name: /Mover para "Arquivado"/ })).not.toBeNull()
+    })
+
+    it('omits move-up/move-down at the ends of the visible file list', async () => {
+      renderHarness()
+
+      vi.mocked(showPromptDialog).mockResolvedValueOnce('segundo-arquivo')
+      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Meu Projeto/ }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Novo arquivo/ }))
+      expect(await screen.findByText('segundo-arquivo')).not.toBeNull()
+
+      // "Sem título" is first in the visible list: no move-up.
+      fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo Sem título' }))
+      expect(screen.queryByRole('menuitem', { name: /Mover para cima/ })).toBeNull()
+      expect(screen.getByRole('menuitem', { name: /Mover para baixo/ })).not.toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo Sem título' }))
+
+      // "segundo-arquivo" is last: no move-down.
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Mais opções do arquivo segundo-arquivo' }),
+      )
+      expect(screen.getByRole('menuitem', { name: /Mover para cima/ })).not.toBeNull()
+      expect(screen.queryByRole('menuitem', { name: /Mover para baixo/ })).toBeNull()
+    })
+
+    it('omits project reorder items at the ends of the visible project list', async () => {
+      renderHarness()
+
+      vi.mocked(showPromptDialog).mockResolvedValueOnce('Segundo')
+      fireEvent.click(screen.getByRole('button', { name: 'Criar novo projeto' }))
+      expect(await screen.findByText('Segundo')).not.toBeNull()
+
+      // "Meu Projeto" is first: no move-up.
+      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Meu Projeto/ }))
+      expect(screen.queryByRole('menuitem', { name: /Mover projeto para cima/ })).toBeNull()
+      expect(screen.getByRole('menuitem', { name: /Mover projeto para baixo/ })).not.toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Meu Projeto/ }))
+
+      // "Segundo" is last: no move-down.
+      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Segundo/ }))
+      expect(screen.getByRole('menuitem', { name: /Mover projeto para cima/ })).not.toBeNull()
+      expect(screen.queryByRole('menuitem', { name: /Mover projeto para baixo/ })).toBeNull()
+    })
+
+    it("does not show project reorder items on an archived project's menu", async () => {
+      renderHarness()
+
+      vi.mocked(showPromptDialog).mockResolvedValueOnce('Segundo')
+      fireEvent.click(screen.getByRole('button', { name: 'Criar novo projeto' }))
+      expect(await screen.findByText('Segundo')).not.toBeNull()
+
+      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Segundo/ }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Arquivar projeto/ }))
+      await waitFor(() => expect(screen.queryByText('Segundo')).toBeNull())
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Mostrar arquivados (1)' }))
+      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Segundo/ }))
+      expect(screen.queryByRole('menuitem', { name: /Mover projeto para cima/ })).toBeNull()
+      expect(screen.queryByRole('menuitem', { name: /Mover projeto para baixo/ })).toBeNull()
     })
   })
 })

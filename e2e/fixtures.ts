@@ -1,4 +1,4 @@
-import { test as base, expect } from '@playwright/test'
+import { test as base, expect, type Page } from '@playwright/test'
 
 /**
  * Shared e2e fixture (issue #33).
@@ -29,3 +29,19 @@ export const test = base.extend({
 })
 
 export { expect }
+
+/**
+ * Creating a file closes the mobile drawer (app.tsx's `handleCreateFile`)
+ * so the newly-active file, now selected by default, is actually visible
+ * instead of sitting behind the sidebar overlay — see the mobile media
+ * query in global.css. On viewports where that applies, a spec creating
+ * more than one file (or interacting with the sidebar again after a
+ * create) needs to reopen the drawer first; on wider viewports the
+ * sidebar was never an overlay and this is a no-op (already open).
+ */
+export async function ensureSidebarOpen(page: Page): Promise<void> {
+  const menuButton = page.getByRole('button', { name: 'Abrir menu de projetos' })
+  if ((await menuButton.getAttribute('aria-expanded')) === 'false') {
+    await menuButton.click()
+  }
+}
