@@ -111,6 +111,79 @@ test.describe('file row actions menu', () => {
     await expect(trigger).toBeFocused()
   })
 
+  // Regression: `visibility: hidden` (used to hide the trigger on a
+  // non-active row) also removes an element from the Tab order — a hidden
+  // trigger can never itself receive focus, so rename/archive/delete/move
+  // was unreachable by keyboard for every file that wasn't already active.
+  // The fix reveals the trigger when the ROW ITSELF gets keyboard focus
+  // (`.file-item:focus-visible`), which happens one Tab stop before the
+  // trigger — so Tabbing onto a non-active row must reveal, and land
+  // keyboard focus on, its own trigger.
+  test('a non-active file\'s "..." trigger is reachable and focusable via Tab', async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(isMobile, 'Tab-key navigation is a desktop keyboard scenario')
+    await page.goto('/app.html')
+
+    const sidebar = page.locator('#projectsSidebar')
+    const projectName = `E2E Row Actions Keyboard ${Date.now()}`
+    const fileName = 'row-actions-kbd-file'
+    const otherFileName = 'row-actions-kbd-other-file'
+
+    await page.getByRole('button', { name: 'Criar novo projeto' }).click()
+    await page.getByLabel('Nome do novo projeto').fill(projectName)
+    await page.getByRole('button', { name: 'Criar', exact: true }).click()
+    await expect(sidebar.getByText(projectName)).toBeVisible()
+
+    for (const name of [fileName, otherFileName]) {
+      await ensureSidebarOpen(page)
+      await page
+        .getByRole('button', { name: `Mais opções do projeto ${projectName}`, exact: true })
+        .click()
+      await page.getByRole('menuitem', { name: /Novo arquivo/ }).click()
+      await page.getByLabel('Nome do arquivo').fill(name)
+      await page.getByRole('button', { name: 'Criar', exact: true }).click()
+      await expect(sidebar.getByText(name)).toBeVisible()
+    }
+    await ensureSidebarOpen(page)
+
+    // otherFileName was created last, so it's the active file — fileName
+    // is not, and its trigger starts visually hidden.
+    const trigger = page.getByRole('button', {
+      name: `Mais opções do arquivo ${fileName}`,
+      exact: true,
+    })
+    await expect(trigger).toBeHidden()
+
+    // DOM order within one row is row -> checkbox -> trigger (the row
+    // `<div>` wraps both). `.focus()` on the checkbox doesn't itself
+    // trigger `:focus-visible` (it's a programmatic, non-keyboard focus),
+    // but Shift+Tab from there is genuine keyboard input, so the row it
+    // lands on backing up onto IS `:focus-visible` — exactly like a real
+    // keyboard user tabbing in from somewhere earlier on the page.
+    const rowCheckbox = page.getByRole('checkbox', {
+      name: `Selecionar ${fileName} para download em lote`,
+    })
+    await rowCheckbox.focus()
+    await page.keyboard.press('Shift+Tab') // checkbox -> row (backward)
+    const row = sidebar.locator(
+      `[data-dnd-file="${fileName}"][data-dnd-file-project="${projectName}"]`,
+    )
+    await expect(row).toBeFocused()
+    // Wait for the CSS reveal to actually take effect before continuing
+    // the Tab sequence — under load, a Tab dispatched the instant DOM
+    // focus lands can outrace the browser's own style recalculation for
+    // the `:focus-visible` rule that makes the trigger focusable at all,
+    // making it invisible to the very next Tab's focus-order computation.
+    await expect(row.locator('.file-menu-trigger')).toBeVisible()
+
+    await page.keyboard.press('Tab') // row -> checkbox
+    await page.keyboard.press('Tab') // checkbox -> its own "..." trigger
+    await expect(trigger).toBeFocused()
+    await expect(trigger).toBeVisible()
+  })
+
   // Half the original report was mobile: tapping a row used to reveal the
   // same stuck-open chips via a sticky emulated `:hover`. The assertion
   // above already proves the CSS rule can't latch regardless of input

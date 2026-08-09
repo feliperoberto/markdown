@@ -129,6 +129,67 @@ export function ProjectsSidebar({
   const handleCloseMenu = useCallback(() => {
     setOpenMenu(null)
   }, [])
+
+  // Remembered collapsed/expanded state per project (issue #92). Seeded
+  // from localStorage so a returning user sees the same projects folded as
+  // when they left; persisted on every change. Declared here (rather than
+  // further down, where it originally lived) because `revealProject` below
+  // needs it, and that helper must exist before `useSidebarDnd` wraps
+  // `onMoveFile` with it.
+  const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(() =>
+    loadCollapsedProjects(),
+  )
+
+  // A file becomes visible in the sidebar tree only when its project is
+  // expanded — expanding it is the shared last step whenever a file
+  // becomes the active one as a side effect of creating, uploading, or
+  // moving it into a project, otherwise the newly active file is selected
+  // inside a folded group and nothing appears to change. A single helper
+  // used by every path that can do that, rather than duplicating it per
+  // path: previously only the create-file dialog expanded the target
+  // project, so uploading a file or moving one via the "Mover para" menu
+  // item into a collapsed project left it selected but invisible.
+  const revealProject = useCallback((projectName: string) => {
+    setCollapsedProjects((prev) => {
+      if (!prev.has(projectName)) return prev
+      const next = new Set(prev)
+      next.delete(projectName)
+      return next
+    })
+  }, [])
+
+  const handleCreateFile = useCallback(
+    (projectName: string, fileName: string) => {
+      revealProject(projectName)
+      onCreateFile(projectName, fileName)
+    },
+    [onCreateFile, revealProject],
+  )
+
+  // Both wrappers below are conditional on the underlying handler prop
+  // rather than always defined, because `ProjectGroup`/`FileRow` gate an
+  // entire feature (the Upload menu item; the drag handle and "Mover"
+  // menu items) on whether `onUploadFile`/`onMoveFile` is present at all
+  // — an always-defined wrapper would turn those features permanently on
+  // even for a caller that never wired the underlying handler.
+  const handleUploadFileImpl = useCallback(
+    (projectName: string, file: File) => {
+      revealProject(projectName)
+      onUploadFile?.(projectName, file)
+    },
+    [onUploadFile, revealProject],
+  )
+  const handleUploadFile = onUploadFile ? handleUploadFileImpl : undefined
+
+  const handleMoveFileImpl = useCallback(
+    (fromProject: string, fileName: string, toProject: string, beforeFile?: string | null) => {
+      revealProject(toProject)
+      onMoveFile?.(fromProject, fileName, toProject, beforeFile)
+    },
+    [onMoveFile, revealProject],
+  )
+  const handleMoveFile = onMoveFile ? handleMoveFileImpl : undefined
+
   // Pointer-based drag & drop (issue: mobile DnD — HTML5 Drag-and-Drop
   // never fires from a touch gesture). One delegated pointerdown listener
   // on the sidebar root; see useSidebarDnd.ts/dnd.ts for the actual
@@ -136,7 +197,7 @@ export function ProjectsSidebar({
   // menu the moment a drag activates — a floating menu's pre-computed
   // position has nothing to do with an in-progress drag.
   const { rootRef: dndRootRef } = useSidebarDnd({
-    onMoveFile,
+    onMoveFile: handleMoveFile,
     onMoveProject,
     onDragStart: handleCloseMenu,
   })
@@ -144,9 +205,30 @@ export function ProjectsSidebar({
   // (handleNewProject below, and ProjectGroup's rename validation) must see
   // — filtering it would let a user create/rename into a name collision
   // with a hidden archived project, which model.createProject/renameProject
-  // would then silently no-op. Memoized because Object.keys returns a new
-  // array reference every render, which would defeat ProjectGroup's memo().
-  const projectNames = useMemo(() => Object.keys(projects), [projects])
+  // would then silently no-op.
+  //
+  // Stabilized against `projects`' reference churning on every keystroke
+  // (autosave persists on every content edit, which replaces `projects`
+  // with a new object every time — see useProjects.updateFileContent) even
+  // though the actual project names/order essentially never change on a
+  // content edit. `useMemo`'s own `[projects]` dependency would still
+  // allocate a fresh `Object.keys` array on every one of those unrelated
+  // updates, and that fresh reference cascades into `visibleProjectNames`
+  // and every `ProjectGroup`'s `otherProjectNames`, defeating `FileRow`'s
+  // memo() for every row in every project on every character typed. The
+  // ref below reuses the previous array whenever the name set AND order
+  // are unchanged — order must be compared, not just membership, because
+  // reordering a project (moveProject) is itself expressed as a change in
+  // key order and must still produce a new reference.
+  const projectNamesRef = useRef<string[]>([])
+  const projectNames = useMemo(() => {
+    const next = Object.keys(projects)
+    const prev = projectNamesRef.current
+    const unchanged = prev.length === next.length && prev.every((name, i) => name === next[i])
+    if (unchanged) return prev
+    projectNamesRef.current = next
+    return next
+  }, [projects])
   const archivedCount = projectNames.filter((name) => archivedProjects.has(name)).length
   // Whether the archived section is expanded — deliberately transient, not
   // persisted like collapsedProjects: archiving means "out of my way", so a
@@ -198,13 +280,6 @@ export function ProjectsSidebar({
 
   const importZipInputRef = useRef<HTMLInputElement>(null)
 
-  // Remembered collapsed/expanded state per project (issue #92). Seeded
-  // from localStorage so a returning user sees the same projects folded as
-  // when they left; persisted on every change.
-  const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(() =>
-    loadCollapsedProjects(),
-  )
-
   useEffect(() => {
     saveCollapsedProjects(collapsedProjects)
   }, [collapsedProjects])
@@ -244,23 +319,6 @@ export function ProjectsSidebar({
       return next
     })
   }, [])
-
-  // A newly created file becomes the active one (useProjects.createFile),
-  // so it needs to actually be visible: expand the project first if it was
-  // collapsed, otherwise the now-active file is selected inside a folded
-  // group and nothing appears to change.
-  const handleCreateFile = useCallback(
-    (projectName: string, fileName: string) => {
-      setCollapsedProjects((prev) => {
-        if (!prev.has(projectName)) return prev
-        const next = new Set(prev)
-        next.delete(projectName)
-        return next
-      })
-      onCreateFile(projectName, fileName)
-    },
-    [onCreateFile],
-  )
 
   // Prunes stale selection entries whenever the project/file set changes
   // (rename, delete, import, restore) — and also when a project, or an
@@ -404,9 +462,9 @@ export function ProjectsSidebar({
                 onRenameProject={onRenameProject}
                 onDeleteProject={onDeleteProject}
                 onExportProject={onExportProject}
-                onUploadFile={onUploadFile}
+                onUploadFile={handleUploadFile}
                 onUploadMultipleFiles={onUploadMultipleFiles}
-                onMoveFile={onMoveFile}
+                onMoveFile={handleMoveFile}
                 onMoveProject={onMoveProject}
                 onToggleArchived={onToggleArchived}
                 archivedFileNames={

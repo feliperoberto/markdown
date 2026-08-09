@@ -497,6 +497,23 @@ describe('mergeProjectsByFreshness (smart sync)', () => {
       expect(result.remoteChanged).toBe(true)
     })
 
+    it('keeps an EMPTY remote-only project even when a tombstone exists for its name (regression: vacuous truth on Object.values({}).every())', () => {
+      // `.every()` on an empty array is vacuously true, so an empty remote
+      // project used to always count as "untouched since deletion"
+      // regardless of how old the tombstone was — including a tombstone
+      // left over from an unrelated, much earlier deletion of that same
+      // name, wrongly dropping a legitimate fresh (still-empty) project of
+      // the same name created on another device with nothing yet to prove
+      // otherwise.
+      const local: ProjectsState = {}
+      const remote: ProjectsState = { Notes: {} }
+      const tombstones = { [model.encodeProjectTombstoneKey('Notes')]: '2020-01-01T00:00:00.000Z' }
+
+      const result = model.mergeProjectsByFreshness(local, remote, tombstones)
+
+      expect(result.merged.Notes).toEqual({})
+    })
+
     it('resurrects a remote-only project whose tombstone predates a later edit to one of its files', () => {
       const local: ProjectsState = {}
       const remote: ProjectsState = {

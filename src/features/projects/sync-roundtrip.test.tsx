@@ -37,6 +37,8 @@ function Harness() {
   const {
     projects,
     createProject,
+    deleteProject,
+    renameProject,
     createFile,
     renameFile,
     deleteFile,
@@ -53,6 +55,8 @@ function Harness() {
     <div>
       <button onClick={() => createProject('P')}>create-project-p</button>
       <button onClick={() => createProject('Q')}>create-project-q</button>
+      <button onClick={() => deleteProject('P')}>delete-project-p</button>
+      <button onClick={() => renameProject('P', 'P2')}>rename-project-p</button>
       <button onClick={() => createFile('P', 'old', 'hello')}>create-file</button>
       <button onClick={() => renameFile('P', 'old', 'new')}>rename-file</button>
       <button onClick={() => renameFile('P', 'new', 'newer')}>rename-file-again</button>
@@ -175,5 +179,63 @@ describe('sync round trip (push -> mutate -> sync)', () => {
     await waitFor(() => expect(fakeRemote.projects.P?.newer).toBeDefined())
 
     expect(Object.keys(fakeRemote.projects.P ?? {})).toEqual(['newer'])
+  })
+
+  // Regression: deleteProject/renameProject previously recorded only a
+  // project-level tombstone, never a per-file one for the files that lived
+  // under that name. mergeProjectsByFreshness's whole-project tombstone
+  // check only fires while the name is absent locally
+  // (`!projectExists(local, projectName)`) — the moment the name exists
+  // locally again (recreated, or renamed into), that check is skipped
+  // entirely and a missing per-file tombstone let the old files merge
+  // straight back in.
+  it('reusing a deleted project name does not resurrect its old files after sync', async () => {
+    const { container } = renderHarness()
+    const stateText = () => container.querySelector('pre')?.textContent ?? ''
+
+    fireEvent.click(screen.getByText('create-project-p'))
+    fireEvent.click(screen.getByText('create-file')) // P/old
+    await waitFor(() => expect(stateText()).toContain('"old"'))
+
+    fireEvent.click(screen.getByText('sync')) // remote now has P/old
+    await waitFor(() => expect(fakeRemote.projects.P?.old).toBeDefined())
+
+    fireEvent.click(screen.getByText('delete-project-p'))
+    await waitFor(() => expect(stateText()).not.toContain('"old"'))
+
+    fireEvent.click(screen.getByText('create-project-p')) // a brand-new, empty P
+    await waitFor(() => expect(stateText()).toContain('"P"'))
+
+    fireEvent.click(screen.getByText('sync')) // pull (remote still has old P/old) -> merge -> push
+
+    await waitFor(() => expect(fakeRemote.projects.P).toBeDefined())
+    expect(Object.keys(fakeRemote.projects.P ?? {})).toEqual([])
+    expect(stateText()).not.toContain('"old"')
+  })
+
+  it('reusing a project name after renaming it away does not resurrect its old files after sync', async () => {
+    const { container } = renderHarness()
+    const stateText = () => container.querySelector('pre')?.textContent ?? ''
+
+    fireEvent.click(screen.getByText('create-project-p'))
+    fireEvent.click(screen.getByText('create-file')) // P/old
+    await waitFor(() => expect(stateText()).toContain('"old"'))
+
+    fireEvent.click(screen.getByText('sync')) // remote now has P/old
+    await waitFor(() => expect(fakeRemote.projects.P?.old).toBeDefined())
+
+    fireEvent.click(screen.getByText('rename-project-p')) // P -> P2, old comes with it
+    await waitFor(() => expect(stateText()).toContain('"P2"'))
+
+    fireEvent.click(screen.getByText('create-project-p')) // a brand-new, empty P
+    await waitFor(() => expect(stateText()).toContain('"P"'))
+
+    fireEvent.click(screen.getByText('sync')) // pull (remote still has old P/old) -> merge -> push
+
+    await waitFor(() => {
+      expect(fakeRemote.projects.P).toBeDefined()
+      expect(fakeRemote.projects.P2?.old).toBeDefined()
+    })
+    expect(Object.keys(fakeRemote.projects.P ?? {})).toEqual([])
   })
 })

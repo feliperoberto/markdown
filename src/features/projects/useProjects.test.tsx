@@ -13,6 +13,7 @@ function Harness() {
     currentFile,
     selectFile,
     createFile,
+    createFiles,
     createProject,
     renameProject,
     deleteProject,
@@ -40,6 +41,28 @@ function Harness() {
       </button>
       <button onClick={() => createFile('Meu Projeto', 'Sem título', 'dup')}>
         create-file-duplicate
+      </button>
+      <button
+        onClick={() =>
+          createFiles('Meu Projeto', [
+            { name: 'batch-a', content: '1' },
+            { name: 'batch-b', content: '2' },
+            { name: 'batch-c', content: '3' },
+          ])
+        }
+      >
+        create-files-batch
+      </button>
+      <button
+        onClick={() =>
+          createFiles('Meu Projeto', [
+            { name: 'batch-x', content: '1' },
+            { name: 'Sem título', content: 'collides with the seeded file' },
+            { name: 'batch-y', content: '2' },
+          ])
+        }
+      >
+        create-files-batch-with-collision
       </button>
       <button onClick={() => toggleFileArchived('Segundo', 'notes')}>
         toggle-archive-file-segundo-notes
@@ -260,6 +283,58 @@ describe('useProjects', () => {
       await Promise.resolve()
       expect(stateText()).toBe(before)
       expect(screen.queryByText('✅ Novo arquivo')).toBeNull()
+    })
+  })
+
+  // Regression: a loop calling `createFile` once per entry (the old
+  // multi-file-upload shape) reads a stale pre-loop `projects` snapshot on
+  // every iteration once real `await`s separate the calls, so each
+  // `persist()`'s plain `setProjects` overwrite discards the previous
+  // iteration's file — only the last one survives. `createFiles` folds
+  // every entry into one running value before persisting once, so it
+  // can't lose entries this way regardless of how it's called.
+  describe('createFiles (batch)', () => {
+    it('creates every entry in one call, not just the last one', async () => {
+      const { container } = renderHarness()
+      const stateText = () => container.querySelector('pre')?.textContent ?? ''
+
+      fireEvent.click(screen.getByText('create-files-batch'))
+
+      await waitFor(() => {
+        expect(stateText()).toContain('"batch-a"')
+        expect(stateText()).toContain('"batch-b"')
+        expect(stateText()).toContain('"batch-c"')
+      })
+    })
+
+    it('never selects any of the created files', async () => {
+      const { container } = renderHarness()
+      const stateText = () => container.querySelector('pre')?.textContent ?? ''
+
+      await waitFor(() => expect(stateText()).toContain('"currentFile":"Sem título"'))
+
+      fireEvent.click(screen.getByText('create-files-batch'))
+
+      await waitFor(() => expect(stateText()).toContain('"batch-a"'))
+      expect(stateText()).toContain('"currentFile":"Sem título"')
+    })
+
+    // model.createFile's same-reference-on-no-op refusal (duplicate name)
+    // must skip just that one entry, not abort the whole batch or persist
+    // nothing at all.
+    it('skips a name that collides with an existing file but still creates the rest', async () => {
+      const { container } = renderHarness()
+      const stateText = () => container.querySelector('pre')?.textContent ?? ''
+
+      fireEvent.click(screen.getByText('create-files-batch-with-collision'))
+
+      await waitFor(() => {
+        expect(stateText()).toContain('"batch-x"')
+        expect(stateText()).toContain('"batch-y"')
+      })
+      // The pre-existing "Sem título" content must be untouched, not
+      // overwritten by the colliding batch entry.
+      expect(stateText()).not.toContain('collides with the seeded file')
     })
   })
 

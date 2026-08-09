@@ -474,9 +474,21 @@ body[data-dragging] {
   visibility: hidden;
 }
 
+/* `visibility: hidden` also removes an element from the Tab order — a
+   hidden trigger can never itself receive focus, so `:focus-visible` on
+   the trigger alone (below) can never fire for a non-active row, making
+   rename/archive/delete/move unreachable by keyboard for every file that
+   isn't already active. Revealing on `.file-item:focus-visible` closes
+   that gap: keyboard-Tabbing onto the row itself (which is its own
+   tabbable `role="button"`) flips the trigger's computed visibility to
+   `visible` before the *next* Tab press, so it becomes reachable right
+   after its row — without making it appear on an ordinary mouse click,
+   since browsers withhold `:focus-visible` for pointer-triggered focus on
+   a non-text control. */
 .file-item.active .file-menu-trigger,
 .file-item .file-menu-trigger[aria-expanded='true'],
-.file-item .file-menu-trigger:focus-visible {
+.file-item .file-menu-trigger:focus-visible,
+.file-item:focus-visible .file-menu-trigger {
   visibility: visible;
 }
 

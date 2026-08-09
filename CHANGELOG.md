@@ -78,14 +78,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Creating a new file now selects it immediately, so the editor shows the
   new file instead of leaving whatever was open before. A collapsed
   project auto-expands and the mobile drawer closes so the newly active
-  file is actually visible. Importing multiple files at once still leaves
-  the current selection alone.
-- Renaming or moving a file (or renaming a project), followed by a Google
-  Drive sync, no longer resurrects the old name as a duplicate. The sync
-  merge previously had no way to tell "deleted on this device" apart from
-  "never seen this device's edit yet", so a stale remote copy under the
-  old name kept winning the union and syncing back
+  file is actually visible — uploading a single file or moving a file into
+  a project via its "⋮" menu now expand a collapsed destination the same
+  way creating one does. Importing multiple files at once still leaves the
+  current selection alone.
+- Renaming or moving a file (or renaming or deleting a project), followed
+  by a Google Drive sync, no longer resurrects the old name(s) as
+  duplicates. The sync merge previously had no way to tell "deleted on
+  this device" apart from "never seen this device's edit yet", so a stale
+  remote copy under the old name kept winning the union and syncing back;
+  deleting or renaming a whole project now also protects every file that
+  was inside it, and reusing a project name no longer resurrects the old
+  project's files
   ([ADR-0004](./docs/adr/0004-sync-tombstones.md)).
+- Uploading several files into a project at once no longer silently drops
+  every file but the last one — the import loop previously read a stale
+  snapshot of the project list on every file, so only the final file
+  actually got saved despite the toast reporting all of them as imported.
+- A non-active file's "⋮" actions menu is now reachable by Tab, not just
+  by mouse hover or by opening the file first — the CSS that hides the
+  trigger by default previously also removed it from the keyboard tab
+  order entirely.
+- Moving a file into another project no longer lists a hidden (archived)
+  project as a "Mover para" target — matching the drag-and-drop
+  equivalent, which can only reach a project that's actually visible on
+  screen.
+- Fixed a couple of drag-and-drop auto-scroll inefficiencies: the
+  auto-scroll loop no longer re-arms on every pointer movement regardless
+  of how far the pointer is from an edge, and no longer re-measures drop
+  zones twice for the same scroll change.
+- Fixed the sidebar re-rendering every file row on every keystroke —
+  editing a file's content was incidentally invalidating the project name
+  list used to compute each row's "move to project" menu, even though the
+  actual list of projects hadn't changed.
 
 ## [0.1.0] - 2026-07-05
 

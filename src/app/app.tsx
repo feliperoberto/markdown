@@ -45,6 +45,7 @@ export function App(): JSX.Element {
     selectFile,
     createProject,
     createFile,
+    createFiles,
     renameFile,
     deleteFile,
     renameProject,
@@ -190,22 +191,30 @@ export function App(): JSX.Element {
   // Upload) — kept reachable per explicit discussion rather than
   // removed, since multi-file import is a real capability, not UI noise.
   const handleUploadMultipleFilesToProject = async (projectName: string, files: File[]) => {
-    let successCount = 0
+    // Read every file first, then create them all through ONE
+    // `createFiles` call — not one `createFile` call per file inside this
+    // loop. `createFile` closes over the `projects` value from whenever
+    // *this* render's `handleUploadMultipleFilesToProject` was created;
+    // since that reference doesn't advance between `await`s within a
+    // single invocation, a per-file loop of `createFile` calls each
+    // persisted from the same stale pre-loop snapshot, and each call's
+    // plain `setProjects` overwrite discarded the previous one's file —
+    // silently keeping only the last import while still reporting every
+    // file as a success. `createFiles` avoids this by folding all entries
+    // into one state transition before persisting once.
+    const entries: { name: string; content: string }[] = []
     for (const file of files) {
       try {
         const entry = await importFile(file)
-        // Doesn't select each file as it lands — createFile now selects by
-        // default (issue: a newly created file should become active), but
-        // with several files importing in a loop that would just mean
-        // selection jumps to whichever one happened to land last.
-        createFile(projectName, entry.name, entry.content, { select: false })
-        successCount++
+        entries.push({ name: entry.name, content: entry.content })
       } catch (error) {
         showToast(`Erro ao importar "${file.name}": ${(error as Error).message}`, 'error')
       }
     }
-    if (successCount > 0) {
-      showToast(`${successCount} arquivo(s) importado(s)`, 'success')
+    if (entries.length === 0) return
+    const createdCount = createFiles(projectName, entries)
+    if (createdCount > 0) {
+      showToast(`${createdCount} arquivo(s) importado(s)`, 'success')
     }
   }
 

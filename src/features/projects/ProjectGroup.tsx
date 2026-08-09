@@ -151,12 +151,20 @@ export const ProjectGroup = memo(function ProjectGroup({
     () => fileNames.filter((name) => archivedFileNames.has(name)).length,
     [fileNames, archivedFileNames],
   )
-  // Every OTHER project, for each file row's "Mover para <project>" menu
-  // items — memoized so a fresh array every render doesn't defeat FileRow's
-  // memo() for every row in this project on every unrelated re-render.
+  // Every OTHER *visible* project, for each file row's "Mover para
+  // <project>" menu items — memoized so a fresh array every render doesn't
+  // defeat FileRow's memo() for every row in this project on every
+  // unrelated re-render. Deliberately built from `visibleProjectNames`
+  // (already filtered to the current "Mostrar arquivados" toggle state),
+  // not the full `projectNames` — the equivalent pointer-drag path can
+  // only ever drop onto a project that's actually rendered on screen, so
+  // an archived, hidden project isn't a reachable drop target until
+  // revealed; the keyboard "Mover para" menu previously ignored that and
+  // listed every project including hidden archived ones, silently moving
+  // a file into a project the user couldn't currently see.
   const otherProjectNames = useMemo(
-    () => projectNames.filter((name) => name !== projectName),
-    [projectNames, projectName],
+    () => visibleProjectNames.filter((name) => name !== projectName),
+    [visibleProjectNames, projectName],
   )
 
   const {

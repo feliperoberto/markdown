@@ -396,6 +396,59 @@ describe('ProjectsSidebar + useProjects', () => {
       expect(screen.queryByRole('menuitem', { name: /Mover para "Meu Projeto"/ })).toBeNull()
     })
 
+    // Regression: only the create-file dialog path expanded a collapsed
+    // destination project so the newly active/moved file stays visible —
+    // moving a file into a collapsed project via this menu item selected
+    // it without expanding the project, leaving it selected but hidden.
+    it('expands a collapsed project when a file is moved into it', async () => {
+      renderHarness()
+
+      vi.mocked(showPromptDialog).mockResolvedValueOnce('Outro')
+      fireEvent.click(screen.getByRole('button', { name: 'Criar novo projeto' }))
+      expect(await screen.findByText('Outro')).not.toBeNull()
+
+      const outroHeader = screen.getByText('Outro').closest('.project-header')
+      expect(outroHeader).not.toBeNull()
+
+      // Collapse it.
+      fireEvent.click(outroHeader as HTMLElement)
+      expect(outroHeader?.getAttribute('aria-expanded')).toBe('false')
+
+      // Move the seeded file into it via the "Mover para" menu item.
+      fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo Sem título' }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Mover para "Outro"/ }))
+
+      await waitFor(() => expect(outroHeader?.getAttribute('aria-expanded')).toBe('true'))
+    })
+
+    // Regression: the "Mover para" menu previously listed every OTHER
+    // project including hidden/archived ones — the equivalent pointer-drag
+    // path can only ever drop onto a project that's actually rendered on
+    // screen (unarchived, or archived-and-revealed), so an archived,
+    // hidden project wasn't a reachable drag target but WAS a reachable
+    // "Mover para" menu target, silently moving a file somewhere the user
+    // couldn't see without any indication it was archived.
+    it('does not list an archived (hidden) project as a "Mover para" target', async () => {
+      renderHarness()
+
+      vi.mocked(showPromptDialog).mockResolvedValueOnce('Arquivado')
+      fireEvent.click(screen.getByRole('button', { name: 'Criar novo projeto' }))
+      expect(await screen.findByText('Arquivado')).not.toBeNull()
+
+      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Arquivado/ }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Arquivar projeto/ }))
+      await waitFor(() => expect(screen.queryByText('Arquivado')).toBeNull())
+
+      fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo Sem título' }))
+      expect(screen.queryByRole('menuitem', { name: /Mover para "Arquivado"/ })).toBeNull()
+
+      // Once revealed via "Mostrar arquivados", it becomes a legitimate
+      // target again — matching what the drag path can also now reach.
+      fireEvent.click(screen.getByRole('button', { name: 'Mostrar arquivados (1)' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo Sem título' }))
+      expect(await screen.findByRole('menuitem', { name: /Mover para "Arquivado"/ })).not.toBeNull()
+    })
+
     it('omits move-up/move-down at the ends of the visible file list', async () => {
       renderHarness()
 

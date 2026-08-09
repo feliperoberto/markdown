@@ -314,9 +314,19 @@ export function mergeProjectsByFreshness(
     if (!projectExists(local, projectName)) {
       const projectTombstone = tombstones[encodeProjectTombstoneKey(projectName)]
       if (projectTombstone) {
-        const untouchedSinceDeletion = Object.values(remoteFiles).every(
-          (file) => file.timestamp <= projectTombstone,
-        )
+        const remoteFileList = Object.values(remoteFiles)
+        // `.every()` on an empty array is vacuously true, so an EMPTY
+        // remote project would otherwise always count as "untouched since
+        // deletion" regardless of how old the tombstone is — including
+        // when the empty project is a legitimate fresh recreation of that
+        // name on another device (no per-file timestamp exists yet to
+        // prove otherwise). Requiring at least one file keeps the tombstone
+        // meaningful only where it has actual evidence to compare against;
+        // an ambiguous empty project is kept, matching this function's
+        // general bias toward not discarding data it can't be sure about.
+        const untouchedSinceDeletion =
+          remoteFileList.length > 0 &&
+          remoteFileList.every((file) => file.timestamp <= projectTombstone)
         if (untouchedSinceDeletion) {
           // The whole project is dropped — never added to `merged` at all,
           // not even as an empty project — and remote must catch up.

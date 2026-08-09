@@ -86,6 +86,19 @@ export interface UseProjectsResult {
     content?: string,
     options?: { select?: boolean },
   ) => void
+  // Batch create, folded into a single persist() call — unlike calling
+  // `createFile` once per entry in a loop with `await`s between calls
+  // (e.g. importing several files), which reads a stale pre-loop
+  // `projects` snapshot on every iteration and silently loses every entry
+  // but the last (see CHANGELOG's "Fixed" note on multi-file import).
+  // Never selects (matches the existing `{ select: false }` convention for
+  // multi-file callers). Returns how many entries actually got created,
+  // since a name colliding with an existing or earlier-in-this-batch file
+  // is silently skipped, same as a single createFile refusal.
+  createFiles: (
+    projectName: string,
+    entries: ReadonlyArray<{ name: string; content: string }>,
+  ) => number
   renameFile: (projectName: string, oldFileName: string, newFileName: string) => void
   deleteFile: (projectName: string, fileName: string) => void
   updateFileContent: (projectName: string, fileName: string, content: string) => void
@@ -275,6 +288,12 @@ export function useProjects(): UseProjectsResult {
       // pair. Harmless when nothing was selected; only matters now that a
       // file can be pre-selected on init (issue #92).
       setCurrentFile(null)
+      // Belt-and-braces, same reasoning as createFile's clearFileTombstone:
+      // if this exact name was deleted (or renamed away from) earlier and
+      // still carries a tombstone, drop it so a brand-new, still-empty
+      // project of the same name doesn't stay shadowed by stale deletion
+      // history the next time it's synced.
+      setTombstones((prev) => clearProjectTombstone(prev, name))
       showToast('✅ Projeto criado', 'success')
     },
     [projects, persist, showToast],
@@ -318,10 +337,27 @@ export function useProjects(): UseProjectsResult {
         // old key survives in Drive until the next sync tells it otherwise,
         // and without a tombstone `mergeProjectsByFreshness` would resurrect
         // it as a duplicate the next time it's pulled. See tombstones.ts.
+        //
+        // The project-level tombstone alone only protects this exact name
+        // from resurrecting while it stays absent locally
+        // (`mergeProjectsByFreshness` only consults it via
+        // `!projectExists(local, projectName)`) — it does nothing once
+        // `oldName` exists locally again, e.g. because it was reused for an
+        // unrelated new/renamed-into project before the next sync. Also
+        // tombstoning every individual file that lived under `oldName`
+        // closes that gap: those file-level tombstones are what stop the
+        // old project's files from being merged into a same-named
+        // replacement, exactly like an ordinary per-file rename does.
         const deletedAt = new Date().toISOString()
+        const movedFileNames = Object.keys(projects[oldName] ?? {})
         setTombstones((prev) => {
-          const cleared = clearProjectTombstone(prev, newName)
-          return recordProjectTombstone(cleared, oldName, deletedAt)
+          let result = clearProjectTombstone(prev, newName)
+          result = recordProjectTombstone(result, oldName, deletedAt)
+          for (const fileName of movedFileNames) {
+            result = clearFileTombstone(result, newName, fileName)
+            result = recordFileTombstone(result, oldName, fileName, deletedAt)
+          }
+          return result
         })
       }
       showToast('✅ Projeto renomeado', 'success')
@@ -368,7 +404,23 @@ export function useProjects(): UseProjectsResult {
         // Same reasoning as renameProject's tombstone: without it, a Drive
         // pull that still has this project (not yet told about the
         // deletion) would resurrect it via mergeProjectsByFreshness's union.
-        setTombstones((prev) => recordProjectTombstone(prev, name, new Date().toISOString()))
+        //
+        // Also tombstones every file that was in the project, one level
+        // down — same reasoning as renameProject's identical addition: the
+        // project-level tombstone alone stops protecting this name the
+        // moment it exists locally again (e.g. recreated, or another
+        // project renamed into it, before the next sync), and without a
+        // per-file tombstone the deleted project's old files would merge
+        // straight into whatever now occupies that name.
+        const deletedAt = new Date().toISOString()
+        const deletedFileNames = Object.keys(projects[name] ?? {})
+        setTombstones((prev) => {
+          let result = recordProjectTombstone(prev, name, deletedAt)
+          for (const fileName of deletedFileNames) {
+            result = recordFileTombstone(result, name, fileName, deletedAt)
+          }
+          return result
+        })
       }
       showToast('🗑 Projeto excluído', 'success')
     },
@@ -494,6 +546,33 @@ export function useProjects(): UseProjectsResult {
       showToast('✅ Novo arquivo', 'success')
     },
     [projects, persist, showToast],
+  )
+
+  const createFiles = useCallback(
+    (projectName: string, entries: ReadonlyArray<{ name: string; content: string }>): number => {
+      // Folds every entry into one running `next` value and persists once
+      // at the end — not one `createFile` call per entry — precisely so a
+      // caller looping over several `await`-separated imports isn't
+      // silently discarding all but the last one (see this function's own
+      // doc comment above).
+      let next: ProjectsState = projects
+      const createdNames: string[] = []
+      for (const entry of entries) {
+        const candidate = model.createFile(next, projectName, entry.name, entry.content)
+        if (candidate === next) continue
+        next = candidate
+        createdNames.push(entry.name)
+      }
+      if (createdNames.length === 0) return 0
+      if (!persist(next)) return 0
+      setTombstones((prev) => {
+        let result = prev
+        for (const name of createdNames) result = clearFileTombstone(result, projectName, name)
+        return result
+      })
+      return createdNames.length
+    },
+    [projects, persist],
   )
 
   const renameFile = useCallback(
@@ -689,6 +768,7 @@ export function useProjects(): UseProjectsResult {
     renameProject,
     deleteProject,
     createFile,
+    createFiles,
     renameFile,
     deleteFile,
     updateFileContent,

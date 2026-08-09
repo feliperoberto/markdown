@@ -187,25 +187,61 @@ export function useSidebarDnd(options: SidebarDndOptions): SidebarDndControls {
       return root?.querySelector<HTMLElement>('[data-dnd-scroll]') ?? null
     }
 
-    function tickAutoScroll() {
-      autoScrollRafRef.current = null
-      if (gestureStateRef.current.phase !== 'dragging') return
+    // Cached scroll-container metrics, refreshed at activation and on the
+    // container's own `scroll` event — NOT read fresh on every pointermove.
+    // `autoScrollDelta` is pure arithmetic once it has a rect, so checking
+    // "is the pointer even near an edge" against this cache costs nothing;
+    // reading it via `getBoundingClientRect()` on every pointermove (a
+    // forced synchronous layout) — which an unconditional per-move
+    // re-arming of the auto-scroll rAF loop used to do even far from any
+    // edge — does not.
+    let containerMetrics: {
+      top: number
+      bottom: number
+      scrollTop: number
+      scrollHeight: number
+      clientHeight: number
+    } | null = null
+
+    function refreshContainerMetrics() {
       const container = scrollContainer()
-      if (!container) return
+      if (!container) {
+        containerMetrics = null
+        return
+      }
       const rect = container.getBoundingClientRect()
-      const delta = autoScrollDelta(lastPointRef.current.y, {
+      containerMetrics = {
         top: rect.top,
         bottom: rect.bottom,
         scrollTop: container.scrollTop,
         scrollHeight: container.scrollHeight,
         clientHeight: container.clientHeight,
-      })
-      if (delta !== 0) {
-        container.scrollTop += delta
-        measure()
-        scheduleRender()
-        autoScrollRafRef.current = requestAnimationFrame(tickAutoScroll)
       }
+    }
+
+    function pendingAutoScrollDelta(): number {
+      return containerMetrics ? autoScrollDelta(lastPointRef.current.y, containerMetrics) : 0
+    }
+
+    // Set right before a `scrollTop` write this hook makes itself, so the
+    // `scroll` event that write fires doesn't make `handleScroll` redo the
+    // exact `measure()`/`scheduleRender()` pair `tickAutoScroll` already
+    // just did for the same visual change.
+    let suppressNextScrollHandler = false
+
+    function tickAutoScroll() {
+      autoScrollRafRef.current = null
+      if (gestureStateRef.current.phase !== 'dragging') return
+      const delta = pendingAutoScrollDelta()
+      if (delta === 0) return
+      const container = scrollContainer()
+      if (!container) return
+      suppressNextScrollHandler = true
+      container.scrollTop += delta
+      if (containerMetrics) containerMetrics.scrollTop = container.scrollTop
+      measure()
+      scheduleRender()
+      autoScrollRafRef.current = requestAnimationFrame(tickAutoScroll)
     }
 
     // Attributes stripped from the ghost and every descendant it cloned —
@@ -325,10 +361,15 @@ export function useSidebarDnd(options: SidebarDndOptions): SidebarDndControls {
         const rowEl = rowElRef.current
         if (rowEl) createGhost(rowEl)
         measure()
+        refreshContainerMetrics()
       }
       if (result.state.phase === 'dragging') {
         scheduleRender()
-        if (autoScrollRafRef.current === null) {
+        // Cheap (cached-metrics) proximity check before arming the rAF
+        // loop at all — see pendingAutoScrollDelta's doc comment. Only a
+        // pointer actually near an edge pays for the loop; every other
+        // pointermove during the drag (the common case) does not.
+        if (autoScrollRafRef.current === null && pendingAutoScrollDelta() !== 0) {
           autoScrollRafRef.current = requestAnimationFrame(tickAutoScroll)
         }
       }
@@ -361,7 +402,12 @@ export function useSidebarDnd(options: SidebarDndOptions): SidebarDndControls {
     }
 
     function handleScroll() {
+      if (suppressNextScrollHandler) {
+        suppressNextScrollHandler = false
+        return
+      }
       if (gestureStateRef.current.phase !== 'dragging') return
+      refreshContainerMetrics()
       measure()
       scheduleRender()
     }
