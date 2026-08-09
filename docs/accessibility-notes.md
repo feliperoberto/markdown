@@ -79,13 +79,14 @@ top to bottom:
 **The drag handle (`.drag-handle`, `data-dnd-handle`) adds zero new Tab
 stops.** It is `aria-hidden="true"` with no `tabindex` — a deliberately
 pointer-only affordance, not a keyboard control with a missing binding.
-Reordering/moving is fully available without it: each "⋮" menu (file and
-project) carries "Mover para cima"/"Mover para baixo" items computed by
-`src/features/projects/dnd.ts`'s `stepBefore`, plus "Mover para
-&lt;projeto&gt;" per other project on a file's menu — the same
-`onMoveFile`/`onMoveProject` calls the pointer drag itself makes (see
-`applyDropIntent`), not a parallel implementation. This is what satisfies
-WCAG 2.1 SC 2.5.7 (Dragging Movements requires a single-pointer,
+Reordering is fully available without it: each "⋮" menu (file and project)
+carries "Mover para cima"/"Mover para baixo" items computed by
+`src/features/projects/dnd.ts`'s `stepBefore` — the same `onMoveFile`/
+`onMoveProject` calls the pointer drag itself makes (see
+`applyDropIntent`), not a parallel implementation. Moving a file into a
+different project was removed (see CHANGELOG) — a file's handle and menu
+now both only ever reorder it within its own project. This is what
+satisfies WCAG 2.1 SC 2.5.7 (Dragging Movements requires a single-pointer,
 non-dragging alternative) and SC 2.1.1 (Keyboard) for the whole feature — a
 focusable "grab mode" on the handle itself was considered and deferred
 (it would need a 4th Tab stop per row for behavior the menu already

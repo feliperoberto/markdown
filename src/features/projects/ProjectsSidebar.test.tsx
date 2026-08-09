@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/preact'
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/preact'
 import { useProjects } from './useProjects'
 import { ProjectsSidebar } from './ProjectsSidebar'
 import { ToastProvider } from '@/components'
@@ -367,86 +367,19 @@ describe('ProjectsSidebar + useProjects', () => {
   // drag handle — are reachable from a component-level test, not just the
   // pure `dnd.ts`/`useSidebarDnd.ts` unit suites.
   describe('"Mover" menu items', () => {
-    it('shows a "Mover para" target for another project, and moves the file there', async () => {
+    // Moving a file to a different project was removed (see CHANGELOG) —
+    // the file's own "..." menu no longer offers any "Mover para
+    // <projeto>" items at all, regardless of how many other projects
+    // exist.
+    it('never shows a "Mover para <project>" target on a file\'s menu', async () => {
       renderHarness()
 
       vi.mocked(showPromptDialog).mockResolvedValueOnce('Outro')
       fireEvent.click(screen.getByRole('button', { name: 'Criar novo projeto' }))
       expect(await screen.findByText('Outro')).not.toBeNull()
 
-      // The default seeded project ("Meu Projeto") already has one file,
-      // "Sem título".
       fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo Sem título' }))
-      fireEvent.click(screen.getByRole('menuitem', { name: /Mover para "Outro"/ }))
-
-      const outroGroup = (await screen.findByText('Outro')).closest('.project-group')
-      expect(outroGroup).not.toBeNull()
-      await waitFor(() =>
-        expect(within(outroGroup as HTMLElement).queryByText('Sem título')).not.toBeNull(),
-      )
-
-      const meuProjetoGroup = screen.getByText('Meu Projeto').closest('.project-group')
-      expect(within(meuProjetoGroup as HTMLElement).queryByText('Sem título')).toBeNull()
-    })
-
-    it('does not list a file\'s own project as a "Mover para" target', async () => {
-      renderHarness()
-
-      fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo Sem título' }))
-      expect(screen.queryByRole('menuitem', { name: /Mover para "Meu Projeto"/ })).toBeNull()
-    })
-
-    // Regression: only the create-file dialog path expanded a collapsed
-    // destination project so the newly active/moved file stays visible —
-    // moving a file into a collapsed project via this menu item selected
-    // it without expanding the project, leaving it selected but hidden.
-    it('expands a collapsed project when a file is moved into it', async () => {
-      renderHarness()
-
-      vi.mocked(showPromptDialog).mockResolvedValueOnce('Outro')
-      fireEvent.click(screen.getByRole('button', { name: 'Criar novo projeto' }))
-      expect(await screen.findByText('Outro')).not.toBeNull()
-
-      const outroHeader = screen.getByText('Outro').closest('.project-header')
-      expect(outroHeader).not.toBeNull()
-
-      // Collapse it.
-      fireEvent.click(outroHeader as HTMLElement)
-      expect(outroHeader?.getAttribute('aria-expanded')).toBe('false')
-
-      // Move the seeded file into it via the "Mover para" menu item.
-      fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo Sem título' }))
-      fireEvent.click(screen.getByRole('menuitem', { name: /Mover para "Outro"/ }))
-
-      await waitFor(() => expect(outroHeader?.getAttribute('aria-expanded')).toBe('true'))
-    })
-
-    // Regression: the "Mover para" menu previously listed every OTHER
-    // project including hidden/archived ones — the equivalent pointer-drag
-    // path can only ever drop onto a project that's actually rendered on
-    // screen (unarchived, or archived-and-revealed), so an archived,
-    // hidden project wasn't a reachable drag target but WAS a reachable
-    // "Mover para" menu target, silently moving a file somewhere the user
-    // couldn't see without any indication it was archived.
-    it('does not list an archived (hidden) project as a "Mover para" target', async () => {
-      renderHarness()
-
-      vi.mocked(showPromptDialog).mockResolvedValueOnce('Arquivado')
-      fireEvent.click(screen.getByRole('button', { name: 'Criar novo projeto' }))
-      expect(await screen.findByText('Arquivado')).not.toBeNull()
-
-      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Arquivado/ }))
-      fireEvent.click(screen.getByRole('menuitem', { name: /Arquivar projeto/ }))
-      await waitFor(() => expect(screen.queryByText('Arquivado')).toBeNull())
-
-      fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo Sem título' }))
-      expect(screen.queryByRole('menuitem', { name: /Mover para "Arquivado"/ })).toBeNull()
-
-      // Once revealed via "Mostrar arquivados", it becomes a legitimate
-      // target again — matching what the drag path can also now reach.
-      fireEvent.click(screen.getByRole('button', { name: 'Mostrar arquivados (1)' }))
-      fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo Sem título' }))
-      expect(await screen.findByRole('menuitem', { name: /Mover para "Arquivado"/ })).not.toBeNull()
+      expect(screen.queryByRole('menuitem', { name: /Mover para "/ })).toBeNull()
     })
 
     it('omits move-up/move-down at the ends of the visible file list', async () => {

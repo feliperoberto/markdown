@@ -149,52 +149,34 @@ export function updateFileContent(
 }
 
 /**
- * Moves a file (issue #92: drag & drop). Handles three cases with one
- * order-preserving rebuild:
- *  - reorder within a project (`fromProject === toProject`): the file is
- *    lifted out and reinserted before `beforeFile` (or appended when
- *    `beforeFile` is null/unknown);
- *  - move to another project: removed from the source, inserted into the
- *    target at the same before/append position.
+ * Reorders a file within its project (issue #92: drag & drop). The file is
+ * lifted out and reinserted before `beforeFile` (or appended when
+ * `beforeFile` is null/unknown) — an order-preserving rebuild, same
+ * approach as `moveProject` below.
  *
- * A no-op-returning guard (identical reference back) protects every invalid
- * request — unknown source file, unknown target project, or a name
- * collision in a *different* target project (which would otherwise
- * overwrite an existing file). `ProjectFile` references are preserved
- * as-is; only object key ordering changes.
+ * Moving a file to a DIFFERENT project is not supported (removed feature —
+ * see CHANGELOG); every call here is a same-project reorder. A no-op-
+ * returning guard (identical reference back) protects every invalid
+ * request — unknown project/file, or dropping a file onto itself.
+ * `ProjectFile` references are preserved as-is; only object key ordering
+ * changes.
  */
 export function moveFile(
   state: ProjectsState,
-  fromProject: string,
+  projectName: string,
   fileName: string,
-  toProject: string,
   beforeFile: string | null = null,
 ): ProjectsState {
-  if (!fileExists(state, fromProject, fileName)) return state
-  if (!projectExists(state, toProject)) return state
-  if (fromProject !== toProject && fileExists(state, toProject, fileName)) return state
+  if (!fileExists(state, projectName, fileName)) return state
   // Reordering a file relative to itself is a no-op.
-  if (fromProject === toProject && beforeFile === fileName) return state
+  if (beforeFile === fileName) return state
 
-  const moving = state[fromProject]![fileName] as ProjectFile
-
-  function insert(entries: Array<[string, ProjectFile]>): ProjectFiles {
-    const index = beforeFile ? entries.findIndex(([key]) => key === beforeFile) : -1
-    const at = index < 0 ? entries.length : index
-    entries.splice(at, 0, [fileName, moving])
-    return Object.fromEntries(entries)
-  }
-
-  if (fromProject === toProject) {
-    const entries = Object.entries(state[fromProject]!).filter(([key]) => key !== fileName)
-    return { ...state, [fromProject]: insert(entries) }
-  }
-
-  const sourceFiles = Object.fromEntries(
-    Object.entries(state[fromProject]!).filter(([key]) => key !== fileName),
-  )
-  const targetFiles = insert(Object.entries(state[toProject]!))
-  return { ...state, [fromProject]: sourceFiles, [toProject]: targetFiles }
+  const moving = state[projectName]![fileName] as ProjectFile
+  const entries = Object.entries(state[projectName]!).filter(([key]) => key !== fileName)
+  const index = beforeFile ? entries.findIndex(([key]) => key === beforeFile) : -1
+  const at = index < 0 ? entries.length : index
+  entries.splice(at, 0, [fileName, moving])
+  return { ...state, [projectName]: Object.fromEntries(entries) }
 }
 
 /**
@@ -487,26 +469,6 @@ export function renameFileInArchivedFiles(
   const next = new Set(archivedFiles)
   next.delete(oldKey)
   next.add(encodeArchivedFileKey(projectName, newFileName))
-  return next
-}
-
-/**
- * Carries an archived-file flag across `moveFile` when it moves a file to a
- * *different* project (a same-project move is just a reorder — identity is
- * unchanged, so it's a no-op here).
- */
-export function moveFileInArchivedFiles(
-  archivedFiles: ReadonlySet<string>,
-  fromProject: string,
-  fileName: string,
-  toProject: string,
-): ReadonlySet<string> {
-  if (fromProject === toProject) return archivedFiles
-  const oldKey = encodeArchivedFileKey(fromProject, fileName)
-  if (!archivedFiles.has(oldKey)) return archivedFiles
-  const next = new Set(archivedFiles)
-  next.delete(oldKey)
-  next.add(encodeArchivedFileKey(toProject, fileName))
   return next
 }
 

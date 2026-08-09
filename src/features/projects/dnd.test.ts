@@ -19,17 +19,17 @@ const groupZone = (
 ): DropZone => ({ kind: 'group', project, archived, rect })
 
 describe('resolveDropIntent', () => {
-  it('a file source over a file row inserts before that file', () => {
+  it('a file source over a file row in the SAME project inserts before that file', () => {
     const zones = [fileZone('A', 'b'), groupZone('A')]
     const result = resolveDropIntent(
       zones,
       { x: 5, y: 5 },
       { kind: 'file', project: 'A', file: 'a' },
     )
-    expect(result).toEqual({ kind: 'file', toProject: 'A', beforeFile: 'b' })
+    expect(result).toEqual({ kind: 'file', beforeFile: 'b' })
   })
 
-  it('a file source over group padding (outside every row) appends (beforeFile: null)', () => {
+  it('a file source over group padding (outside every row) in the SAME project appends (beforeFile: null)', () => {
     // Point inside the group rect but outside the file zone's smaller rect.
     const zones = [fileZone('A', 'b'), groupZone('A')]
     const result = resolveDropIntent(
@@ -37,7 +37,7 @@ describe('resolveDropIntent', () => {
       { x: 5, y: 100 },
       { kind: 'file', project: 'A', file: 'a' },
     )
-    expect(result).toEqual({ kind: 'file', toProject: 'A', beforeFile: null })
+    expect(result).toEqual({ kind: 'file', beforeFile: null })
   })
 
   it("a project source over a file row falls through to that file's own group", () => {
@@ -55,14 +55,14 @@ describe('resolveDropIntent', () => {
     expect(result).toBeNull()
   })
 
-  it('a file source over an archived group is still accepted (appended)', () => {
+  it('a file source over its OWN archived group is still accepted (appended)', () => {
     const zones = [groupZone('A', true)]
     const result = resolveDropIntent(
       zones,
       { x: 5, y: 5 },
-      { kind: 'file', project: 'B', file: 'x' },
+      { kind: 'file', project: 'A', file: 'x' },
     )
-    expect(result).toEqual({ kind: 'file', toProject: 'A', beforeFile: null })
+    expect(result).toEqual({ kind: 'file', beforeFile: null })
   })
 
   it('a point outside every zone resolves to null', () => {
@@ -75,26 +75,50 @@ describe('resolveDropIntent', () => {
     expect(result).toBeNull()
   })
 
-  it('a file source over one project inserts into a DIFFERENT project (cross-project)', () => {
+  // Moving a file to a different project is a removed feature (see
+  // CHANGELOG) — a file source landing on ANY zone belonging to a
+  // different project is not a match at all, exactly like a project
+  // source landing on a file row isn't.
+  it('a file source over a file row in a DIFFERENT project is rejected (no match)', () => {
     const zones = [fileZone('B', 'x'), groupZone('B')]
     const result = resolveDropIntent(
       zones,
       { x: 5, y: 5 },
       { kind: 'file', project: 'A', file: 'a' },
     )
-    expect(result).toEqual({ kind: 'file', toProject: 'B', beforeFile: 'x' })
+    expect(result).toBeNull()
+  })
+
+  it('a file source over an unarchived group of a DIFFERENT project is rejected (no match)', () => {
+    const zones = [groupZone('B')]
+    const result = resolveDropIntent(
+      zones,
+      { x: 5, y: 5 },
+      { kind: 'file', project: 'A', file: 'a' },
+    )
+    expect(result).toBeNull()
+  })
+
+  it('a file source over an archived group of a DIFFERENT project is rejected (no match)', () => {
+    const zones = [groupZone('B', true)]
+    const result = resolveDropIntent(
+      zones,
+      { x: 5, y: 5 },
+      { kind: 'file', project: 'A', file: 'a' },
+    )
+    expect(result).toBeNull()
   })
 })
 
 describe('applyDropIntent — argument-shape lock', () => {
-  it('calls onMoveFile with exactly (fromProject, fileName, toProject, beforeFile)', () => {
+  it('calls onMoveFile with exactly (projectName, fileName, beforeFile)', () => {
     const onMoveFile = vi.fn()
     applyDropIntent(
-      { kind: 'file', toProject: 'B', beforeFile: 'x' },
+      { kind: 'file', beforeFile: 'x' },
       { kind: 'file', project: 'A', file: 'a' },
       { onMoveFile },
     )
-    expect(onMoveFile).toHaveBeenCalledExactlyOnceWith('A', 'a', 'B', 'x')
+    expect(onMoveFile).toHaveBeenCalledExactlyOnceWith('A', 'a', 'x')
   })
 
   it('calls onMoveProject with exactly (projectName, beforeProject)', () => {
@@ -122,7 +146,7 @@ describe('applyDropIntent — argument-shape lock', () => {
   it('does nothing when the matching handler was not provided', () => {
     const onMoveProject = vi.fn()
     applyDropIntent(
-      { kind: 'file', toProject: 'B', beforeFile: null },
+      { kind: 'file', beforeFile: null },
       { kind: 'file', project: 'A', file: 'a' },
       { onMoveProject },
     )

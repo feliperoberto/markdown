@@ -8,10 +8,13 @@ Accepted.
 
 `ProjectsState` has no stable file identity — a file is a key in
 `Record<projectName, Record<fileName, ProjectFile>>`, and its name _is_ its
-identity. A rename or a cross-project move (`model.ts`'s `renameFile`,
-`renameProject`, `moveFile`) is therefore always a key move: insert under
-the new key, delete the old one. `deleteFile`/`deleteProject` remove a key
-outright.
+identity. A rename (`model.ts`'s `renameFile`/`renameProject`) is
+therefore always a key move: insert under the new key, delete the old
+one. `deleteFile`/`deleteProject` remove a key outright. (At the time
+this ADR was written, moving a file to a different project — `moveFile`
+with a `toProject` argument — was a fourth key-move case; that capability
+was later removed as a product decision, unrelated to this ADR, so
+`moveFile` no longer appears among the tombstone-recording sites below.)
 
 `mergeProjectsByFreshness` (`model.ts`) reconciles a local `ProjectsState`
 against a Google Drive snapshot by freshness, per file: newer `timestamp`
@@ -59,12 +62,12 @@ archived-files sidecar (one key format in the codebase, not two); project
 keys use a new one-element sibling, `encodeProjectTombstoneKey`.
 
 A tombstone is recorded at every site that removes or vacates a key —
-`renameFile`/`renameProject`/`moveFile` (old key), `deleteFile`/
-`deleteProject` — gated on the same `saved` guard the codebase already
-uses to skip persistence failures, and only when the operation is a real
-state change (`next !== projects`), matching the existing archived-flag
-cascade convention. Every site that re-creates a key (`createFile`, the
-destination of a rename/move) clears any tombstone shadowing it.
+`renameFile`/`renameProject` (old key), `deleteFile`/`deleteProject` —
+gated on the same `saved` guard the codebase already uses to skip
+persistence failures, and only when the operation is a real state change
+(`next !== projects`), matching the existing archived-flag cascade
+convention. Every site that re-creates a key (`createFile`, the
+destination of a rename) clears any tombstone shadowing it.
 
 `mergeProjectsByFreshness` takes a third argument, the combined
 tombstone set. The fix is a single added rule in the existing remote-only
@@ -105,8 +108,8 @@ devices syncing, not the life of the app.
 
 ## Consequences
 
-- Fixes the reported bug: renaming, moving, or deleting a file or project
-  and then syncing no longer resurrects the old name on either device.
+- Fixes the reported bug: renaming or deleting a file or project and then
+  syncing no longer resurrects the old name on either device.
 - The Drive snapshot's shape gains a field and the merge's conflict
   semantics gain a rule, but both are additive/backward compatible — an
   old client reading a snapshot with `tombstones` ignores the field it
