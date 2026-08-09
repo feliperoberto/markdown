@@ -2,23 +2,25 @@
 
 ## 1. Accessible names for icon-only controls (`aria-label`, PT-BR)
 
-| Element(s)                             | `aria-label`                              |
-| -------------------------------------- | ----------------------------------------- |
-| `#menuBtn` (☰)                        | "Abrir menu de projetos"                  |
-| `#driveBtn` (☁️)                       | "Abrir Google Drive"                      |
-| `#fontSizeBtn` (Aa)                    | "Alternar tamanho do texto do editor"     |
-| `#fullscreenBtn` (⛶)                   | "Alternar tela cheia"                     |
-| `#newProjectBtn` (➕)                  | "Criar novo projeto"                      |
-| `#importZipBtn` (📥)                   | "Importar projetos de um arquivo ZIP"     |
-| `#configBtn` (⚙️)                      | "Abrir configurações"                     |
-| `#installBtn` (📲)                     | "Instalar aplicativo"                     |
-| `#downloadBtn` (⬇️)                    | "Baixar arquivo atual"                    |
-| `#copyBtn` (📋)                        | "Copiar todo o conteúdo do arquivo"       |
-| `#configModalClose` (✕)                | "Fechar configurações"                    |
-| `#driveModalClose` (✕)                 | "Fechar Google Drive"                     |
-| Project "⋮" menu trigger (per project) | "Mais opções do projeto {nome}"           |
-| File "⋮" menu trigger (per file)       | "Mais opções do arquivo {nome}"           |
-| `.file-checkbox` (per file)            | "Selecionar {nome} para download em lote" |
+| Element(s)                              | `aria-label`                                                                                                                         |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `#menuBtn` (☰)                         | "Abrir menu de projetos"                                                                                                             |
+| `#driveBtn` (☁️)                        | "Abrir Google Drive"                                                                                                                 |
+| `#fontSizeBtn` (Aa)                     | "Alternar tamanho do texto do editor"                                                                                                |
+| `#fullscreenBtn` (⛶)                    | "Alternar tela cheia"                                                                                                                |
+| `#newProjectBtn` (➕)                   | "Criar novo projeto"                                                                                                                 |
+| `#importZipBtn` (📥)                    | "Importar projetos de um arquivo ZIP"                                                                                                |
+| `#configBtn` (⚙️)                       | "Abrir configurações"                                                                                                                |
+| `#installBtn` (📲)                      | "Instalar aplicativo"                                                                                                                |
+| `#downloadBtn` (⬇️)                     | "Baixar arquivo atual"                                                                                                               |
+| `#copyBtn` (📋)                         | "Copiar todo o conteúdo do arquivo"                                                                                                  |
+| `#configModalClose` (✕)                 | "Fechar configurações"                                                                                                               |
+| `#driveModalClose` (✕)                  | "Fechar Google Drive"                                                                                                                |
+| Project "⋮" menu trigger (per project)  | "Mais opções do projeto {nome}"                                                                                                      |
+| File "⋮" menu trigger (per file)        | "Mais opções do arquivo {nome}"                                                                                                      |
+| `.file-checkbox` (per file)             | "Selecionar {nome} para download em lote"                                                                                            |
+| Drag handle, file (`⠿`, per file)       | "Mover arquivo {nome}" — while picked: "Arquivo {nome} selecionado para mover — use as setas ou toque em outro item; Escape cancela" |
+| Drag handle, project (`⠿`, per project) | "Mover projeto {nome}" — while picked: "Projeto {nome} selecionado para mover — use as setas ou toque em outro item; Escape cancela" |
 
 (The last three rows above have moved on from `prototype/index.html`'s
 literal class names — see §4 for the current sidebar structure. Rename/
@@ -68,29 +70,48 @@ actions menu, the same pattern project rows already used), and drag & drop
 Tab order through the sidebar file tree (when open) follows DOM order,
 top to bottom:
 
-1. Project header (`role="button"`, `tabindex="0"`, expand/collapse via
+1. Project header: project drag handle (`⠿`, when reordering is enabled) →
+   project header (`role="button"`, `tabindex="0"`, expand/collapse via
    click or `Enter`/`Space`) → its "⋮" actions menu trigger.
-2. Per file row: checkbox → file row (`role="button"`, `tabindex="0"`,
-   opens the file via click or `Enter`/`Space`) → its "⋮" actions menu
-   trigger (rename/archive/delete/move, all inside one `role="menu"`,
-   keyboard-navigable per §3 above).
+2. Per file row: file drag handle (`⠿`) → checkbox → file row
+   (`role="button"`, `tabindex="0"`, opens the file via click or
+   `Enter`/`Space`) → its "⋮" actions menu trigger (rename/archive/delete,
+   inside one `role="menu"`, keyboard-navigable per §3 above).
 3. Sidebar footer: Novo → Importar → Config.
 
-**The drag handle (`.drag-handle`, `data-dnd-handle`) adds zero new Tab
-stops.** It is `aria-hidden="true"` with no `tabindex` — a deliberately
-pointer-only affordance, not a keyboard control with a missing binding.
-Reordering is fully available without it: each "⋮" menu (file and project)
-carries "Mover para cima"/"Mover para baixo" items computed by
-`src/features/projects/dnd.ts`'s `stepBefore` — the same `onMoveFile`/
-`onMoveProject` calls the pointer drag itself makes (see
-`applyDropIntent`), not a parallel implementation. Moving a file into a
-different project was removed (see CHANGELOG) — a file's handle and menu
-now both only ever reorder it within its own project. This is what
-satisfies WCAG 2.1 SC 2.5.7 (Dragging Movements requires a single-pointer,
-non-dragging alternative) and SC 2.1.1 (Keyboard) for the whole feature — a
-focusable "grab mode" on the handle itself was considered and deferred
-(it would need a 4th Tab stop per row for behavior the menu already
-delivers); see the DnD design notes for that trade-off.
+**The drag handle (`.drag-handle`, `data-dnd-handle`) is the SOLE reorder
+affordance** — there used to also be "⬆ Mover para cima"/"⬇ Mover para
+baixo" items in each row's "⋮" menu; those are gone. The handle now
+supports three interchangeable ways to do the same reorder, all funneling
+into the same `onMoveFile`/`onMoveProject` calls (see
+`src/features/projects/dnd.ts`'s `applyDropIntent`) — not three parallel
+implementations:
+
+- **Drag** (mouse or touch): press on the handle, move past a small
+  activation threshold, drop on a valid target. Unchanged from before.
+- **Tap-to-pick / tap-to-drop**: a press-and-release on the handle that
+  never crosses the drag-activation threshold — a literal single-pointer,
+  non-dragging gesture — "picks" that file/project up (`aria-pressed`
+  turns `true`, the accessible name changes to state what's picked and
+  how to cancel). While picked, tapping any other row/header that's a
+  legal target (`matchZone` in `dnd.ts`) commits the move there; tapping
+  the same handle again, pressing `Escape`, or clicking anywhere outside
+  the sidebar cancels with no change. This alone satisfies WCAG 2.1
+  SC 2.5.7 (Dragging Movements requires a single-pointer, non-dragging
+  alternative) for both touch and mouse, with no keyboard involved.
+- **Keyboard grab + arrow-step**: the handle is a real Tab stop
+  (`role="button"`, `tabindex="0"`). `Enter`/`Space` toggles the same
+  picked state as a tap. While picked, `ArrowUp`/`ArrowDown` steps the
+  item one visible slot at a time via `stepBefore()`, committing
+  immediately on each press (there is nothing "pending" left for `Escape`
+  to roll back — only the pick state itself, not any already-applied
+  step, is what `Escape` cancels). This satisfies SC 2.1.1 (Keyboard).
+
+Moving a file into a different project was removed (see CHANGELOG) — the
+handle only ever reorders a file within its own project, regardless of
+which of the three methods above triggers it; an archived project's
+header is never a valid drop/commit target for a picked project (its
+handle isn't rendered at all — see `ProjectGroup.tsx`).
 
 **Resolved (issue #34):** `.project-header` and `.file-item` were
 previously `<div>`s with only `click`/`dblclick` handlers, so they were not

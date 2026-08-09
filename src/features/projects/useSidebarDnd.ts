@@ -26,6 +26,16 @@ export interface SidebarDndOptions {
   onMoveProject?: (projectName: string, beforeProject?: string | null) => void
   /** Called the moment a gesture activates (crosses the drag threshold) — closes any open "..." menu, since a floating menu's pre-computed position has nothing to do with an in-progress drag. */
   onDragStart?: () => void
+  /**
+   * Called when a pointer went down on a handle and came back up without
+   * ever crossing the drag-activation threshold — a plain tap/click, not a
+   * drag (pick mode's entry point; see `ProjectsSidebar.tsx`). Fired only
+   * from a genuine `up` while still `pending` — a gesture that was already
+   * `dragging` produces `commit` on `up`, never this, and a cancelled
+   * gesture (pointercancel, blur, Escape) always arrives via a `cancel`
+   * event, never `up` — so this can't misfire for either of those.
+   */
+  onTap?: (source: DragSource) => void
   /** Test seam: the real DOM default reads `getBoundingClientRect()`; a test injects fixed rects instead, since jsdom has no layout. */
   measureZones?: (root: HTMLElement) => DropZone[]
 }
@@ -316,7 +326,12 @@ export function useSidebarDnd(options: SidebarDndOptions): SidebarDndControls {
         }
       }
 
-      if (wasDragging) installClickSuppressor()
+      // Unconditional, not just `if (wasDragging)`: a plain tap on the
+      // handle (pick mode's entry point) must not also bubble into the
+      // row's own click and open the file — that bubble-through was
+      // harmless when the handle had no meaning beyond dragging, but a tap
+      // now toggles pick mode, so it always needs suppressing.
+      installClickSuppressor()
 
       setHighlight(null)
       removeGhost()
@@ -381,8 +396,19 @@ export function useSidebarDnd(options: SidebarDndOptions): SidebarDndControls {
     function handlePointerUp(e: PointerEvent) {
       const result = gestureReducer(gestureStateRef.current, { type: 'up', pointerId: e.pointerId })
       gestureStateRef.current = result.state
-      if (result.effect === 'commit') endDrag(true)
-      else if (result.effect === 'abort') endDrag(false)
+      if (result.effect === 'commit') {
+        endDrag(true)
+      } else if (result.effect === 'abort') {
+        // `abort` from an `up` event (as opposed to a `cancel` event) can
+        // only mean the gesture never left the `pending` phase — a plain
+        // tap, not a drag that got cancelled. `sourceRef.current` is still
+        // set at this point (endDrag(false) clears it right after) and is
+        // always non-null here: the listener carrying this handler is only
+        // ever attached inside handlePointerDown, right after
+        // sourceRef.current is set, and removed inside endDrag.
+        if (sourceRef.current) optionsRef.current.onTap?.(sourceRef.current)
+        endDrag(false)
+      }
     }
 
     function handlePointerCancel(e: PointerEvent) {

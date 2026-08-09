@@ -7,7 +7,8 @@ import { test, expect, ensureSidebarOpen } from './fixtures'
 // spec proves the new pointer-based implementation still does everything
 // the old one did on a real mouse; e2e/sidebar-reorder-touch.spec.ts proves
 // the same code path also works from a real touch gesture, and
-// e2e/sidebar-reorder-menu.spec.ts covers the non-drag "Mover" menu path.
+// e2e/sidebar-reorder-pick.spec.ts covers the non-drag tap-to-pick and
+// keyboard grab+arrow-step paths on the same handle.
 //
 // Skipped on the `mobile` project: a mouse-simulated drag under touch-
 // device emulation (Pixel 5's `hasTouch: true`) doesn't behave reliably

@@ -2,10 +2,18 @@ import type { JSX } from 'preact'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { ProjectGroup } from './ProjectGroup'
 import { showPromptDialog } from './dialogs'
+import {
+  applyDropIntent,
+  matchZone,
+  resolveTapOnHandle,
+  type DragSource,
+  type ZoneIdentity,
+} from './dnd'
 import { decodeArchivedFileKey, fileExists, isFileArchived, projectExists } from './model'
 import { loadCollapsedProjects, saveCollapsedProjects } from './storage'
 import type { ProjectsState } from './types'
 import { useSidebarDnd } from './useSidebarDnd'
+import { useOutsideClick } from '@/lib/useOutsideClick'
 
 // Stable empty-set default for the `archivedProjects` prop: a `= new Set()`
 // default parameter would allocate a fresh Set every render and defeat
@@ -125,6 +133,70 @@ export function ProjectsSidebar({
     setOpenMenu(null)
   }, [])
 
+  // Reordering (issue #92, and its "collapse drag + Mover menu items onto
+  // one handle" follow-up): at most one file/project can be "picked" at a
+  // time, the same single-slot pattern as `openMenu` above. A pick is a
+  // non-drag, single-pointer-or-keyboard way to reorder — tap/Enter-Space a
+  // handle to pick it up, then tap/Enter-Space another valid row's handle
+  // (or the row itself), or Arrow Up/Down while picked, to move it; Escape,
+  // re-activating the same handle, or an outside click cancels. This is
+  // what replaces the old "⬆ Mover para cima"/"⬇ Mover para baixo" menu
+  // items — the handle is now the SOLE reorder affordance (drag, tap-pick,
+  // and keyboard), not a separate button pair alongside it. See
+  // docs/accessibility-notes.md §4 for the WCAG 2.1 SC 2.5.7/2.1.1 mapping.
+  const [pickedItem, setPickedItem] = useState<DragSource | null>(null)
+
+  // The single place that decides what tapping (pointer, via
+  // useSidebarDnd's `onTap`) OR Enter/Space-ing (keyboard) a handle does —
+  // both are "activate this handle" with identical semantics, so both
+  // route through here. `resolveTapOnHandle` is the pure decision;
+  // committing a move (when it resolves one) is the one side effect this
+  // wrapper adds.
+  const handleTapHandle = useCallback(
+    (tapped: DragSource) => {
+      const { nextPicked, intent } = resolveTapOnHandle(pickedItem, tapped)
+      if (intent && pickedItem) {
+        applyDropIntent(intent, pickedItem, { onMoveFile, onMoveProject })
+      }
+      setPickedItem(nextPicked)
+    },
+    [pickedItem, onMoveFile, onMoveProject],
+  )
+
+  // Called from a row/header's own onClick when something is picked and
+  // THIS row/header isn't the one that owns the pick — i.e. tapping the
+  // row body (not necessarily its handle) of a candidate target. Commits
+  // if `zone` is a legal target for the current pick, otherwise just
+  // cancels (an unrelated click while picked shouldn't silently do
+  // nothing, and shouldn't fall through to the row's normal
+  // select/expand behavior either — the picked state must resolve one way
+  // or the other before a plain click means what it normally means again).
+  const handleRowActivateWhilePicked = useCallback(
+    (zone: ZoneIdentity) => {
+      if (!pickedItem) return
+      const intent = matchZone(zone, pickedItem)
+      if (intent) applyDropIntent(intent, pickedItem, { onMoveFile, onMoveProject })
+      setPickedItem(null)
+    },
+    [pickedItem, onMoveFile, onMoveProject],
+  )
+
+  const handleCancelPick = useCallback(() => {
+    setPickedItem(null)
+  }, [])
+
+  // Escape cancels a pick from anywhere in the sidebar, not just from the
+  // handle that started it — mirrors useSidebarDnd's own document-level
+  // Escape handling for an in-progress drag.
+  useEffect(() => {
+    if (!pickedItem) return
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') handleCancelPick()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [pickedItem, handleCancelPick])
+
   // Remembered collapsed/expanded state per project (issue #92). Seeded
   // from localStorage so a returning user sees the same projects folded as
   // when they left; persisted on every change. Declared here (rather than
@@ -185,13 +257,33 @@ export function ProjectsSidebar({
   // never fires from a touch gesture). One delegated pointerdown listener
   // on the sidebar root; see useSidebarDnd.ts/dnd.ts for the actual
   // gesture/drop-resolution logic. `onDragStart` closes any open "..."
-  // menu the moment a drag activates — a floating menu's pre-computed
-  // position has nothing to do with an in-progress drag.
+  // menu AND cancels an active pick the moment a drag activates — a
+  // floating menu's pre-computed position, or a picked item's stale
+  // highlight, has nothing to do with an in-progress drag; letting both
+  // features touch `data-drop-target` at once would fight each other.
+  // `onTap` is a plain tap/click on a handle that never crossed the drag
+  // threshold — pick mode's pointer entry point, routed through the exact
+  // same decision `handleTapHandle` also makes for the keyboard path.
   const { rootRef: dndRootRef } = useSidebarDnd({
     onMoveFile,
     onMoveProject,
-    onDragStart: handleCloseMenu,
+    onDragStart: () => {
+      handleCloseMenu()
+      handleCancelPick()
+    },
+    onTap: handleTapHandle,
   })
+
+  // A click outside the sidebar entirely cancels a pick — a click INSIDE
+  // it either commits (a valid target's own onClick) or cancels (any other
+  // row/header's onClick, via handleRowActivateWhilePicked) already, so
+  // this only needs to catch the sidebar being left altogether (the
+  // editor, the header, elsewhere on the page).
+  useOutsideClick(
+    pickedItem !== null,
+    (target) => dndRootRef.current?.contains(target) ?? false,
+    handleCancelPick,
+  )
   // The full, unfiltered list. This is what duplicate-name validation
   // (handleNewProject below, and ProjectGroup's rename validation) must see
   // — filtering it would let a user create/rename into a name collision
@@ -457,6 +549,9 @@ export function ProjectsSidebar({
                 onUploadMultipleFiles={onUploadMultipleFiles}
                 onMoveFile={onMoveFile}
                 onMoveProject={onMoveProject}
+                pickedItem={pickedItem}
+                onTapHandle={handleTapHandle}
+                onRowActivateWhilePicked={handleRowActivateWhilePicked}
                 onToggleArchived={onToggleArchived}
                 archivedFileNames={
                   archivedFileNamesByProject.get(projectName) ?? NO_ARCHIVED_FILE_NAMES

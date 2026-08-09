@@ -362,27 +362,85 @@ describe('ProjectsSidebar + useProjects', () => {
   })
 
   // Coverage-reachability fix (regression-analysis cause b): the harness now
-  // wires `onMoveFile`/`onMoveProject` through to `useProjects`, so these
-  // "Mover" menu items — the keyboard/non-drag alternative to the pointer
-  // drag handle — are reachable from a component-level test, not just the
-  // pure `dnd.ts`/`useSidebarDnd.ts` unit suites.
-  describe('"Mover" menu items', () => {
-    // Moving a file to a different project was removed (see CHANGELOG) —
-    // the file's own "..." menu no longer offers any "Mover para
-    // <projeto>" items at all, regardless of how many other projects
-    // exist.
-    it('never shows a "Mover para <project>" target on a file\'s menu', async () => {
+  // wires `onMoveFile`/`onMoveProject` through to `useProjects`, so reorder
+  // is reachable from a component-level test, not just the pure
+  // `dnd.ts`/`useSidebarDnd.ts` unit suites. The old "Mover para cima/baixo"
+  // menu items are gone — reordering is now the drag handle's keyboard path
+  // (Enter/Space to pick, Arrow Up/Down to step, Escape/re-tap/another row
+  // to drop) — same underlying eligibility rules (same-project-only,
+  // archived-group excluded), different trigger mechanism.
+  describe('drag handle keyboard reorder (pick mode)', () => {
+    function fileNamesInOrder(): string[] {
+      return Array.from(document.querySelectorAll('.file-name')).map((el) => el.textContent ?? '')
+    }
+
+    function projectNamesInOrder(): string[] {
+      return Array.from(document.querySelectorAll('.project-name')).map(
+        (el) => el.textContent ?? '',
+      )
+    }
+
+    it('picking a file handle and activating another same-project row commits the reorder', async () => {
       renderHarness()
 
-      vi.mocked(showPromptDialog).mockResolvedValueOnce('Outro')
-      fireEvent.click(screen.getByRole('button', { name: 'Criar novo projeto' }))
-      expect(await screen.findByText('Outro')).not.toBeNull()
+      vi.mocked(showPromptDialog).mockResolvedValueOnce('segundo-arquivo')
+      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Meu Projeto/ }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Novo arquivo/ }))
+      expect(await screen.findByText('segundo-arquivo')).not.toBeNull()
+      expect(fileNamesInOrder()).toEqual(['Sem título', 'segundo-arquivo'])
 
-      fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo Sem título' }))
-      expect(screen.queryByRole('menuitem', { name: /Mover para "/ })).toBeNull()
+      fireEvent.keyDown(screen.getByRole('button', { name: 'Mover arquivo segundo-arquivo' }), {
+        key: 'Enter',
+      })
+      expect(
+        screen.getByRole('button', { name: /segundo-arquivo selecionado para mover/ }),
+      ).not.toBeNull()
+
+      fireEvent.click(screen.getByText('Sem título'))
+      expect(fileNamesInOrder()).toEqual(['segundo-arquivo', 'Sem título'])
+      // The pick clears once the move commits.
+      expect(screen.getByRole('button', { name: 'Mover arquivo segundo-arquivo' })).not.toBeNull()
     })
 
-    it('omits move-up/move-down at the ends of the visible file list', async () => {
+    it('re-activating the same handle cancels the pick', async () => {
+      renderHarness()
+
+      const handle = screen.getByRole('button', { name: 'Mover arquivo Sem título' })
+      fireEvent.keyDown(handle, { key: 'Enter' })
+      expect(handle.getAttribute('aria-pressed')).toBe('true')
+
+      fireEvent.keyDown(handle, { key: ' ' })
+      expect(handle.getAttribute('aria-pressed')).toBe('false')
+    })
+
+    it('Escape cancels an active pick', () => {
+      renderHarness()
+
+      const handle = screen.getByRole('button', { name: 'Mover arquivo Sem título' })
+      fireEvent.keyDown(handle, { key: 'Enter' })
+      expect(handle.getAttribute('aria-pressed')).toBe('true')
+
+      fireEvent.keyDown(document, { key: 'Escape' })
+      expect(handle.getAttribute('aria-pressed')).toBe('false')
+    })
+
+    it('activating a row in a different project cancels the pick without moving (cross-project move is not supported)', async () => {
+      renderHarness()
+
+      vi.mocked(showPromptDialog).mockResolvedValueOnce('Outro Projeto')
+      fireEvent.click(screen.getByRole('button', { name: 'Criar novo projeto' }))
+      expect(await screen.findByText('Outro Projeto')).not.toBeNull()
+
+      const handle = screen.getByRole('button', { name: 'Mover arquivo Sem título' })
+      fireEvent.keyDown(handle, { key: 'Enter' })
+      expect(handle.getAttribute('aria-pressed')).toBe('true')
+
+      fireEvent.click(screen.getByText('Outro Projeto'))
+      expect(handle.getAttribute('aria-pressed')).toBe('false')
+      expect(fileNamesInOrder()).toEqual(['Sem título'])
+    })
+
+    it('Arrow Up/Down at the ends of the visible file list is a no-op', async () => {
       renderHarness()
 
       vi.mocked(showPromptDialog).mockResolvedValueOnce('segundo-arquivo')
@@ -390,40 +448,33 @@ describe('ProjectsSidebar + useProjects', () => {
       fireEvent.click(screen.getByRole('menuitem', { name: /Novo arquivo/ }))
       expect(await screen.findByText('segundo-arquivo')).not.toBeNull()
 
-      // "Sem título" is first in the visible list: no move-up.
-      fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo Sem título' }))
-      expect(screen.queryByRole('menuitem', { name: /Mover para cima/ })).toBeNull()
-      expect(screen.getByRole('menuitem', { name: /Mover para baixo/ })).not.toBeNull()
-      fireEvent.click(screen.getByRole('button', { name: 'Mais opções do arquivo Sem título' }))
+      const first = screen.getByRole('button', { name: 'Mover arquivo Sem título' })
+      fireEvent.keyDown(first, { key: 'Enter' })
+      fireEvent.keyDown(first, { key: 'ArrowUp' })
+      expect(fileNamesInOrder()).toEqual(['Sem título', 'segundo-arquivo'])
+      fireEvent.keyDown(first, { key: 'Escape' })
 
-      // "segundo-arquivo" is last: no move-down.
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Mais opções do arquivo segundo-arquivo' }),
-      )
-      expect(screen.getByRole('menuitem', { name: /Mover para cima/ })).not.toBeNull()
-      expect(screen.queryByRole('menuitem', { name: /Mover para baixo/ })).toBeNull()
+      const last = screen.getByRole('button', { name: 'Mover arquivo segundo-arquivo' })
+      fireEvent.keyDown(last, { key: 'Enter' })
+      fireEvent.keyDown(last, { key: 'ArrowDown' })
+      expect(fileNamesInOrder()).toEqual(['Sem título', 'segundo-arquivo'])
     })
 
-    it('omits project reorder items at the ends of the visible project list', async () => {
+    it('picking a project handle and arrow-stepping reorders projects', async () => {
       renderHarness()
 
       vi.mocked(showPromptDialog).mockResolvedValueOnce('Segundo')
       fireEvent.click(screen.getByRole('button', { name: 'Criar novo projeto' }))
       expect(await screen.findByText('Segundo')).not.toBeNull()
+      expect(projectNamesInOrder()).toEqual(['Meu Projeto', 'Segundo'])
 
-      // "Meu Projeto" is first: no move-up.
-      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Meu Projeto/ }))
-      expect(screen.queryByRole('menuitem', { name: /Mover projeto para cima/ })).toBeNull()
-      expect(screen.getByRole('menuitem', { name: /Mover projeto para baixo/ })).not.toBeNull()
-      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Meu Projeto/ }))
-
-      // "Segundo" is last: no move-down.
-      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Segundo/ }))
-      expect(screen.getByRole('menuitem', { name: /Mover projeto para cima/ })).not.toBeNull()
-      expect(screen.queryByRole('menuitem', { name: /Mover projeto para baixo/ })).toBeNull()
+      const handle = screen.getByRole('button', { name: 'Mover projeto Meu Projeto' })
+      fireEvent.keyDown(handle, { key: 'Enter' })
+      fireEvent.keyDown(handle, { key: 'ArrowDown' })
+      expect(projectNamesInOrder()).toEqual(['Segundo', 'Meu Projeto'])
     })
 
-    it("does not show project reorder items on an archived project's menu", async () => {
+    it("an archived project's own handle is not rendered (it is not a valid pick source)", async () => {
       renderHarness()
 
       vi.mocked(showPromptDialog).mockResolvedValueOnce('Segundo')
@@ -435,9 +486,7 @@ describe('ProjectsSidebar + useProjects', () => {
       await waitFor(() => expect(screen.queryByText('Segundo')).toBeNull())
 
       fireEvent.click(await screen.findByRole('button', { name: 'Mostrar arquivados (1)' }))
-      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Segundo/ }))
-      expect(screen.queryByRole('menuitem', { name: /Mover projeto para cima/ })).toBeNull()
-      expect(screen.queryByRole('menuitem', { name: /Mover projeto para baixo/ })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Mover projeto Segundo' })).toBeNull()
     })
   })
 })

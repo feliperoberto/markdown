@@ -2,7 +2,7 @@ import type { JSX } from 'preact'
 import { memo } from 'preact/compat'
 import type { ProjectFile } from './types'
 import { showPromptDialog } from './dialogs'
-import { stepBefore } from './dnd'
+import { matchZone, stepBefore, type DragSource, type ZoneIdentity } from './dnd'
 import { Checkbox, IconButton } from '@/components'
 import { formatRelativeTime } from '@/lib/formatRelativeTime'
 import { useDropdownMenu } from '@/lib/useDropdownMenu'
@@ -18,8 +18,9 @@ export interface FileRowProps {
   /**
    * This project's currently VISIBLE file order (already filtered to what's
    * on screen — archived files excluded unless revealed) — used by the
-   * "Mover para cima/baixo" menu items to compute a step, matching what the
-   * user actually sees move. Computed and memoized by ProjectGroup.
+   * handle's own Arrow Up/Down keyboard step (see `handleHandleKeyDown`) to
+   * compute a step, matching what the user actually sees move. Computed and
+   * memoized by ProjectGroup.
    */
   visibleFileNames: string[]
   onSelectFile: (projectName: string, fileName: string) => void
@@ -42,14 +43,30 @@ export interface FileRowProps {
   /**
    * Drag & drop (issue #92, and its mobile follow-up: a Pointer Events
    * rewrite so this also works from a touch gesture, not just a mouse).
-   * When provided, the row's drag handle is active and the "Mover para
-   * cima/baixo" menu items render — see `useSidebarDnd`/`./dnd.ts`, which
-   * own the actual gesture/drop-resolution logic; this component only
-   * supplies the `data-dnd-*` identity attributes the delegated pointer
-   * handler reads. Moving a file to a DIFFERENT project was removed (see
-   * CHANGELOG) — a move only ever reorders within `projectName`.
+   * When provided, the row's drag handle is active — see
+   * `useSidebarDnd`/`./dnd.ts`, which own the actual gesture/drop-
+   * resolution logic; this component only supplies the `data-dnd-*`
+   * identity attributes the delegated pointer handler reads. Moving a file
+   * to a DIFFERENT project was removed (see CHANGELOG) — a move only ever
+   * reorders within `projectName`.
    */
   onMoveFile?: (projectName: string, fileName: string, beforeFile?: string | null) => void
+  /**
+   * Reordering: the single project- or file-scoped item currently "picked"
+   * via a handle, or null — see ProjectsSidebar's own doc comment on its
+   * `pickedItem` state for the full picture. Drives this row's handle's
+   * `aria-pressed`, and whether the row itself renders as a tappable pick
+   * target.
+   */
+  pickedItem: DragSource | null
+  /** Tap or Enter/Space on this file's own handle — toggles picking it. */
+  onTapHandle: (source: DragSource) => void
+  /**
+   * This row was clicked/activated while something is picked — commits if
+   * it's a legal target for the current pick, cancels the pick otherwise
+   * either way.
+   */
+  onRowActivateWhilePicked: (zone: ZoneIdentity) => void
 }
 
 // Renders one file row in the sidebar tree, including its "..." actions
@@ -76,6 +93,9 @@ export const FileRow = memo(function FileRow({
   onDeleteFile,
   onToggleArchived,
   onMoveFile,
+  pickedItem,
+  onTapHandle,
+  onRowActivateWhilePicked,
 }: FileRowProps): JSX.Element {
   const {
     triggerId: menuButtonId,
@@ -85,21 +105,59 @@ export const FileRow = memo(function FileRow({
     toggleMenu,
   } = useDropdownMenu(isMenuOpen, () => onOpenMenu(projectName, file.name), onCloseMenu)
 
+  // This row's zone identity, for both matching against a current pick (is
+  // this row a legal target?) and reporting one of its own (a tap on its
+  // own handle).
+  const rowZone: ZoneIdentity = { kind: 'file', project: projectName, file: file.name }
+  const isHandlePicked =
+    pickedItem?.kind === 'file' &&
+    pickedItem.project === projectName &&
+    pickedItem.file === file.name
+  const isRowPickTarget = pickedItem !== null && matchZone(rowZone, pickedItem) !== null
+
+  // While something is picked, the row's click resolves the pick (commit if
+  // it's a legal target, cancel otherwise) instead of its usual open-file —
+  // same reasoning as ProjectGroup's identical header-click branching.
   function handleRowClick() {
+    if (pickedItem) {
+      onRowActivateWhilePicked(rowZone)
+      return
+    }
     onSelectFile(projectName, file.name)
   }
 
   function handleRowKeyDown(e: KeyboardEvent) {
     // Only when the keydown originated on the row itself, not a bubbled
-    // event from a nested interactive descendant (the checkbox, the "..."
-    // trigger) — otherwise preventDefault() here suppresses THEIR native
-    // Enter/Space activation too (the browser checks defaultPrevented
-    // against the original target, not this handler's own), so e.g. the
-    // "..." button could never be activated by keyboard at all.
+    // event from a nested interactive descendant (the checkbox, the drag
+    // handle, the "..." trigger) — otherwise preventDefault() here
+    // suppresses THEIR native Enter/Space activation too (the browser
+    // checks defaultPrevented against the original target, not this
+    // handler's own), so e.g. the "..." button could never be activated by
+    // keyboard at all.
     if (e.target !== e.currentTarget) return
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
       handleRowClick()
+    }
+  }
+
+  // The handle's own keyboard path — see ProjectGroup's identical
+  // handleHandleKeyDown for the full reasoning (Enter/Space picks/drops/
+  // cancels via the same decision the pointer-tap path makes; Arrow Up/Down
+  // steps immediately via stepBefore while picked; Escape is handled
+  // globally by ProjectsSidebar).
+  function handleHandleKeyDown(e: KeyboardEvent) {
+    e.stopPropagation()
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      onTapHandle({ kind: 'file', project: projectName, file: file.name })
+      return
+    }
+    if (!isHandlePicked) return
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault()
+      const step = stepBefore(visibleFileNames, file.name, e.key === 'ArrowUp' ? -1 : 1)
+      if (step) onMoveFile?.(projectName, file.name, step.before)
     }
   }
 
@@ -135,25 +193,6 @@ export const FileRow = memo(function FileRow({
     onToggleArchived?.(projectName, file.name)
   }
 
-  // --- "Mover" menu items (issue: mobile drag & drop) — the keyboard/
-  // non-drag path alongside the pointer drag handle below. Precomputed
-  // (rather than inside each handler) so the same stepBefore() result
-  // both decides whether to render the item and what to move to.
-  const moveUp = onMoveFile ? stepBefore(visibleFileNames, file.name, -1) : null
-  const moveDown = onMoveFile ? stepBefore(visibleFileNames, file.name, 1) : null
-
-  function handleMoveUp(e: MouseEvent) {
-    e.stopPropagation()
-    onCloseMenu()
-    if (moveUp) onMoveFile?.(projectName, file.name, moveUp.before)
-  }
-
-  function handleMoveDown(e: MouseEvent) {
-    e.stopPropagation()
-    onCloseMenu()
-    if (moveDown) onMoveFile?.(projectName, file.name, moveDown.before)
-  }
-
   return (
     // Fragment, not a single wrapped div: the menu below is a SIBLING of
     // .file-item, not nested inside it — mirroring ProjectGroup's own
@@ -171,18 +210,33 @@ export const FileRow = memo(function FileRow({
         aria-current={isActive ? 'true' : undefined}
         data-dnd-file={onMoveFile ? file.name : undefined}
         data-dnd-file-project={onMoveFile ? projectName : undefined}
+        data-drop-target={isRowPickTarget ? 'true' : undefined}
         onClick={handleRowClick}
         onKeyDown={handleRowKeyDown}
       >
         {onMoveFile && (
-          // Pointer-only affordance (issue: mobile drag & drop) — a plain
-          // touch-target grip, not a focusable control. `aria-hidden` +
-          // no `tabindex`: keyboard users reach the same capability via
-          // the "Mover" menu items below, so this adds zero new Tab
-          // stops to every row (see docs/accessibility-notes.md).
-          // `touch-action: none` (global.css) is what keeps a finger here
-          // from also panning the sidebar while dragging.
-          <span className="drag-handle" data-dnd-handle="file" aria-hidden="true">
+          // The SOLE reorder affordance for this file — drag, tap-to-pick +
+          // tap-to-drop, and keyboard grab + arrow-step all live on this
+          // one handle now (no separate "Mover para cima/baixo" menu items
+          // — see docs/accessibility-notes.md §4 for the WCAG 2.1 SC
+          // 2.5.7/2.1.1 mapping). Focusable (unlike the old aria-hidden,
+          // no-tabindex version), since it's now a real keyboard control,
+          // not just a pointer-only affordance. `touch-action: none`
+          // (global.css) is what keeps a finger here from also panning the
+          // sidebar while dragging.
+          <span
+            className={`drag-handle${isHandlePicked ? ' picked' : ''}`}
+            data-dnd-handle="file"
+            role="button"
+            tabIndex={0}
+            aria-pressed={isHandlePicked}
+            aria-label={
+              isHandlePicked
+                ? `Arquivo ${file.name} selecionado para mover — use as setas ou toque em outro item; Escape cancela`
+                : `Mover arquivo ${file.name}`
+            }
+            onKeyDown={handleHandleKeyDown}
+          >
             ⠿
           </span>
         )}
@@ -251,21 +305,6 @@ export const FileRow = memo(function FileRow({
               onClick={handleToggleArchived}
             >
               {isArchived ? '📂 Desarquivar' : '📦 Arquivar'}
-            </button>
-          )}
-          {moveUp && (
-            <button type="button" className="dropdown-item" role="menuitem" onClick={handleMoveUp}>
-              ⬆ Mover para cima
-            </button>
-          )}
-          {moveDown && (
-            <button
-              type="button"
-              className="dropdown-item"
-              role="menuitem"
-              onClick={handleMoveDown}
-            >
-              ⬇ Mover para baixo
             </button>
           )}
           <button

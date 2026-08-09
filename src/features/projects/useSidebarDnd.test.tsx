@@ -75,9 +75,10 @@ function Harness({
   onMoveFile,
   onMoveProject,
   onDragStart,
+  onTap,
   onRowClick,
 }: Partial<SidebarDndOptions> & { onRowClick?: () => void }) {
-  const { rootRef } = useSidebarDnd({ onMoveFile, onMoveProject, onDragStart, measureZones })
+  const { rootRef } = useSidebarDnd({ onMoveFile, onMoveProject, onDragStart, onTap, measureZones })
 
   return (
     // A <nav>, not a <div>, to match ProjectsSidebar's real root element —
@@ -158,9 +159,16 @@ describe('useSidebarDnd', () => {
     expect(onRowClick).not.toHaveBeenCalled()
   })
 
-  it('a plain (never-activated) tap does not suppress the next click', () => {
+  // Regression note: this predates onTap's addition, when a plain tap truly
+  // had no meaning. Now that onTap exists (pick mode's entry point), a tap
+  // DOES suppress the following click — see the dedicated onTap tests below,
+  // which supersede this one's original assumption. Kept, updated, since a
+  // subsequent click still shouldn't ALSO open the file once pick mode is
+  // wired up — a bubbled-through click on top of a real onTap call would be
+  // a double action.
+  it('a plain (never-activated) tap suppresses the next click', () => {
     const onRowClick = vi.fn()
-    const { container } = renderHarness({ onRowClick })
+    const { container } = renderHarness({ onRowClick, onMoveFile: vi.fn() })
     const handleA = container.querySelector('[data-dnd-file="a"] [data-dnd-handle]') as HTMLElement
     const rowA = container.querySelector('[data-dnd-file="a"]') as HTMLElement
 
@@ -168,7 +176,67 @@ describe('useSidebarDnd', () => {
     fireEvent(handleA, pointerEvent('pointerup', { clientX: 10, clientY: 10 }))
 
     fireEvent.click(rowA)
-    expect(onRowClick).toHaveBeenCalledOnce()
+    expect(onRowClick).not.toHaveBeenCalled()
+  })
+
+  describe('onTap', () => {
+    it('fires with the tapped source on a genuine tap (down/up, never crossed the threshold)', () => {
+      const onTap = vi.fn()
+      const { container } = renderHarness({ onTap, onMoveFile: vi.fn() })
+      const handleA = container.querySelector(
+        '[data-dnd-file="a"] [data-dnd-handle]',
+      ) as HTMLElement
+
+      fireEvent(handleA, pointerEvent('pointerdown', { clientX: 10, clientY: 10 }))
+      fireEvent(handleA, pointerEvent('pointerup', { clientX: 10, clientY: 10 }))
+
+      expect(onTap).toHaveBeenCalledExactlyOnceWith({ kind: 'file', project: 'P', file: 'a' })
+    })
+
+    it('does not fire when the gesture became a real drag and committed', () => {
+      const onTap = vi.fn()
+      const { container } = renderHarness({ onTap, onMoveFile: vi.fn() })
+      const handleA = container.querySelector(
+        '[data-dnd-file="a"] [data-dnd-handle]',
+      ) as HTMLElement
+
+      fireEvent(handleA, pointerEvent('pointerdown', { clientX: 10, clientY: 10 }))
+      fireEvent(handleA, pointerEvent('pointermove', { clientX: 10, clientY: 30 }))
+      fireEvent(handleA, pointerEvent('pointerup', { clientX: 10, clientY: 30 }))
+
+      expect(onTap).not.toHaveBeenCalled()
+    })
+
+    it('does not fire on pointercancel (neither pre-activation nor mid-drag)', async () => {
+      const onTap = vi.fn()
+      const { container } = renderHarness({ onTap, onMoveFile: vi.fn() })
+      const handleA = container.querySelector(
+        '[data-dnd-file="a"] [data-dnd-handle]',
+      ) as HTMLElement
+
+      // Cancel before ever crossing the threshold.
+      fireEvent(handleA, pointerEvent('pointerdown', { clientX: 10, clientY: 10 }))
+      fireEvent(handleA, pointerEvent('pointercancel', { clientX: 10, clientY: 10 }))
+      expect(onTap).not.toHaveBeenCalled()
+
+      // Cancel mid-drag.
+      fireEvent(handleA, pointerEvent('pointerdown', { clientX: 10, clientY: 10 }))
+      fireEvent(handleA, pointerEvent('pointermove', { clientX: 10, clientY: 30 }))
+      await waitFor(() => expect(document.body.dataset.dragging).toBe('true'))
+      fireEvent(handleA, pointerEvent('pointercancel', { clientX: 10, clientY: 30 }))
+      expect(onTap).not.toHaveBeenCalled()
+    })
+
+    it('fires for a tap on the project handle too, with a project-kind source', () => {
+      const onTap = vi.fn()
+      const { container } = renderHarness({ onTap, onMoveProject: vi.fn() })
+      const handleProject = container.querySelector('[data-dnd-handle="project"]') as HTMLElement
+
+      fireEvent(handleProject, pointerEvent('pointerdown', { clientX: 10, clientY: 10 }))
+      fireEvent(handleProject, pointerEvent('pointerup', { clientX: 10, clientY: 10 }))
+
+      expect(onTap).toHaveBeenCalledExactlyOnceWith({ kind: 'project', project: 'P' })
+    })
   })
 
   it('pointercancel mid-drag aborts: no move, no leftover dragging state or ghost', async () => {

@@ -156,20 +156,27 @@ test.describe('file row actions menu', () => {
     })
     await expect(trigger).toBeHidden()
 
-    // DOM order within one row is row -> checkbox -> trigger (the row
-    // `<div>` wraps both). `.focus()` on the checkbox doesn't itself
-    // trigger `:focus-visible` (it's a programmatic, non-keyboard focus),
-    // but Shift+Tab from there is genuine keyboard input, so the row it
-    // lands on backing up onto IS `:focus-visible` — exactly like a real
-    // keyboard user tabbing in from somewhere earlier on the page.
+    // DOM order within one row is row -> drag handle -> checkbox -> trigger
+    // (the row `<div>` wraps all three; the handle is a real Tab stop of
+    // its own — see the pick-mode reorder feature in dnd.ts/FileRow.tsx —
+    // not just a pointer-only affordance). `.focus()` on the checkbox
+    // doesn't itself trigger `:focus-visible` (it's a programmatic,
+    // non-keyboard focus), but Shift+Tab from there is genuine keyboard
+    // input, so the handle it lands on backing up onto IS `:focus-visible`
+    // — exactly like a real keyboard user tabbing in from somewhere earlier
+    // on the page.
     const rowCheckbox = page.getByRole('checkbox', {
       name: `Selecionar ${fileName} para download em lote`,
     })
-    await rowCheckbox.focus()
-    await page.keyboard.press('Shift+Tab') // checkbox -> row (backward)
     const row = sidebar.locator(
       `[data-dnd-file="${fileName}"][data-dnd-file-project="${projectName}"]`,
     )
+    const handle = row.locator('[data-dnd-handle="file"]')
+    await rowCheckbox.focus()
+    await page.keyboard.press('Shift+Tab') // checkbox -> handle (backward)
+    await expect(handle).toBeFocused()
+
+    await page.keyboard.press('Shift+Tab') // handle -> row (backward)
     await expect(row).toBeFocused()
     // Wait for the CSS reveal to actually take effect before continuing
     // the Tab sequence — under load, a Tab dispatched the instant DOM
@@ -178,7 +185,8 @@ test.describe('file row actions menu', () => {
     // making it invisible to the very next Tab's focus-order computation.
     await expect(row.locator('.file-menu-trigger')).toBeVisible()
 
-    await page.keyboard.press('Tab') // row -> checkbox
+    await page.keyboard.press('Tab') // row -> handle
+    await page.keyboard.press('Tab') // handle -> checkbox
     await page.keyboard.press('Tab') // checkbox -> its own "..." trigger
     await expect(trigger).toBeFocused()
     await expect(trigger).toBeVisible()

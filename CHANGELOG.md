@@ -9,18 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Reordering files and projects in the sidebar: drag a file's or project's
-  handle to a new position, or use the "⬆ Mover para cima"/"⬇ Mover para
-  baixo" items in its "⋮" menu.
+- Reordering files and projects in the sidebar: a single `⠿` handle on
+  each row/header supports dragging it to a new position (mouse or
+  touch), tapping it once to "pick" it up and tapping another row to
+  drop it there, or (keyboard) `Enter`/`Space` to pick it up and
+  `Arrow Up`/`Down` to step it into place.
 
 ### Changed
 
 - Sidebar drag & drop is rewritten on Pointer Events instead of HTML5
   Drag-and-Drop, so reordering files and projects now works on touch
   devices, not just with a mouse. A small `⠿` grip on each row/header is
-  the drag affordance; the rest of the row still taps to open/expand and
-  scrolls normally. Every "⋮" menu also gained "Mover" items as a
-  non-drag, keyboard-accessible equivalent (WCAG 2.1 SC 2.5.7/2.1.1).
+  the sole reorder affordance; the rest of the row still taps to
+  open/expand and scrolls normally. The same handle also supports a
+  tap-to-pick + tap-to-drop gesture and a keyboard grab + arrow-step path
+  as non-drag equivalents (WCAG 2.1 SC 2.5.7/2.1.1) — no separate "Mover"
+  menu items.
 - A file's "⋮" actions menu trigger is now hidden unless that file is the
   active one (or its menu is open), revealing on hover only on
   pointer-capable/hover-capable devices — cutting down on visual noise

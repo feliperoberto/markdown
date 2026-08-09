@@ -3,7 +3,7 @@ import { memo } from 'preact/compat'
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { FileRow } from './FileRow'
 import { showConfirmDialog, showPromptDialog } from './dialogs'
-import { stepBefore } from './dnd'
+import { matchZone, stepBefore, type DragSource, type ZoneIdentity } from './dnd'
 import type { ProjectFiles } from './types'
 import { IconButton } from '@/components'
 import { useDropdownMenu } from '@/lib/useDropdownMenu'
@@ -27,8 +27,8 @@ export interface ProjectGroupProps {
   /**
    * The sidebar's currently VISIBLE project order (already filtered to
    * what's on screen — archived projects excluded unless revealed) — used
-   * by this project's own "Mover projeto para cima/baixo" menu items to
-   * compute a step, matching what the user actually sees move. Computed
+   * by the handle's own Arrow Up/Down keyboard step (see `handleHandleKeyDown`)
+   * to compute a step, matching what the user actually sees move. Computed
    * and memoized by ProjectsSidebar.
    */
   visibleProjectNames: string[]
@@ -77,6 +77,22 @@ export interface ProjectGroupProps {
   // project, and reorder projects.
   onMoveFile?: (projectName: string, fileName: string, beforeFile?: string | null) => void
   onMoveProject?: (projectName: string, beforeProject?: string | null) => void
+  /**
+   * Reordering (see ProjectsSidebar's own doc comment on its `pickedItem`
+   * state for the full picture): the single project- or file-scoped item
+   * currently "picked" via the handle, or null. Drives the handle's
+   * `aria-pressed`, and whether this header (or one of this project's
+   * files) renders as a tappable pick target.
+   */
+  pickedItem: DragSource | null
+  /** Tap or Enter/Space on this project's own handle — toggles picking it. */
+  onTapHandle: (source: DragSource) => void
+  /**
+   * The header (or a file row) was clicked/activated while something is
+   * picked — commits if this row/header is a legal target for the current
+   * pick, cancels the pick otherwise either way.
+   */
+  onRowActivateWhilePicked: (zone: ZoneIdentity) => void
   /** Archive feature: flips this project's archived state. */
   onToggleArchived?: (projectName: string) => void
   /**
@@ -123,6 +139,9 @@ export const ProjectGroup = memo(function ProjectGroup({
   onUploadMultipleFiles,
   onMoveFile,
   onMoveProject,
+  pickedItem,
+  onTapHandle,
+  onRowActivateWhilePicked,
   onToggleArchived,
   archivedFileNames = NO_ARCHIVED_FILES,
   onToggleFileArchived,
@@ -167,20 +186,64 @@ export const ProjectGroup = memo(function ProjectGroup({
   }, [isExpanded, openFileMenu, onCloseMenu])
   const multiFileInputRef = useRef<HTMLInputElement>(null)
 
-  function toggleExpanded() {
+  // This project's zone identity, for both matching against a current pick
+  // (is this header a legal target?) and reporting one of its own (a tap
+  // on its own handle).
+  const headerZone: ZoneIdentity = { kind: 'group', project: projectName, archived: isArchived }
+  const isHandlePicked = pickedItem?.kind === 'project' && pickedItem.project === projectName
+  const isHeaderPickTarget = pickedItem !== null && matchZone(headerZone, pickedItem) !== null
+
+  // While something is picked, the header's click resolves the pick
+  // (commit if it's a legal target, cancel otherwise) instead of its usual
+  // expand/collapse — a plain click while picked shouldn't silently do the
+  // normal thing, since that would leave the user unsure whether their tap
+  // landed on the pick or on the toggle.
+  function handleHeaderClick() {
+    if (pickedItem) {
+      onRowActivateWhilePicked(headerZone)
+      return
+    }
     onToggleExpanded(projectName)
   }
 
   function handleHeaderKeyDown(e: KeyboardEvent) {
     // Only when the keydown originated on the header itself, not a bubbled
-    // event from the nested "..." trigger — otherwise preventDefault() here
-    // suppresses the trigger's own native Enter/Space activation (the
-    // browser checks defaultPrevented against the original target, not
-    // this handler's own), making the menu unreachable by keyboard.
+    // event from a nested interactive descendant (the drag handle, the
+    // "..." trigger) — otherwise preventDefault() here suppresses THEIR own
+    // native Enter/Space activation (the browser checks defaultPrevented
+    // against the original target, not this handler's own).
     if (e.target !== e.currentTarget) return
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
-      toggleExpanded()
+      handleHeaderClick()
+    }
+  }
+
+  // The handle's own keyboard path (issue: mobile drag & drop's "collapse
+  // drag + Mover menu items onto one handle" follow-up) — Enter/Space picks
+  // it up (or drops it, or cancels, via the exact same decision
+  // useSidebarDnd's pointer-tap path makes: see ProjectsSidebar's
+  // handleTapHandle), and while picked, Arrow Up/Down steps it immediately
+  // via stepBefore — the same computation the old "Mover projeto para
+  // cima/baixo" menu items used, just triggered here instead of from a
+  // menu click. Escape is handled globally by ProjectsSidebar (mirrors
+  // useSidebarDnd's own document-level Escape-during-drag handling), so
+  // there's nothing to do for it here beyond not swallowing it.
+  function handleHandleKeyDown(e: KeyboardEvent) {
+    // Never let this bubble into the header's own onKeyDown (expand/
+    // collapse) — same reasoning as handleHeaderKeyDown's own guard, from
+    // the opposite direction.
+    e.stopPropagation()
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      onTapHandle({ kind: 'project', project: projectName })
+      return
+    }
+    if (!isHandlePicked) return
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault()
+      const step = stepBefore(visibleProjectNames, projectName, e.key === 'ArrowUp' ? -1 : 1)
+      if (step) onMoveProject?.(projectName, step.before)
     }
   }
 
@@ -275,47 +338,48 @@ export const ProjectGroup = memo(function ProjectGroup({
     void handleRenameProject(e)
   }
 
-  // --- "Mover projeto" menu items (issue: mobile drag & drop) — the
-  // keyboard/non-drag path alongside the pointer drag handle below.
-  // Archived projects sit outside reordering, same as the drag handle
-  // being disabled for them (see the header's data-dnd-handle below).
-  const moveUp =
-    onMoveProject && !isArchived ? stepBefore(visibleProjectNames, projectName, -1) : null
-  const moveDown =
-    onMoveProject && !isArchived ? stepBefore(visibleProjectNames, projectName, 1) : null
-
-  function handleMoveProjectUp(e: MouseEvent) {
-    e.stopPropagation()
-    onCloseMenu()
-    if (moveUp) onMoveProject?.(projectName, moveUp.before)
-  }
-
-  function handleMoveProjectDown(e: MouseEvent) {
-    e.stopPropagation()
-    onCloseMenu()
-    if (moveDown) onMoveProject?.(projectName, moveDown.before)
-  }
-
   return (
     <div
       className={`project-group${isArchived ? ' archived' : ''}`}
       data-dnd-group={onMoveFile || onMoveProject ? projectName : undefined}
       data-dnd-archived={isArchived ? '1' : undefined}
+      // Same attribute the drag path highlights this project's group with
+      // (see useSidebarDnd.ts's setHighlight, and the `[data-drop-target]`
+      // CSS comment below) — reused as-is so pick mode's "this is a legal
+      // target" indicator looks identical to a live drag's, on the same
+      // element.
+      data-drop-target={isHeaderPickTarget ? 'true' : undefined}
     >
       <div
         className={`project-header${isActiveProject ? ' active' : ''}`}
         role="button"
         tabIndex={0}
         aria-expanded={isExpanded}
-        onClick={toggleExpanded}
+        onClick={handleHeaderClick}
         onDblClick={handleHeaderDoubleClick}
         onKeyDown={handleHeaderKeyDown}
       >
         {onMoveProject && !isArchived && (
-          // Pointer-only affordance — see FileRow's identical handle for
-          // the full reasoning (aria-hidden, no tabindex, the "Mover
-          // projeto" menu items below are the keyboard-equivalent path).
-          <span className="drag-handle" data-dnd-handle="project" aria-hidden="true">
+          // The SOLE reorder affordance for this project — drag, tap-to-
+          // pick + tap-to-drop, and keyboard grab + arrow-step all live on
+          // this one handle now (no separate "Mover projeto" menu items —
+          // see docs/accessibility-notes.md §4 for the WCAG 2.1 SC
+          // 2.5.7/2.1.1 mapping). Focusable (unlike the old aria-hidden,
+          // no-tabindex version), since it's now a real keyboard control,
+          // not just a pointer-only affordance.
+          <span
+            className={`drag-handle${isHandlePicked ? ' picked' : ''}`}
+            data-dnd-handle="project"
+            role="button"
+            tabIndex={0}
+            aria-pressed={isHandlePicked}
+            aria-label={
+              isHandlePicked
+                ? `Projeto ${projectName} selecionado para mover — use as setas ou toque em outro item; Escape cancela`
+                : `Mover projeto ${projectName}`
+            }
+            onKeyDown={handleHandleKeyDown}
+          >
             ⠿
           </span>
         )}
@@ -408,26 +472,6 @@ export const ProjectGroup = memo(function ProjectGroup({
               {isArchived ? '📂 Desarquivar projeto' : '📦 Arquivar projeto'}
             </button>
           )}
-          {moveUp && (
-            <button
-              type="button"
-              className="dropdown-item"
-              role="menuitem"
-              onClick={handleMoveProjectUp}
-            >
-              ⬆ Mover projeto para cima
-            </button>
-          )}
-          {moveDown && (
-            <button
-              type="button"
-              className="dropdown-item"
-              role="menuitem"
-              onClick={handleMoveProjectDown}
-            >
-              ⬇ Mover projeto para baixo
-            </button>
-          )}
           <button
             type="button"
             className="dropdown-item danger"
@@ -487,6 +531,9 @@ export const ProjectGroup = memo(function ProjectGroup({
               onDeleteFile={onDeleteFile}
               onToggleArchived={onToggleFileArchived}
               onMoveFile={onMoveFile}
+              pickedItem={pickedItem}
+              onTapHandle={onTapHandle}
+              onRowActivateWhilePicked={onRowActivateWhilePicked}
             />
           ))
         )}

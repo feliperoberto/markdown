@@ -1,5 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
-import { applyDropIntent, resolveDropIntent, stepBefore, type DropZone } from './dnd'
+import {
+  applyDropIntent,
+  matchZone,
+  resolveDropIntent,
+  resolvePickTargets,
+  resolveTapOnHandle,
+  stepBefore,
+  type DropZone,
+  type ZoneIdentity,
+} from './dnd'
 
 const fileZone = (
   project: string,
@@ -107,6 +116,155 @@ describe('resolveDropIntent', () => {
       { kind: 'file', project: 'A', file: 'a' },
     )
     expect(result).toBeNull()
+  })
+})
+
+describe('matchZone', () => {
+  // Pick mode has no pointer position — it only ever asks "is this zone a
+  // valid place for the current pick", i.e. exactly resolveDropIntent's
+  // point-tested branch minus the point test. These mirror the same table
+  // resolveDropIntent's own tests already cover, at the zone-identity level.
+  it('a file zone in the same project as the source is a match', () => {
+    expect(
+      matchZone(
+        { kind: 'file', project: 'A', file: 'b' },
+        { kind: 'file', project: 'A', file: 'a' },
+      ),
+    ).toEqual({
+      kind: 'file',
+      beforeFile: 'b',
+    })
+  })
+
+  it('a file zone in a different project is not a match', () => {
+    expect(
+      matchZone(
+        { kind: 'file', project: 'B', file: 'x' },
+        { kind: 'file', project: 'A', file: 'a' },
+      ),
+    ).toBeNull()
+  })
+
+  it('an unarchived group in the same project is a match (append) for a file source', () => {
+    expect(
+      matchZone(
+        { kind: 'group', project: 'A', archived: false },
+        { kind: 'file', project: 'A', file: 'a' },
+      ),
+    ).toEqual({ kind: 'file', beforeFile: null })
+  })
+
+  it('an archived group in the same project is still a match for a file source', () => {
+    expect(
+      matchZone(
+        { kind: 'group', project: 'A', archived: true },
+        { kind: 'file', project: 'A', file: 'a' },
+      ),
+    ).toEqual({ kind: 'file', beforeFile: null })
+  })
+
+  it('an unarchived group is a match for a project source', () => {
+    expect(
+      matchZone(
+        { kind: 'group', project: 'B', archived: false },
+        { kind: 'project', project: 'A' },
+      ),
+    ).toEqual({
+      kind: 'project',
+      beforeProject: 'B',
+    })
+  })
+
+  it('an archived group is not a match for a project source', () => {
+    expect(
+      matchZone({ kind: 'group', project: 'B', archived: true }, { kind: 'project', project: 'A' }),
+    ).toBeNull()
+  })
+
+  it('a file zone is never a match for a project source', () => {
+    expect(
+      matchZone({ kind: 'file', project: 'A', file: 'a' }, { kind: 'project', project: 'A' }),
+    ).toBeNull()
+  })
+})
+
+describe('resolvePickTargets', () => {
+  it('returns only the zones the picked source could legally land on', () => {
+    const zones: ZoneIdentity[] = [
+      { kind: 'file', project: 'A', file: 'b' },
+      { kind: 'file', project: 'A', file: 'c' },
+      { kind: 'file', project: 'B', file: 'x' },
+      { kind: 'group', project: 'A', archived: false },
+      { kind: 'group', project: 'B', archived: false },
+    ]
+    const targets = resolvePickTargets(zones, { kind: 'file', project: 'A', file: 'a' })
+    expect(targets).toEqual([
+      { kind: 'file', project: 'A', file: 'b' },
+      { kind: 'file', project: 'A', file: 'c' },
+      { kind: 'group', project: 'A', archived: false },
+    ])
+  })
+
+  it('returns an empty list when nothing matches', () => {
+    const zones: ZoneIdentity[] = [{ kind: 'file', project: 'B', file: 'x' }]
+    expect(resolvePickTargets(zones, { kind: 'file', project: 'A', file: 'a' })).toEqual([])
+  })
+})
+
+describe('resolveTapOnHandle', () => {
+  it('starts picking when nothing is picked yet', () => {
+    const result = resolveTapOnHandle(null, { kind: 'file', project: 'A', file: 'a' })
+    expect(result).toEqual({ nextPicked: { kind: 'file', project: 'A', file: 'a' }, intent: null })
+  })
+
+  it("re-tapping the already-picked source's own handle cancels", () => {
+    const source = { kind: 'file' as const, project: 'A', file: 'a' }
+    const result = resolveTapOnHandle(source, source)
+    expect(result).toEqual({ nextPicked: null, intent: null })
+  })
+
+  it('tapping a valid target commits and clears the pick', () => {
+    const picked = { kind: 'file' as const, project: 'A', file: 'a' }
+    const tapped = { kind: 'file' as const, project: 'A', file: 'b' }
+    const result = resolveTapOnHandle(picked, tapped)
+    expect(result).toEqual({ nextPicked: null, intent: { kind: 'file', beforeFile: 'b' } })
+  })
+
+  it('tapping an unrelated handle abandons the old pick and starts a new one', () => {
+    const picked = { kind: 'file' as const, project: 'A', file: 'a' }
+    const tapped = { kind: 'file' as const, project: 'B', file: 'x' }
+    const result = resolveTapOnHandle(picked, tapped)
+    expect(result).toEqual({ nextPicked: tapped, intent: null })
+  })
+
+  // Tapping a project header's own handle, mapped to a zone via
+  // toZoneIdentity, always carries `archived: false` (see that helper's own
+  // comment) — the group-zone/file-source branch of matchZone doesn't care
+  // about archived either way, only same-project-ness, so this exercises
+  // that branch correctly regardless.
+  it("tapping a DIFFERENT project's handle while a file is picked is not a target — abandons and re-picks the project (cross-project move is removed)", () => {
+    const picked = { kind: 'file' as const, project: 'A', file: 'a' }
+    const tapped = { kind: 'project' as const, project: 'B' }
+    const result = resolveTapOnHandle(picked, tapped)
+    expect(result).toEqual({ nextPicked: tapped, intent: null })
+  })
+
+  it("tapping the picked file's OWN project's handle commits an append to the end of that project", () => {
+    const picked = { kind: 'file' as const, project: 'A', file: 'a' }
+    const tapped = { kind: 'project' as const, project: 'A' }
+    const result = resolveTapOnHandle(picked, tapped)
+    expect(result).toEqual({ nextPicked: null, intent: { kind: 'file', beforeFile: null } })
+  })
+
+  it('tapping a file handle while a project is picked has nothing to do with it — abandons and re-picks the file', () => {
+    // A project source can only land on a group zone (matchZone rejects a
+    // file zone for a project source outright) — same fall-through
+    // reasoning as resolveDropIntent's own "project source over a file
+    // row" case, just via a tap instead of a point.
+    const picked = { kind: 'project' as const, project: 'A' }
+    const tapped = { kind: 'file' as const, project: 'B', file: 'x' }
+    const result = resolveTapOnHandle(picked, tapped)
+    expect(result).toEqual({ nextPicked: tapped, intent: null })
   })
 })
 

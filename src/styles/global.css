@@ -301,15 +301,22 @@ body {
 }
 
 /* Drag & drop feedback (issue #92, and its mobile follow-up — see
-   useSidebarDnd.ts). `[data-drop-target]` (an attribute the component
-   never renders in JSX), not a className: useSidebarDnd sets/clears it
-   imperatively on the raw DOM element during a drag, entirely outside
-   Preact's render cycle. A className computed from props would get wiped
-   by the very next re-render — and autosave bumps a file's `timestamp` on
-   every keystroke, so re-renders happen mid-drag routinely — silently
-   dropping the highlight. An attribute Preact never touches survives that
-   reconciliation because it's simply absent from both the old and new
-   vnode being diffed. */
+   useSidebarDnd.ts). `[data-drop-target]`, not a className, during a live
+   drag: useSidebarDnd sets/clears it imperatively on the raw DOM element,
+   entirely outside Preact's render cycle. A className computed from props
+   would get wiped by the very next re-render — and autosave bumps a
+   file's `timestamp` on every keystroke, so re-renders happen mid-drag
+   routinely — silently dropping the highlight. An attribute Preact never
+   touches survives that reconciliation because it's simply absent from
+   both the old and new vnode being diffed.
+
+   Pick mode (the tap-to-pick/keyboard-grab alternative — see
+   ProjectsSidebar's `pickedItem`) reuses the very same attribute for the
+   same visual meaning ("this is a legal place to put what's picked"), but
+   sets it via a plain conditional JSX attribute instead — pick-mode
+   re-renders are driven BY the state that determines the attribute, so
+   there's no re-render-wipes-it-out race to guard against the way there
+   is mid-drag. */
 .project-group[data-drop-target] {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent) inset;
@@ -417,6 +424,25 @@ body {
 
 .drag-handle:active {
   cursor: grabbing;
+}
+
+/* Pick mode (issue: collapse drag + the old "Mover para cima/baixo" menu
+   items onto this one handle) — the handle is now a real focusable
+   control (role="button", tabIndex 0), not just a pointer-only affordance,
+   so it needs its own :focus-visible ring like every other interactive
+   control in this file (there's no broad fallback rule). `[aria-pressed]`
+   only exists on the handle while something is picked (see FileRow.tsx/
+   ProjectGroup.tsx), so this never applies to a plain, unpicked handle. */
+.drag-handle[aria-pressed='true'] {
+  color: var(--accent);
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  cursor: default;
+}
+
+.drag-handle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 body[data-dragging] {
