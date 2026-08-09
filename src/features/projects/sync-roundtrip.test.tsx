@@ -4,13 +4,13 @@ import { ToastProvider } from '@/components'
 import { useProjects } from './useProjects'
 import type { ProjectsState } from './types'
 
-// Regression coverage for the reported bug: a renamed (or deleted, or
-// cross-project-moved) file reappearing as a duplicate after a Drive sync.
+// Regression coverage for the reported bug: a renamed or deleted file
+// reappearing as a duplicate after a Drive sync.
 // `model.test.ts` covers `mergeProjectsByFreshness` as a pure function
 // (hand-built local/remote pairs) and `useProjects.test.tsx` covers
 // `reconcileWithRemote` as a single call — neither models the actual
 // *sequence* that produces the bug: push (remote now has the old key) ->
-// rename/delete/move (a key move; the old key survives remotely) -> pull +
+// rename/delete (a key move; the old key survives remotely) -> pull +
 // reconcile (the old key comes back from remote) -> push (permanently, on
 // both sides). This file drives that full sequence through the real
 // `useProjects` hook, simulating "Drive" as a single shared in-memory
@@ -42,7 +42,6 @@ function Harness() {
     createFile,
     renameFile,
     deleteFile,
-    moveFile,
     reconcileWithRemote,
   } = useProjects()
 
@@ -54,14 +53,12 @@ function Harness() {
   return (
     <div>
       <button onClick={() => createProject('P')}>create-project-p</button>
-      <button onClick={() => createProject('Q')}>create-project-q</button>
       <button onClick={() => deleteProject('P')}>delete-project-p</button>
       <button onClick={() => renameProject('P', 'P2')}>rename-project-p</button>
       <button onClick={() => createFile('P', 'old', 'hello')}>create-file</button>
       <button onClick={() => renameFile('P', 'old', 'new')}>rename-file</button>
       <button onClick={() => renameFile('P', 'new', 'newer')}>rename-file-again</button>
       <button onClick={() => deleteFile('P', 'old')}>delete-file</button>
-      <button onClick={() => moveFile('P', 'old', 'Q', null)}>move-file</button>
       <button onClick={sync}>sync</button>
       <pre>{JSON.stringify(projects)}</pre>
     </div>
@@ -128,29 +125,6 @@ describe('sync round trip (push -> mutate -> sync)', () => {
 
     await waitFor(() => expect(fakeRemote.projects.P?.old).toBeUndefined())
     expect(stateText()).not.toContain('"old"')
-  })
-
-  it('a cross-project move does not resurrect the file under its old project after a second sync', async () => {
-    const { container } = renderHarness()
-    const stateText = () => container.querySelector('pre')?.textContent ?? ''
-
-    fireEvent.click(screen.getByText('create-project-p'))
-    fireEvent.click(screen.getByText('create-project-q'))
-    fireEvent.click(screen.getByText('create-file')) // P/old
-    await waitFor(() => expect(stateText()).toContain('"old"'))
-
-    fireEvent.click(screen.getByText('sync')) // remote now has P/old
-    await waitFor(() => expect(fakeRemote.projects.P?.old).toBeDefined())
-
-    fireEvent.click(screen.getByText('move-file')) // P/old -> Q/old
-    await waitFor(() => expect(stateText()).toContain('"Q"'))
-
-    fireEvent.click(screen.getByText('sync')) // pull (P still has old) -> merge -> push
-
-    await waitFor(() => {
-      expect(fakeRemote.projects.Q?.old).toBeDefined()
-      expect(fakeRemote.projects.P?.old).toBeUndefined()
-    })
   })
 
   // Renaming twice (old -> new -> newer), syncing after each, must not

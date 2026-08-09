@@ -73,14 +73,9 @@ export interface ProjectGroupProps {
    */
   onUploadMultipleFiles?: (projectName: string, files: File[]) => void
   // Drag & drop (issue #92, and its mobile follow-up: a Pointer Events
-  // rewrite — see useSidebarDnd.ts/dnd.ts) — reorder/move files and
-  // reorder projects.
-  onMoveFile?: (
-    fromProject: string,
-    fileName: string,
-    toProject: string,
-    beforeFile?: string | null,
-  ) => void
+  // rewrite — see useSidebarDnd.ts/dnd.ts) — reorder files within this
+  // project, and reorder projects.
+  onMoveFile?: (projectName: string, fileName: string, beforeFile?: string | null) => void
   onMoveProject?: (projectName: string, beforeProject?: string | null) => void
   /** Archive feature: flips this project's archived state. */
   onToggleArchived?: (projectName: string) => void
@@ -151,22 +146,6 @@ export const ProjectGroup = memo(function ProjectGroup({
     () => fileNames.filter((name) => archivedFileNames.has(name)).length,
     [fileNames, archivedFileNames],
   )
-  // Every OTHER *visible* project, for each file row's "Mover para
-  // <project>" menu items — memoized so a fresh array every render doesn't
-  // defeat FileRow's memo() for every row in this project on every
-  // unrelated re-render. Deliberately built from `visibleProjectNames`
-  // (already filtered to the current "Mostrar arquivados" toggle state),
-  // not the full `projectNames` — the equivalent pointer-drag path can
-  // only ever drop onto a project that's actually rendered on screen, so
-  // an archived, hidden project isn't a reachable drop target until
-  // revealed; the keyboard "Mover para" menu previously ignored that and
-  // listed every project including hidden archived ones, silently moving
-  // a file into a project the user couldn't currently see.
-  const otherProjectNames = useMemo(
-    () => visibleProjectNames.filter((name) => name !== projectName),
-    [visibleProjectNames, projectName],
-  )
-
   const {
     triggerId: menuButtonId,
     menuId,
@@ -499,7 +478,6 @@ export const ProjectGroup = memo(function ProjectGroup({
               isArchived={archivedFileNames.has(fileName)}
               fileNames={fileNames}
               visibleFileNames={visibleFileNames}
-              otherProjectNames={otherProjectNames}
               onSelectFile={onSelectFile}
               isMenuOpen={openFileMenu === fileName}
               onOpenMenu={onOpenFileMenu}

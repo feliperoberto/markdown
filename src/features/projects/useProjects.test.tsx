@@ -67,7 +67,7 @@ function Harness() {
       <button onClick={() => toggleFileArchived('Segundo', 'notes')}>
         toggle-archive-file-segundo-notes
       </button>
-      <button onClick={() => moveFile('Meu Projeto', 'notes', 'Segundo', null)}>move-file</button>
+      <button onClick={() => moveFile('Meu Projeto', 'notes', 'Sem título')}>move-file</button>
       <button onClick={() => moveProject('Segundo', 'Meu Projeto')}>move-project</button>
       <button onClick={() => toggleProjectArchived('Meu Projeto')}>
         toggle-archive-meu-projeto
@@ -178,40 +178,21 @@ describe('useProjects', () => {
     })
   })
 
-  it('moveFile moves a file across projects and keeps the active selection following it', async () => {
+  // moveFile only reorders a file within its own project — moving a file
+  // to a different project was removed (see CHANGELOG).
+  it('moveFile reorders a file within its project, inserting before the target', async () => {
     const { container } = renderHarness()
     const stateText = () => container.querySelector('pre')?.textContent ?? ''
 
-    fireEvent.click(screen.getByText('create-file'))
-    fireEvent.click(screen.getByText('create-project'))
-    fireEvent.click(screen.getByText('select-notes'))
-    await waitFor(() => expect(stateText()).toContain('"currentFile":"notes"'))
+    fireEvent.click(screen.getByText('create-file')) // Meu Projeto/notes, appended after "Sem título"
+    await waitFor(() => expect(stateText()).toContain('"notes"'))
 
-    fireEvent.click(screen.getByText('move-file'))
+    fireEvent.click(screen.getByText('move-file')) // notes -> before "Sem título"
 
     await waitFor(() => {
-      expect(stateText()).toContain('"Segundo":{"notes"')
-      expect(stateText()).toContain('"currentProject":"Segundo"')
+      const text = stateText()
+      expect(text.indexOf('"notes"')).toBeLessThan(text.indexOf('"Sem título"'))
     })
-  })
-
-  it('moveFile into a project with a same-named file is rejected with a warning toast', async () => {
-    const { container } = renderHarness()
-    const stateText = () => container.querySelector('pre')?.textContent ?? ''
-
-    fireEvent.click(screen.getByText('create-file')) // Meu Projeto/notes
-    fireEvent.click(screen.getByText('create-project')) // Segundo
-    fireEvent.click(screen.getByText('create-file-segundo')) // Segundo/notes
-    await waitFor(() => expect(stateText()).toContain('"Segundo":{"notes"'))
-
-    fireEvent.click(screen.getByText('move-file'))
-
-    // Warning toast (role="status") explaining the rejected move.
-    await waitFor(() => expect(screen.getByText(/Já existe um arquivo/)).not.toBeNull())
-    // Both files survive untouched: the source file kept its content and the
-    // target's same-named file was not overwritten (nothing moved).
-    expect(stateText()).toContain('"content":"hello"')
-    expect(stateText()).toContain('"content":"other"')
   })
 
   it('moveProject reorders the project list', async () => {
@@ -620,28 +601,6 @@ describe('useProjects', () => {
 
       fireEvent.click(screen.getByText('delete-file-notes'))
       await waitFor(() => expect(archivedFilesText()).toBe('[]'))
-    })
-
-    it('moving an archived file across projects rekeys it to the new project', async () => {
-      const { container } = renderHarness()
-      const archivedFilesText = () => container.querySelector('#archivedFiles')?.textContent ?? ''
-
-      fireEvent.click(screen.getByText('create-file')) // Meu Projeto/notes
-      fireEvent.click(screen.getByText('toggle-archive-file-notes'))
-      await waitFor(() =>
-        expect(archivedFilesText()).toBe(
-          JSON.stringify([encodeArchivedFileKey('Meu Projeto', 'notes')]),
-        ),
-      )
-
-      fireEvent.click(screen.getByText('create-project')) // Segundo
-      fireEvent.click(screen.getByText('move-file')) // Meu Projeto/notes -> Segundo
-
-      await waitFor(() =>
-        expect(archivedFilesText()).toBe(
-          JSON.stringify([encodeArchivedFileKey('Segundo', 'notes')]),
-        ),
-      )
     })
 
     it('renaming a project cascades the rename to its archived files', async () => {

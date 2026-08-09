@@ -23,20 +23,23 @@ export type DropZone =
   | { kind: 'group'; project: string; archived: boolean; rect: Rect }
 
 export type DropIntent =
-  | { kind: 'file'; toProject: string; beforeFile: string | null }
-  | { kind: 'project'; beforeProject: string }
+  { kind: 'file'; beforeFile: string | null } | { kind: 'project'; beforeProject: string }
 
 /**
  * Resolves what dropping `source` at `point` would do, given the currently
- * measured `zones` — a first-match-wins scan reproducing the HTML5-DnD
- * implementation's exact behavior:
+ * measured `zones` — a first-match-wins scan:
  *
- * | zone hit          | source `file`                        | source `project`        |
- * |--------------------|---------------------------------------|--------------------------|
- * | a file row         | insert before that file               | no match, keep scanning |
- * | an unarchived group | append to that project (`beforeFile: null`) | insert before that project |
- * | an archived group  | append (still accepted)               | no match                |
- * | nothing            | `null`                                | `null`                  |
+ * | zone hit          | source `file`, SAME project           | source `file`, OTHER project | source `project`        |
+ * |--------------------|-----------------------------------------|-------------------------------|--------------------------|
+ * | a file row         | insert before that file                 | no match, keep scanning       | no match, keep scanning |
+ * | an unarchived group | append to that project (`beforeFile: null`) | no match, keep scanning   | insert before that project |
+ * | an archived group  | append (still accepted)                 | no match, keep scanning       | no match                |
+ * | nothing            | `null`                                  | `null`                        | `null`                  |
+ *
+ * A file can only be reordered within its OWN project — moving a file to a
+ * DIFFERENT project is a removed feature (see CHANGELOG), so any zone
+ * belonging to another project is not a match for a file source at all,
+ * exactly like a project source landing on a file row isn't.
  *
  * `zones` MUST list every `'file'` zone before every `'group'` zone (see
  * `useSidebarDnd.ts`'s `measureZones`, which measures `[data-dnd-file]`
@@ -64,7 +67,8 @@ export function resolveDropIntent(
 
     if (zone.kind === 'file') {
       if (source.kind !== 'file') continue
-      return { kind: 'file', toProject: zone.project, beforeFile: zone.file }
+      if (zone.project !== source.project) continue
+      return { kind: 'file', beforeFile: zone.file }
     }
 
     // zone.kind === 'group'
@@ -72,25 +76,21 @@ export function resolveDropIntent(
       if (zone.archived) continue
       return { kind: 'project', beforeProject: zone.project }
     }
-    return { kind: 'file', toProject: zone.project, beforeFile: null }
+    if (zone.project !== source.project) continue
+    return { kind: 'file', beforeFile: null }
   }
   return null
 }
 
 export interface MoveHandlers {
-  onMoveFile?: (
-    fromProject: string,
-    fileName: string,
-    toProject: string,
-    beforeFile?: string | null,
-  ) => void
+  onMoveFile?: (projectName: string, fileName: string, beforeFile?: string | null) => void
   onMoveProject?: (projectName: string, beforeProject?: string | null) => void
 }
 
 /**
  * The single place that calls through to `useProjects.moveFile`/
  * `moveProject` — an argument-shape lock ensuring the rewrite calls them
- * with exactly the signatures #98 established (collision toast and
+ * with exactly the signatures established for each (collision toast and
  * active-file-follow behavior included; both live in `useProjects.ts`,
  * untouched by this rewrite).
  */
@@ -101,7 +101,7 @@ export function applyDropIntent(
 ): void {
   if (intent.kind === 'file') {
     if (source.kind !== 'file') return
-    handlers.onMoveFile?.(source.project, source.file, intent.toProject, intent.beforeFile)
+    handlers.onMoveFile?.(source.project, source.file, intent.beforeFile)
     return
   }
   if (source.kind !== 'project') return

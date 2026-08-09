@@ -121,12 +121,15 @@ test.describe('sidebar reorder ("Mover" menu items)', () => {
     await expect(page.getByRole('menuitem', { name: /Mover para cima/ })).toBeVisible()
   })
 
-  test('moves a file to another project via "Mover para <projeto>"', async ({ page }) => {
+  // Moving a file to a different project was removed (see CHANGELOG) — a
+  // file's "..." menu no longer offers any "Mover para <projeto>" item,
+  // regardless of how many other projects exist.
+  test('never shows a "Mover para <projeto>" item on a file\'s menu', async ({ page }) => {
     await page.goto('/app.html')
     const sidebar = page.locator('#projectsSidebar')
 
     const sourceProject = `E2E Menu Source ${Date.now()}`
-    const targetProject = `E2E Menu Target ${Date.now()}`
+    const otherProject = `E2E Menu Other ${Date.now()}`
     await page.getByRole('button', { name: 'Criar novo projeto' }).click()
     await page.getByLabel('Nome do novo projeto').fill(sourceProject)
     await page.getByRole('button', { name: 'Criar', exact: true }).click()
@@ -134,26 +137,21 @@ test.describe('sidebar reorder ("Mover" menu items)', () => {
       .getByRole('button', { name: `Mais opções do projeto ${sourceProject}`, exact: true })
       .click()
     await page.getByRole('menuitem', { name: /Novo arquivo/ }).click()
-    await page.getByLabel('Nome do arquivo').fill('movable')
+    await page.getByLabel('Nome do arquivo').fill('stays-put')
     await page.getByRole('button', { name: 'Criar', exact: true }).click()
 
     await ensureSidebarOpen(page)
     await page.getByRole('button', { name: 'Criar novo projeto' }).click()
-    await page.getByLabel('Nome do novo projeto').fill(targetProject)
+    await page.getByLabel('Nome do novo projeto').fill(otherProject)
     await page.getByRole('button', { name: 'Criar', exact: true }).click()
-    await expect(sidebar.getByText(targetProject)).toBeVisible()
+    await expect(sidebar.getByText(otherProject)).toBeVisible()
 
-    // 'movable' is still the active file (creating the target project
+    // 'stays-put' is still the active file (creating another project
     // doesn't change selection) — its trigger stays visible.
     await page
-      .getByRole('button', { name: 'Mais opções do arquivo movable', exact: true })
+      .getByRole('button', { name: 'Mais opções do arquivo stays-put', exact: true })
       .click()
-    await page.getByRole('menuitem', { name: `📁 Mover para "${targetProject}"` }).click()
-
-    await expect(page.locator(`[data-dnd-group="${sourceProject}"] .file-name`)).toHaveCount(0)
-    await expect(page.locator(`[data-dnd-group="${targetProject}"] .file-name`)).toHaveText([
-      'movable',
-    ])
+    await expect(page.getByRole('menuitem', { name: /^📁 Mover para/ })).toHaveCount(0)
   })
 
   test('moves a project up/down via its own "..." menu', async ({ page }) => {

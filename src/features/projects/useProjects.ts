@@ -102,15 +102,10 @@ export interface UseProjectsResult {
   renameFile: (projectName: string, oldFileName: string, newFileName: string) => void
   deleteFile: (projectName: string, fileName: string) => void
   updateFileContent: (projectName: string, fileName: string, content: string) => void
-  // Drag & drop (issue #92). `moveFile` reorders within a project or moves
-  // across projects (append when `beforeFile` is null); `moveProject`
-  // reorders the top-level project list (append when `beforeProject` is null).
-  moveFile: (
-    fromProject: string,
-    fileName: string,
-    toProject: string,
-    beforeFile?: string | null,
-  ) => void
+  // Drag & drop (issue #92). `moveFile` reorders a file within its project
+  // (append when `beforeFile` is null); `moveProject` reorders the
+  // top-level project list (append when `beforeProject` is null).
+  moveFile: (projectName: string, fileName: string, beforeFile?: string | null) => void
   moveProject: (projectName: string, beforeProject?: string | null) => void
   // Archive feature: names of projects currently hidden from the everyday
   // list. Device-local (see storage.ts's ARCHIVED_PROJECTS_KEY comment) —
@@ -650,55 +645,21 @@ export function useProjects(): UseProjectsResult {
     [projects, persist],
   )
 
+  // Reorders a file within its own project (issue #92: drag & drop).
+  // Moving a file to a DIFFERENT project was removed — see CHANGELOG — so
+  // this is a pure reorder: no collision toast (a project can't collide
+  // with itself), no active-file-follow (the project never changes), no
+  // archived-flag rekey and no tombstone (both existed only to carry a
+  // file's identity across a project boundary a move can no longer cross).
   const moveFile = useCallback(
-    (
-      fromProject: string,
-      fileName: string,
-      toProject: string,
-      beforeFile: string | null = null,
-    ) => {
-      // Explain the one rejection a user can trigger but not see: moving a
-      // file into another project that already has a same-named file. The
-      // model refuses it (never overwrites), and without this the drop just
-      // silently does nothing.
-      if (fromProject !== toProject && model.fileExists(projects, toProject, fileName)) {
-        showToast(`Já existe um arquivo "${fileName}" em "${toProject}".`, 'warning')
-        return
-      }
-      const next = model.moveFile(projects, fromProject, fileName, toProject, beforeFile)
-      // Same reference back means the move was a no-op (e.g. dropping a file
-      // onto itself) — nothing to persist.
+    (projectName: string, fileName: string, beforeFile: string | null = null) => {
+      const next = model.moveFile(projects, projectName, fileName, beforeFile)
+      // Same reference back means the move was a no-op (e.g. dropping a
+      // file onto itself) — nothing to persist.
       if (next === projects) return
-      // Only follow the active file into its new project if the write
-      // actually reached storage; on a persist failure the file is still in
-      // its old project, so moving the selection would point the editor at a
-      // file that isn't there.
-      const saved = persist(next)
-      if (saved) {
-        setCurrentProject((current) =>
-          current === fromProject && currentFile === fileName ? toProject : current,
-        )
-        // Carry the archived flag across a cross-project move — same
-        // reasoning as renameFileInArchivedFiles, but rekeying the project
-        // segment instead of the file segment.
-        setArchivedFiles((prev) => {
-          const rekeyed = model.moveFileInArchivedFiles(prev, fromProject, fileName, toProject)
-          return rekeyed === prev ? prev : new Set(rekeyed)
-        })
-        // A cross-project move is also a key move (the file leaves
-        // fromProject's key space) — same reasoning as renameFile's
-        // tombstone. A same-project move is a pure reorder, not a key
-        // move, so it needs none.
-        if (fromProject !== toProject) {
-          const deletedAt = new Date().toISOString()
-          setTombstones((prev) => {
-            const cleared = clearFileTombstone(prev, toProject, fileName)
-            return recordFileTombstone(cleared, fromProject, fileName, deletedAt)
-          })
-        }
-      }
+      persist(next)
     },
-    [projects, persist, currentFile, showToast],
+    [projects, persist],
   )
 
   const moveProject = useCallback(
