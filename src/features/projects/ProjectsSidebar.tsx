@@ -47,7 +47,11 @@ export interface ProjectsSidebarProps {
   // import-export directly. Optional so the menu items only render when
   // a caller opts in.
   onExportProject?: (projectName: string) => void
-  onUploadFiles?: (projectName: string, files: File[]) => void
+  // Returns whether anything was actually created (a `Promise` since the
+  // caller reads each file async) — the sidebar only reveals a collapsed
+  // target project once it knows the upload actually produced a file, not
+  // as soon as the file picker returns.
+  onUploadFiles?: (projectName: string, files: File[]) => Promise<boolean> | void
   /** Sidebar-footer "📥 Importar" (ZIP) — same taxonomy reason as above. */
   onImportZip?: (file: File) => void
   /** Sidebar-footer "⚙️ Config" — opens the Drive/Config modal (app.tsx owns it). */
@@ -169,11 +173,17 @@ export function ProjectsSidebar({
   // Unlike the old single-file-only upload, this now needs `revealProject`:
   // the caller selects the last uploaded file (app.tsx), and a file selected
   // inside a collapsed group is invisible — the same bug this comment block
-  // already describes for `handleCreateFile` above.
+  // already describes for `handleCreateFile` above. Reveals only once the
+  // caller's returned promise resolves `true` (something was actually
+  // created) — reading files is async and can end in total failure (every
+  // file rejected, or every name collided), and revealing a collapsed
+  // project for an upload that created nothing is a surprise with no
+  // payoff.
   const handleUploadFilesImpl = useCallback(
     (projectName: string, files: File[]) => {
-      revealProject(projectName)
-      onUploadFiles?.(projectName, files)
+      void Promise.resolve(onUploadFiles?.(projectName, files)).then((created) => {
+        if (created) revealProject(projectName)
+      })
     },
     [onUploadFiles, revealProject],
   )

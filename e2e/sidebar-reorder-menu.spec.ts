@@ -1,4 +1,4 @@
-import { test, expect, ensureSidebarOpen } from './fixtures'
+import { test, expect, ensureSidebarOpen, focusMenuItemViaArrowDown } from './fixtures'
 
 // Keyboard/non-drag coverage for the "Mover" menu items (issue: mobile
 // DnD's Pointer Events rewrite still needs a non-drag alternative — WCAG
@@ -64,11 +64,7 @@ test.describe('sidebar reorder ("Mover" menu items)', () => {
     // conditionally-rendered items varies with feature flags (Upload,
     // export, archive), so search for it by pressing ArrowDown and
     // checking focus rather than a fixed press count.
-    for (let i = 0; i < 10; i++) {
-      if (await moveUp.evaluate((el) => el === document.activeElement).catch(() => false)) break
-      await page.keyboard.press('ArrowDown')
-    }
-    await expect(moveUp).toBeFocused()
+    await focusMenuItemViaArrowDown(page, moveUp)
     // Focus reveals it — the whole point of reveal-on-focus.
     await expect
       .poll(async () => (await moveUp.boundingBox())?.width)
@@ -88,11 +84,7 @@ test.describe('sidebar reorder ("Mover" menu items)', () => {
     // `.click()` can't land on it (zero on-screen footprint) — reach it
     // the same ArrowDown-cycle-then-Enter way as "Mover para cima" above.
     const moveDown = page.getByRole('menuitem', { name: /Mover para baixo/ })
-    for (let i = 0; i < 10; i++) {
-      if (await moveDown.evaluate((el) => el === document.activeElement).catch(() => false)) break
-      await page.keyboard.press('ArrowDown')
-    }
-    await expect(moveDown).toBeFocused()
+    await focusMenuItemViaArrowDown(page, moveDown)
     await page.keyboard.press('Enter')
 
     await expect.poll(fileNamesInOrder).toEqual(['a', 'b', 'c'])
@@ -209,12 +201,7 @@ test.describe('sidebar reorder ("Mover" menu items)', () => {
       .getByRole('button', { name: `Mais opções do projeto ${second}`, exact: true })
       .click()
     const moveProjectUp = page.getByRole('menuitem', { name: /Mover projeto para cima/ })
-    for (let i = 0; i < 10; i++) {
-      if (await moveProjectUp.evaluate((el) => el === document.activeElement).catch(() => false))
-        break
-      await page.keyboard.press('ArrowDown')
-    }
-    await expect(moveProjectUp).toBeFocused()
+    await focusMenuItemViaArrowDown(page, moveProjectUp)
     await page.keyboard.press('Enter')
 
     await expect.poll(relativeOrder).toBeLessThan(0)

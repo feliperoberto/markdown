@@ -49,19 +49,29 @@ function Harness({
 
   // Mirrors app.tsx's handleUploadFilesToProject (minus the mobile-drawer/
   // toast side effects, which aren't this component's concern): read every
-  // file, create them all in one `createFiles` call, then select the last
-  // one created — the behavior ProjectsSidebar's `onUploadFiles` wiring
-  // relies on to reveal a collapsed target project.
-  async function handleUploadFiles(projectName: string, files: File[]) {
+  // file — catching a per-file rejection the same way production does, so
+  // one bad file doesn't abort the whole batch here either — create them
+  // all in one `createFiles` call, then select the last one created and
+  // report whether anything was actually created. ProjectsSidebar's
+  // `onUploadFiles` wiring relies on that return value to decide whether
+  // to reveal a collapsed target project.
+  async function handleUploadFiles(projectName: string, files: File[]): Promise<boolean> {
     const entries: { name: string; content: string }[] = []
     for (const file of files) {
-      const entry = await importFile(file)
-      entries.push({ name: entry.name, content: entry.content })
+      try {
+        const entry = await importFile(file)
+        entries.push({ name: entry.name, content: entry.content })
+      } catch {
+        // Swallowed, matching app.tsx's per-file error toast — this
+        // harness has no toast to show, only the create/select behavior
+        // under test.
+      }
     }
-    if (entries.length === 0) return
+    if (entries.length === 0) return false
     const created = createFiles(projectName, entries)
-    if (created.length === 0) return
+    if (created.length === 0) return false
     selectFile(projectName, created[created.length - 1]!)
+    return true
   }
 
   return (

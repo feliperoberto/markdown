@@ -195,7 +195,15 @@ export function App(): JSX.Element {
   // `createFiles` avoids this by folding all entries into one state
   // transition before persisting once, and returns the names it actually
   // created so the last one can be selected below.
-  const handleUploadFilesToProject = async (projectName: string, files: File[]) => {
+  //
+  // Returns whether anything was actually created — ProjectsSidebar reveals
+  // a collapsed target project only once this resolves `true`, so a batch
+  // that fails entirely (every file rejected, or every name collided)
+  // doesn't expand the project for nothing.
+  const handleUploadFilesToProject = async (
+    projectName: string,
+    files: File[],
+  ): Promise<boolean> => {
     const entries: { name: string; content: string }[] = []
     for (const file of files) {
       try {
@@ -205,12 +213,20 @@ export function App(): JSX.Element {
         showToast(`Erro ao importar "${file.name}": ${(error as Error).message}`, 'error')
       }
     }
-    if (entries.length === 0) return
+    if (entries.length === 0) return false
     const created = createFiles(projectName, entries)
-    if (created.length === 0) return
+    if (created.length === 0) return false
     selectFile(projectName, created[created.length - 1]!)
     revealNewFileOnMobile()
-    showToast(`${created.length} arquivo(s) importado(s)`, 'success')
+    // Names the file when exactly one was uploaded, matching the old
+    // single-file-only toast — the generic count only kicks in for an
+    // actual batch, where naming every file would be unwieldy.
+    if (created.length === 1) {
+      showToast(`Arquivo "${created[0]}" importado`, 'success')
+    } else {
+      showToast(`${created.length} arquivo(s) importado(s)`, 'success')
+    }
+    return true
   }
 
   // Sidebar-footer "📥 Importar" (ZIP) — same taxonomy reason as above.

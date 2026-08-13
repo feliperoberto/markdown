@@ -34,6 +34,32 @@ body {
   overflow: hidden;
 }
 
+/**
+ * Visually-hidden but screen-reader/keyboard-accessible content: clipped to
+ * a 1px box rather than `display: none`/`visibility: hidden`, so the
+ * element stays focusable and in the Tab/arrow-key order — `display: none`
+ * or `visibility: hidden` would drop it from both. Shared across every
+ * feature that needs this (the DriveSyncPanel offline-badge label, the
+ * UpdateBanner screen-reader announcer) — including, via the second
+ * selector below, the sidebar's reveal-on-focus "Mover" menu items
+ * (`.dropdown-item-quiet`, see the PROJECT MENU DROPDOWN section further
+ * down): `:not(:focus)` alone is enough to gate it, since `:focus-visible`
+ * is always a subset of `:focus`, making a second `:not(:focus-visible)`
+ * clause redundant.
+ */
+.visually-hidden,
+.dropdown-item-quiet:not(:focus) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 #app {
   display: flex;
   flex-direction: column;
@@ -1139,21 +1165,10 @@ footer,
    useDropdownMenu.ts's arrow-key roving focus walks every
    [role="menuitem"] regardless of visibility. Reveal-on-focus (not a
    permanent hide) keeps a keyboard/AT user's focus visible on something
-   real instead of stranding it on a clipped element. Clip-based hide
-   (not display:none/visibility:hidden) so the item stays focusable and
-   in the Tab/arrow-key order; matches the .visuallyHidden technique in
-   DriveSyncPanel.module.css/UpdateBanner.module.css. */
-.dropdown-item-quiet:not(:focus):not(:focus-visible) {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
+   real instead of stranding it on a clipped element. `.dropdown-item-quiet`
+   itself is declared up top, grouped into the shared `.visually-hidden`
+   rule (see its comment) rather than redeclaring the same clip recipe
+   here. */
 
 /* ============================================================
    DIALOG / CONFIG TEXT INPUTS

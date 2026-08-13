@@ -1,4 +1,4 @@
-import { test as base, expect, type Page } from '@playwright/test'
+import { test as base, expect, type Page, type Locator } from '@playwright/test'
 
 /**
  * Shared e2e fixture (issue #33).
@@ -44,4 +44,22 @@ export async function ensureSidebarOpen(page: Page): Promise<void> {
   if ((await menuButton.getAttribute('aria-expanded')) === 'false') {
     await menuButton.click()
   }
+}
+
+/**
+ * Reaches a `role="menuitem"` inside an already-open dropdown purely by
+ * keyboard: presses ArrowDown until `target` is `document.activeElement`,
+ * then asserts it's focused. Needed for any menu item clip-hidden until
+ * focus (global.css's `.dropdown-item-quiet` — e.g. the "Mover" reorder
+ * items): a plain `.click()` can't land on a zero-on-screen-footprint
+ * target, so this is the load-bearing way to reach one in a test, not just
+ * a style preference. The 10-press cap matches this sidebar's menus, which
+ * never have more than a handful of items.
+ */
+export async function focusMenuItemViaArrowDown(page: Page, target: Locator): Promise<void> {
+  for (let i = 0; i < 10; i++) {
+    if (await target.evaluate((el) => el === document.activeElement).catch(() => false)) break
+    await page.keyboard.press('ArrowDown')
+  }
+  await expect(target).toBeFocused()
 }
