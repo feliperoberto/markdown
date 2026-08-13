@@ -91,14 +91,15 @@ export interface UseProjectsResult {
   // (e.g. importing several files), which reads a stale pre-loop
   // `projects` snapshot on every iteration and silently loses every entry
   // but the last (see CHANGELOG's "Fixed" note on multi-file import).
-  // Never selects (matches the existing `{ select: false }` convention for
-  // multi-file callers). Returns how many entries actually got created,
-  // since a name colliding with an existing or earlier-in-this-batch file
-  // is silently skipped, same as a single createFile refusal.
+  // Never selects itself — the caller decides (e.g. selecting the last
+  // created file). Returns the names of the entries that actually got
+  // created, in order, since a name colliding with an existing or
+  // earlier-in-this-batch file is silently skipped, same as a single
+  // createFile refusal.
   createFiles: (
     projectName: string,
     entries: ReadonlyArray<{ name: string; content: string }>,
-  ) => number
+  ) => string[]
   renameFile: (projectName: string, oldFileName: string, newFileName: string) => void
   deleteFile: (projectName: string, fileName: string) => void
   updateFileContent: (projectName: string, fileName: string, content: string) => void
@@ -544,7 +545,7 @@ export function useProjects(): UseProjectsResult {
   )
 
   const createFiles = useCallback(
-    (projectName: string, entries: ReadonlyArray<{ name: string; content: string }>): number => {
+    (projectName: string, entries: ReadonlyArray<{ name: string; content: string }>): string[] => {
       // Folds every entry into one running `next` value and persists once
       // at the end — not one `createFile` call per entry — precisely so a
       // caller looping over several `await`-separated imports isn't
@@ -558,14 +559,14 @@ export function useProjects(): UseProjectsResult {
         next = candidate
         createdNames.push(entry.name)
       }
-      if (createdNames.length === 0) return 0
-      if (!persist(next)) return 0
+      if (createdNames.length === 0) return []
+      if (!persist(next)) return []
       setTombstones((prev) => {
         let result = prev
         for (const name of createdNames) result = clearFileTombstone(result, projectName, name)
         return result
       })
-      return createdNames.length
+      return createdNames
     },
     [projects, persist],
   )

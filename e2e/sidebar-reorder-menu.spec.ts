@@ -50,16 +50,29 @@ test.describe('sidebar reorder ("Mover" menu items)', () => {
     await page.keyboard.press('Enter')
     await expect(page.getByRole('menuitem', { name: 'Renomear' })).toBeVisible()
 
+    // "Mover" items are clip-hidden (1x1px, clipped) until focused (menu
+    // declutter: reorder is primarily the drag handle for mouse users) —
+    // present in the DOM and the a11y tree the whole time. Checked via the
+    // actual rendered footprint rather than `toBeVisible()`: Playwright's
+    // visible check only requires a non-empty bounding box, so it would
+    // (wrongly, for this purpose) call a 1x1px clipped element visible.
+    const moveUp = page.getByRole('menuitem', { name: /Mover para cima/ })
+    await expect(moveUp).toHaveCount(1)
+    await expect(await moveUp.boundingBox()).toMatchObject({ width: 1, height: 1 })
+
     // Cycle down to "Mover para cima" — its exact position among the
     // conditionally-rendered items varies with feature flags (Upload,
     // export, archive), so search for it by pressing ArrowDown and
     // checking focus rather than a fixed press count.
-    const moveUp = page.getByRole('menuitem', { name: /Mover para cima/ })
     for (let i = 0; i < 10; i++) {
       if (await moveUp.evaluate((el) => el === document.activeElement).catch(() => false)) break
       await page.keyboard.press('ArrowDown')
     }
     await expect(moveUp).toBeFocused()
+    // Focus reveals it — the whole point of reveal-on-focus.
+    await expect
+      .poll(async () => (await moveUp.boundingBox())?.width)
+      .toBeGreaterThan(1)
     await page.keyboard.press('Enter')
 
     // 'c' moved up one visible slot: was last, now in the middle.
@@ -70,7 +83,17 @@ test.describe('sidebar reorder ("Mover" menu items)', () => {
     // useDropdownMenu do — so re-open it directly rather than asserting
     // focus state here.
     await trigger.click()
-    await page.getByRole('menuitem', { name: /Mover para baixo/ }).click()
+
+    // "Mover para baixo" is clip-hidden until focused, so a plain
+    // `.click()` can't land on it (zero on-screen footprint) — reach it
+    // the same ArrowDown-cycle-then-Enter way as "Mover para cima" above.
+    const moveDown = page.getByRole('menuitem', { name: /Mover para baixo/ })
+    for (let i = 0; i < 10; i++) {
+      if (await moveDown.evaluate((el) => el === document.activeElement).catch(() => false)) break
+      await page.keyboard.press('ArrowDown')
+    }
+    await expect(moveDown).toBeFocused()
+    await page.keyboard.press('Enter')
 
     await expect.poll(fileNamesInOrder).toEqual(['a', 'b', 'c'])
   })
@@ -107,7 +130,10 @@ test.describe('sidebar reorder ("Mover" menu items)', () => {
       .getByRole('button', { name: 'Mais opções do arquivo first', exact: true })
       .click()
     await expect(page.getByRole('menuitem', { name: /Mover para cima/ })).toHaveCount(0)
-    await expect(page.getByRole('menuitem', { name: /Mover para baixo/ })).toBeVisible()
+    // Presence, not visibility: "Mover" items are clip-hidden until
+    // focused (menu declutter) — this is checking it's rendered at all
+    // (the omitted-at-the-ends case), not whether it's currently visible.
+    await expect(page.getByRole('menuitem', { name: /Mover para baixo/ })).toHaveCount(1)
     await page.keyboard.press('Escape')
 
     // Selecting 'first' above moved activity off 'last', so re-select it
@@ -118,7 +144,7 @@ test.describe('sidebar reorder ("Mover" menu items)', () => {
       .getByRole('button', { name: 'Mais opções do arquivo last', exact: true })
       .click()
     await expect(page.getByRole('menuitem', { name: /Mover para baixo/ })).toHaveCount(0)
-    await expect(page.getByRole('menuitem', { name: /Mover para cima/ })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: /Mover para cima/ })).toHaveCount(1)
   })
 
   // Moving a file to a different project was removed (see CHANGELOG) — a
@@ -175,11 +201,21 @@ test.describe('sidebar reorder ("Mover" menu items)', () => {
     }
     await expect.poll(relativeOrder).toBeGreaterThan(0)
 
-    // Move 'second' up, past 'first'.
+    // Move 'second' up, past 'first'. "Mover projeto para cima" is
+    // clip-hidden until focused (menu declutter), so a plain `.click()`
+    // can't land on it — reach it by keyboard, same ArrowDown-cycle-then-
+    // Enter pattern as the file-level "Mover" items above.
     await page
       .getByRole('button', { name: `Mais opções do projeto ${second}`, exact: true })
       .click()
-    await page.getByRole('menuitem', { name: /Mover projeto para cima/ }).click()
+    const moveProjectUp = page.getByRole('menuitem', { name: /Mover projeto para cima/ })
+    for (let i = 0; i < 10; i++) {
+      if (await moveProjectUp.evaluate((el) => el === document.activeElement).catch(() => false))
+        break
+      await page.keyboard.press('ArrowDown')
+    }
+    await expect(moveProjectUp).toBeFocused()
+    await page.keyboard.press('Enter')
 
     await expect.poll(relativeOrder).toBeLessThan(0)
   })
