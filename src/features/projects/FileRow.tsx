@@ -254,14 +254,19 @@ export const FileRow = memo(function FileRow({
             </button>
           )}
           {moveUp && (
-            <button type="button" className="dropdown-item" role="menuitem" onClick={handleMoveUp}>
+            <button
+              type="button"
+              className="dropdown-item dropdown-item-quiet"
+              role="menuitem"
+              onClick={handleMoveUp}
+            >
               ⬆ Mover para cima
             </button>
           )}
           {moveDown && (
             <button
               type="button"
-              className="dropdown-item"
+              className="dropdown-item dropdown-item-quiet"
               role="menuitem"
               onClick={handleMoveDown}
             >

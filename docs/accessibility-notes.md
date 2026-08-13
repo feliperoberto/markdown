@@ -92,6 +92,18 @@ focusable "grab mode" on the handle itself was considered and deferred
 (it would need a 4th Tab stop per row for behavior the menu already
 delivers); see the DnD design notes for that trade-off.
 
+These two items now carry the `.dropdown-item-quiet` class (global.css):
+clip-based hidden until they receive focus, then rendered exactly like any
+other menu item. This keeps the menu visually uncluttered for mouse users
+— reordering is primarily the drag handle for them — without weakening the
+keyboard/WCAG story above: the items stay in the DOM, in the a11y tree,
+and in `useDropdownMenu.ts`'s arrow-key roving-focus order the whole time,
+so a keyboard or screen-reader user still reaches and activates them like
+any other menu item, just without the visual entry a mouse user sees.
+`display:none`/`visibility:hidden` were deliberately not used, since
+either would drop the item from the roving-focus set and could strand
+keyboard focus mid-cycle.
+
 **Resolved (issue #34):** `.project-header` and `.file-item` were
 previously `<div>`s with only `click`/`dblclick` handlers, so they were not
 part of the Tab order and had no keyboard activation. They are now

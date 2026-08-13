@@ -28,6 +28,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Shortened the file "⋮" menu's item labels ("Renomear", "Arquivar"/
   "Desarquivar", "Excluir") by dropping the redundant word "arquivo" —
   the menu itself is already announced as "Ações do arquivo <nome>".
+- The "Mover para cima"/"Mover para baixo" items (file and project menus)
+  are no longer part of the visual menu by default, now that reordering
+  is primarily done via the drag handle — they stay in the DOM and in the
+  accessibility tree, revealing themselves only once keyboard/AT focus
+  reaches them, so the WCAG 2.1 SC 2.5.7/2.1.1 keyboard path from the
+  entry above is unchanged for keyboard and screen-reader users.
+- A project's "⋮" menu now has a single "Upload" item that accepts one or
+  more files, replacing the previous "Upload" (single file) / "Importar
+  vários arquivos" pair — the file picker itself already lets you choose
+  how many files to select, so the two buttons offered the same choice
+  twice.
 
 - A notice when a new version of the app is available, with an "Atualizar"
   action, instead of the app updating itself silently in the background.
@@ -77,9 +88,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Creating a new file now selects it immediately, so the editor shows the
   new file instead of leaving whatever was open before. A collapsed
   project auto-expands and the mobile drawer closes so the newly active
-  file is actually visible — uploading a single file expands a collapsed
-  destination project the same way creating one does. Importing multiple
-  files at once still leaves the current selection alone.
+  file is actually visible — uploading one or more files does the same,
+  selecting the last file created.
 - Renaming a file (or renaming or deleting a project), followed by a
   Google Drive sync, no longer resurrects the old name(s) as duplicates.
   The sync merge previously had no way to tell "deleted on this device"

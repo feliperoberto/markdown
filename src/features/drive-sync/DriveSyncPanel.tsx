@@ -224,7 +224,7 @@ export function DriveSyncPanel({ reconcile, openSignal }: DriveSyncPanelProps): 
         />
         {!isOnline && (
           <span class={styles.offlineBadge} role="status" title={driveSyncCopy.offlineBadgeTitle}>
-            <span class={styles.visuallyHidden}>{driveSyncCopy.offlineBadgeLabel}</span>
+            <span class="visually-hidden">{driveSyncCopy.offlineBadgeLabel}</span>
           </span>
         )}
       </span>

@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/preact'
+import { render, screen, fireEvent, createEvent, waitFor, cleanup } from '@testing-library/preact'
 import { useProjects } from './useProjects'
 import { ProjectsSidebar } from './ProjectsSidebar'
 import { ToastProvider } from '@/components'
+import { importFile } from '@/features/import-export'
 
 // `ProjectsSidebar` drives project/file creation through the accessible
 // `showPromptDialog`/`showConfirmDialog` modals (see `dialogs.tsx`), which
@@ -33,6 +34,7 @@ function Harness({
     selectFile,
     createProject,
     createFile,
+    createFiles,
     renameFile,
     deleteFile,
     renameProject,
@@ -44,6 +46,33 @@ function Harness({
     moveFile,
     moveProject,
   } = useProjects()
+
+  // Mirrors app.tsx's handleUploadFilesToProject (minus the mobile-drawer/
+  // toast side effects, which aren't this component's concern): read every
+  // file — catching a per-file rejection the same way production does, so
+  // one bad file doesn't abort the whole batch here either — create them
+  // all in one `createFiles` call, then select the last one created and
+  // report whether anything was actually created. ProjectsSidebar's
+  // `onUploadFiles` wiring relies on that return value to decide whether
+  // to reveal a collapsed target project.
+  async function handleUploadFiles(projectName: string, files: File[]): Promise<boolean> {
+    const entries: { name: string; content: string }[] = []
+    for (const file of files) {
+      try {
+        const entry = await importFile(file)
+        entries.push({ name: entry.name, content: entry.content })
+      } catch {
+        // Swallowed, matching app.tsx's per-file error toast — this
+        // harness has no toast to show, only the create/select behavior
+        // under test.
+      }
+    }
+    if (entries.length === 0) return false
+    const created = createFiles(projectName, entries)
+    if (created.length === 0) return false
+    selectFile(projectName, created[created.length - 1]!)
+    return true
+  }
 
   return (
     <ProjectsSidebar
@@ -64,8 +93,37 @@ function Harness({
       onSelectionChange={onSelectionChange}
       onMoveFile={moveFile}
       onMoveProject={moveProject}
+      onUploadFiles={handleUploadFiles}
     />
   )
+}
+
+function makeMdFile(name: string, content: string): File {
+  return new File([content], name, { type: 'text/markdown' })
+}
+
+/** The hidden multi-file input rendered by ProjectGroup's Upload menu item
+ * — distinguished from the sidebar footer's ZIP input by its `accept`. */
+function uploadInput(container: Element): HTMLInputElement {
+  const input = container.querySelector('input[accept=".md,text/markdown"]')
+  if (!input) throw new Error('upload input not found')
+  return input as HTMLInputElement
+}
+
+// `fireEvent.change` (the @testing-library/preact wrapper, not the plain
+// @testing-library/dom one) unconditionally remaps every 'change' to a
+// native 'input' event once it detects preact/compat is in use anywhere in
+// the process (this file's tree renders `memo()`-wrapped components, so it
+// always is). That matches how compat itself remaps a text input's
+// onChange — but compat deliberately does NOT remap onChange for
+// type="file"/"checkbox"/"radio" (see preact/compat's `onChangeInputType`),
+// so for a file input the two disagree and a plain `fireEvent.change` never
+// reaches the real listener. Building the event via `createEvent.change`
+// and dispatching it through the base `fireEvent(el, event)` (a pure
+// passthrough with no remapping) sidesteps the mismatch.
+function uploadFiles(container: Element, files: File[]) {
+  const input = uploadInput(container)
+  fireEvent(input, createEvent.change(input, { target: { files } }))
 }
 
 // useProjects now calls useToast() (error-toast on a failed save), so the
@@ -438,6 +496,79 @@ describe('ProjectsSidebar + useProjects', () => {
       fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Segundo/ }))
       expect(screen.queryByRole('menuitem', { name: /Mover projeto para cima/ })).toBeNull()
       expect(screen.queryByRole('menuitem', { name: /Mover projeto para baixo/ })).toBeNull()
+    })
+  })
+
+  // The single-file and multi-file upload paths were unified into one
+  // "Upload" menu item — the file picker itself lets the user choose how
+  // many files to select, so twin buttons were redundant.
+  describe('upload', () => {
+    it('offers a single "Upload" menu item — no separate multi-file import item', () => {
+      renderHarness()
+
+      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Meu Projeto/ }))
+
+      const uploadItems = screen.getAllByRole('menuitem', { name: /^📤/ })
+      expect(uploadItems).toHaveLength(1)
+      expect(uploadItems[0]!.textContent).toContain('Upload')
+      expect(screen.queryByRole('menuitem', { name: /Importar vários/ })).toBeNull()
+    })
+
+    it('uploading a single file creates it and selects it', async () => {
+      const { container } = renderHarness()
+
+      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Meu Projeto/ }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Upload/ }))
+      uploadFiles(container, [makeMdFile('notes.md', 'hello')])
+
+      await waitFor(() => expect(screen.queryByText('notes')).not.toBeNull())
+      const row = container.querySelector('[data-dnd-file="notes"]')
+      expect(row?.classList.contains('active')).toBe(true)
+    })
+
+    it('uploading several files at once creates all of them and selects the last one', async () => {
+      const { container } = renderHarness()
+
+      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Meu Projeto/ }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Upload/ }))
+      uploadFiles(container, [
+        makeMdFile('alpha.md', '1'),
+        makeMdFile('beta.md', '2'),
+        makeMdFile('gamma.md', '3'),
+      ])
+
+      await waitFor(() => expect(screen.queryByText('gamma')).not.toBeNull())
+      expect(screen.queryByText('alpha')).not.toBeNull()
+      expect(screen.queryByText('beta')).not.toBeNull()
+
+      const row = container.querySelector('[data-dnd-file="gamma"]')
+      expect(row?.classList.contains('active')).toBe(true)
+    })
+
+    it('expands a collapsed target project so the newly selected upload is visible', async () => {
+      const { container } = renderHarness()
+
+      // Collapse "Meu Projeto" by clicking its header (not the "..."
+      // trigger, which is a nested, independently-clickable control).
+      const header = container.querySelector('.project-header') as HTMLElement
+      fireEvent.click(header)
+      await waitFor(() => {
+        const filesEl = container.querySelector('.project-files')
+        expect(filesEl?.classList.contains('expanded')).toBe(false)
+      })
+
+      fireEvent.click(screen.getByRole('button', { name: /Mais opções do projeto Meu Projeto/ }))
+      fireEvent.click(screen.getByRole('menuitem', { name: /Upload/ }))
+      uploadFiles(container, [makeMdFile('novo.md', 'conteúdo')])
+
+      // Expansion (via `revealProject`) runs synchronously, before the
+      // upload's async file-read/create/select settles, so it's checked
+      // first and separately from the file actually appearing.
+      await waitFor(() => {
+        const filesEl = container.querySelector('.project-files')
+        expect(filesEl?.classList.contains('expanded')).toBe(true)
+      })
+      await waitFor(() => expect(screen.queryByText('novo')).not.toBeNull())
     })
   })
 })

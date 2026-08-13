@@ -47,8 +47,11 @@ export interface ProjectsSidebarProps {
   // import-export directly. Optional so the menu items only render when
   // a caller opts in.
   onExportProject?: (projectName: string) => void
-  onUploadFile?: (projectName: string, file: File) => void
-  onUploadMultipleFiles?: (projectName: string, files: File[]) => void
+  // Returns whether anything was actually created (a `Promise` since the
+  // caller reads each file async) — the sidebar only reveals a collapsed
+  // target project once it knows the upload actually produced a file, not
+  // as soon as the file picker returns.
+  onUploadFiles?: (projectName: string, files: File[]) => Promise<boolean> | void
   /** Sidebar-footer "📥 Importar" (ZIP) — same taxonomy reason as above. */
   onImportZip?: (file: File) => void
   /** Sidebar-footer "⚙️ Config" — opens the Drive/Config modal (app.tsx owns it). */
@@ -89,8 +92,7 @@ export function ProjectsSidebar({
   onSelectionChange,
   mobileHidden = false,
   onExportProject,
-  onUploadFile,
-  onUploadMultipleFiles,
+  onUploadFiles,
   onImportZip,
   onOpenConfig,
   onMoveFile,
@@ -164,17 +166,28 @@ export function ProjectsSidebar({
   // Both wrappers below are conditional on the underlying handler prop
   // rather than always defined, because `ProjectGroup`/`FileRow` gate an
   // entire feature (the Upload menu item; the drag handle and "Mover"
-  // menu items) on whether `onUploadFile`/`onMoveFile` is present at all
+  // menu items) on whether `onUploadFiles`/`onMoveFile` is present at all
   // — an always-defined wrapper would turn those features permanently on
   // even for a caller that never wired the underlying handler.
-  const handleUploadFileImpl = useCallback(
-    (projectName: string, file: File) => {
-      revealProject(projectName)
-      onUploadFile?.(projectName, file)
+  //
+  // Unlike the old single-file-only upload, this now needs `revealProject`:
+  // the caller selects the last uploaded file (app.tsx), and a file selected
+  // inside a collapsed group is invisible — the same bug this comment block
+  // already describes for `handleCreateFile` above. Reveals only once the
+  // caller's returned promise resolves `true` (something was actually
+  // created) — reading files is async and can end in total failure (every
+  // file rejected, or every name collided), and revealing a collapsed
+  // project for an upload that created nothing is a surprise with no
+  // payoff.
+  const handleUploadFilesImpl = useCallback(
+    (projectName: string, files: File[]) => {
+      void Promise.resolve(onUploadFiles?.(projectName, files)).then((created) => {
+        if (created) revealProject(projectName)
+      })
     },
-    [onUploadFile, revealProject],
+    [onUploadFiles, revealProject],
   )
-  const handleUploadFile = onUploadFile ? handleUploadFileImpl : undefined
+  const handleUploadFiles = onUploadFiles ? handleUploadFilesImpl : undefined
 
   // No `revealProject` wrapper for `onMoveFile` — moving a file to a
   // different project was removed (see CHANGELOG), so a move can never
@@ -453,8 +466,7 @@ export function ProjectsSidebar({
                 onRenameProject={onRenameProject}
                 onDeleteProject={onDeleteProject}
                 onExportProject={onExportProject}
-                onUploadFile={handleUploadFile}
-                onUploadMultipleFiles={onUploadMultipleFiles}
+                onUploadFiles={handleUploadFiles}
                 onMoveFile={onMoveFile}
                 onMoveProject={onMoveProject}
                 onToggleArchived={onToggleArchived}

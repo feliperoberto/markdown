@@ -120,14 +120,28 @@ export function useDropdownMenu(
   // commit to a `top` that renders the menu — including its own delete
   // item — partly or fully off-screen. useLayoutEffect, not useEffect, so
   // the correction lands before paint instead of as a visible jump.
+  //
+  // Also re-runs on every `focusin` inside the menu, not just once on
+  // open: a `.dropdown-item-quiet` item (the "Mover" items) is clip-hidden
+  // to 1px until it receives focus, then grows to a full row — the
+  // roving-focus ArrowDown/ArrowUp handler above can land on one well
+  // after this effect's initial run, growing the menu past a bottom edge
+  // that was clamped against its smaller, collapsed-item height.
   useLayoutEffect(() => {
     if (!isOpen) return
     const menuEl = menuRef.current
     if (!menuEl) return
-    const overflow = menuEl.getBoundingClientRect().bottom - window.innerHeight + 8
-    if (overflow > 0) {
-      setMenuPosition((prev) => ({ ...prev, top: Math.max(4, prev.top - overflow) }))
+
+    const clamp = () => {
+      const overflow = menuEl.getBoundingClientRect().bottom - window.innerHeight + 8
+      if (overflow > 0) {
+        setMenuPosition((prev) => ({ ...prev, top: Math.max(4, prev.top - overflow) }))
+      }
     }
+
+    clamp()
+    menuEl.addEventListener('focusin', clamp)
+    return () => menuEl.removeEventListener('focusin', clamp)
   }, [isOpen])
 
   // Closes on any click/tap outside the menu and its trigger — losing focus

@@ -63,15 +63,12 @@ export interface ProjectGroupProps {
   onRenameProject: (oldName: string, newName: string) => void
   onDeleteProject: (projectName: string) => void
   onExportProject?: (projectName: string) => void
-  onUploadFile?: (projectName: string, file: File) => void
   /**
-   * Import several .md files into this project at once. Not in the
-   * prototype (its per-project menu only has single-file Upload) — kept
-   * as a menu item here rather than hidden entirely, per explicit
-   * discussion, since removing multi-file import would be a real
-   * capability regression, not a fix.
+   * Import one or more .md files into this project — a single "Upload"
+   * menu item covers both, since the file picker itself lets the user
+   * choose how many to select.
    */
-  onUploadMultipleFiles?: (projectName: string, files: File[]) => void
+  onUploadFiles?: (projectName: string, files: File[]) => void
   // Drag & drop (issue #92, and its mobile follow-up: a Pointer Events
   // rewrite — see useSidebarDnd.ts/dnd.ts) — reorder files within this
   // project, and reorder projects.
@@ -119,8 +116,7 @@ export const ProjectGroup = memo(function ProjectGroup({
   onRenameProject,
   onDeleteProject,
   onExportProject,
-  onUploadFile,
-  onUploadMultipleFiles,
+  onUploadFiles,
   onMoveFile,
   onMoveProject,
   onToggleArchived,
@@ -153,7 +149,6 @@ export const ProjectGroup = memo(function ProjectGroup({
     menuPosition,
     toggleMenu,
   } = useDropdownMenu(isMenuOpen, () => onOpenMenu(projectName), onCloseMenu)
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // A file's dropdown menu (unlike this project's own, a sibling of the
   // collapsible .project-files below) renders INSIDE .project-files, so
@@ -165,7 +160,7 @@ export const ProjectGroup = memo(function ProjectGroup({
   useEffect(() => {
     if (!isExpanded && openFileMenu !== null) onCloseMenu()
   }, [isExpanded, openFileMenu, onCloseMenu])
-  const multiFileInputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   function toggleExpanded() {
     onToggleExpanded(projectName)
@@ -250,22 +245,10 @@ export const ProjectGroup = memo(function ProjectGroup({
     fileInputRef.current?.click()
   }
 
-  function handleFileSelected(event: JSX.TargetedEvent<HTMLInputElement>) {
-    const file = (event.target as HTMLInputElement).files?.[0]
-    ;(event.target as HTMLInputElement).value = ''
-    if (file) onUploadFile?.(projectName, file)
-  }
-
-  function handleUploadMultipleClick(e: MouseEvent) {
-    e.stopPropagation()
-    onCloseMenu()
-    multiFileInputRef.current?.click()
-  }
-
-  function handleMultipleFilesSelected(event: JSX.TargetedEvent<HTMLInputElement>) {
+  function handleFilesSelected(event: JSX.TargetedEvent<HTMLInputElement>) {
     const files = Array.from((event.target as HTMLInputElement).files ?? [])
     ;(event.target as HTMLInputElement).value = ''
-    if (files.length > 0) onUploadMultipleFiles?.(projectName, files)
+    if (files.length > 0) onUploadFiles?.(projectName, files)
   }
 
   // Double-click-to-rename shortcut on the project header, matching the
@@ -360,7 +343,7 @@ export const ProjectGroup = memo(function ProjectGroup({
           <button type="button" className="dropdown-item" role="menuitem" onClick={handleNewFile}>
             ➕ Novo arquivo
           </button>
-          {onUploadFile && (
+          {onUploadFiles && (
             <button
               type="button"
               className="dropdown-item"
@@ -368,16 +351,6 @@ export const ProjectGroup = memo(function ProjectGroup({
               onClick={handleUploadClick}
             >
               📤 Upload
-            </button>
-          )}
-          {onUploadMultipleFiles && (
-            <button
-              type="button"
-              className="dropdown-item"
-              role="menuitem"
-              onClick={handleUploadMultipleClick}
-            >
-              📤 Importar vários arquivos
             </button>
           )}
           <button
@@ -411,7 +384,7 @@ export const ProjectGroup = memo(function ProjectGroup({
           {moveUp && (
             <button
               type="button"
-              className="dropdown-item"
+              className="dropdown-item dropdown-item-quiet"
               role="menuitem"
               onClick={handleMoveProjectUp}
             >
@@ -421,7 +394,7 @@ export const ProjectGroup = memo(function ProjectGroup({
           {moveDown && (
             <button
               type="button"
-              className="dropdown-item"
+              className="dropdown-item dropdown-item-quiet"
               role="menuitem"
               onClick={handleMoveProjectDown}
             >
@@ -439,24 +412,14 @@ export const ProjectGroup = memo(function ProjectGroup({
         </div>
       )}
 
-      {onUploadFile && (
+      {onUploadFiles && (
         <input
           ref={fileInputRef}
           type="file"
           accept=".md,text/markdown"
-          hidden
-          onChange={handleFileSelected}
-        />
-      )}
-
-      {onUploadMultipleFiles && (
-        <input
-          ref={multiFileInputRef}
-          type="file"
-          accept=".md,text/markdown"
           multiple
           hidden
-          onChange={handleMultipleFilesSelected}
+          onChange={handleFilesSelected}
         />
       )}
 

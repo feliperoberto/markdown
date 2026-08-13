@@ -29,7 +29,7 @@ export interface UpdateBannerProps {
 export function UpdateBanner({ open, onUpdate, onDismiss }: UpdateBannerProps): JSX.Element {
   return (
     <>
-      <div class={styles.visuallyHidden} role="status" aria-live="polite">
+      <div class="visually-hidden" role="status" aria-live="polite">
         {open ? pwaUpdateCopy.bannerTitle : ''}
       </div>
       {open && (
