@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { renderHook, act } from '@testing-library/preact'
+import { renderHook, act, cleanup } from '@testing-library/preact'
 import { useSaveShortcut } from './useSaveShortcut'
 
 function keydown(init: KeyboardEventInit) {
@@ -10,6 +10,11 @@ function keydown(init: KeyboardEventInit) {
 
 describe('useSaveShortcut', () => {
   afterEach(() => {
+    // vitest.config.ts sets globals:false, which disables
+    // @testing-library/preact's automatic afterEach cleanup — without this,
+    // every renderHook() below stays mounted and its document keydown
+    // listener leaks into every subsequent test in this file.
+    cleanup()
     document.querySelectorAll('[role="dialog"]').forEach((el) => el.remove())
   })
 
@@ -102,7 +107,14 @@ describe('useSaveShortcut', () => {
     expect(onSave).not.toHaveBeenCalled()
   })
 
-  it('still prevents default but skips onSave while a dialog is open', () => {
+  // Regression test: an earlier version skipped onSave whenever ANY
+  // [role="dialog"] was open, mirroring app.tsx's sidebar-dismissal guard.
+  // That silently broke the shortcut's own destination UI — the Drive sync
+  // panel is itself a dialog, so once connected with that modal still open,
+  // every subsequent Ctrl+S did nothing. There is nothing dialog-specific
+  // to guard here: firing the sync callback while some unrelated dialog
+  // happens to be open is harmless.
+  it('still fires onSave (and prevents default) even while a dialog is open', () => {
     const onSave = vi.fn()
     const dialog = document.createElement('div')
     dialog.setAttribute('role', 'dialog')
@@ -117,7 +129,7 @@ describe('useSaveShortcut', () => {
       })
 
       expect(event!.defaultPrevented).toBe(true)
-      expect(onSave).not.toHaveBeenCalled()
+      expect(onSave).toHaveBeenCalledOnce()
     } finally {
       dialog.remove()
     }

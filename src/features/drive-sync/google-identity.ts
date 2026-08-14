@@ -19,7 +19,7 @@ export interface GoogleTokenResponse {
   expires_in?: number
 }
 
-export interface GoogleTokenClientError {
+interface GoogleTokenClientError {
   type?: string
   message?: string
 }

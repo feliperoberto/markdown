@@ -9,11 +9,13 @@ import { GoogleDriveSyncProvider } from './google-drive-provider'
  * `configs` records every `initTokenClient` call's `prompt` (so tests can
  * assert silent vs interactive acquisition); `mode` lets a test force the
  * next `requestAccessToken()` to report failure via `error_callback`
- * instead of succeeding via `callback`.
+ * instead of succeeding via `callback` — or, for `'hang'`, to invoke
+ * NEITHER callback, modeling the real-world GIS quirk that motivated
+ * wrapping every silent acquisition in a timeout.
  */
 const tokenClientState = vi.hoisted(() => ({
   configs: [] as Array<{ prompt?: string }>,
-  mode: 'success' as 'success' | 'error',
+  mode: 'success' as 'success' | 'error' | 'hang',
 }))
 
 // Never hit real Google endpoints in tests: the GIS script loader resolves
@@ -34,6 +36,11 @@ vi.mock('./google-identity', () => ({
           tokenClientState.configs.push({ prompt: config.prompt })
           return {
             requestAccessToken: () => {
+              if (tokenClientState.mode === 'hang') {
+                // Deliberately invokes neither callback — see the note on
+                // `tokenClientState` above.
+                return
+              }
               if (tokenClientState.mode === 'error') {
                 config.error_callback?.({ type: 'popup_failed_to_open' })
               } else {
@@ -419,6 +426,29 @@ describe('GoogleDriveSyncProvider', () => {
       await expect(provider.reconnectSilently()).resolves.toBe(false)
       expect(onNotify).not.toHaveBeenCalled()
     })
+
+    // Regression test: reconnectSilently()'s acquireAccessToken call was
+    // originally unbounded, unlike ensureFreshAccessToken's identical
+    // silent call (which has always had a 15s timeout for exactly this
+    // reason). If GIS invokes neither callback for a failed silent request
+    // — a documented real-world quirk of `prompt: ''` acquisition — this
+    // proves reconnectSilently() still resolves (to false) instead of
+    // hanging forever on every affected page load.
+    it('reconnectSilently() resolves to false instead of hanging when GIS never calls back', async () => {
+      localStorage.setItem('driveClientId', 'real-client-id.apps.googleusercontent.com')
+      localStorage.setItem('driveAutoReconnect', 'true')
+      tokenClientState.mode = 'hang'
+      const provider = new GoogleDriveSyncProvider()
+
+      vi.useFakeTimers()
+      try {
+        const resultPromise = provider.reconnectSilently()
+        await vi.advanceTimersByTimeAsync(15_000)
+        await expect(resultPromise).resolves.toBe(false)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
   })
 
   describe('driveAutoReconnect hint (non-secret, not the access token itself)', () => {
@@ -437,6 +467,65 @@ describe('GoogleDriveSyncProvider', () => {
       provider.disconnect()
 
       expect(localStorage.getItem('driveAutoReconnect')).toBeNull()
+    })
+  })
+
+  describe('ensureFreshAccessToken recovers from a genuine (non-timeout) silent-refresh failure', () => {
+    // A silent-only refresh (prompt: '') has no interactive fallback: if
+    // the session genuinely expired or consent was revoked, GIS reports
+    // that via error_callback. Regression test: previously the stale token
+    // was left in place regardless of *why* the refresh failed, so the
+    // panel kept claiming "Conectado" (Desconectar button) with every sync
+    // silently failing — the user had to disconnect before a "Conectar"
+    // button even reappeared. Now a genuine failure clears the token and
+    // flips status offline, so "Conectar" is one click away.
+    it('clears the stale token and flips status to offline, not just leaving it stale', async () => {
+      const onStatusChange = vi.fn()
+      localStorage.setItem('driveClientId', 'real-client-id.apps.googleusercontent.com')
+      stubFetch({ [USERINFO_URL]: () => jsonResponse({ name: 'Test User' }) })
+      const provider = new GoogleDriveSyncProvider({ onStatusChange })
+      await provider.connect()
+      expect(provider.getStatus().connected).toBe(true)
+
+      // Push past TOKEN_REFRESH_MARGIN_MS (5 min before the connect-time
+      // token's 3600s expiry) so the next Drive call attempts a refresh.
+      tokenClientState.mode = 'error'
+      vi.useFakeTimers()
+      try {
+        await vi.advanceTimersByTimeAsync(56 * 60 * 1000)
+        // push() is a silent no-op once the token is gone (matching its
+        // existing "not connected" convention) — not a throw.
+        await provider.push({ projects: {} })
+      } finally {
+        vi.useRealTimers()
+      }
+
+      expect(provider.getStatus().connected).toBe(false)
+      expect(onStatusChange).toHaveBeenCalledWith('offline')
+    })
+
+    // A mere timeout (GIS never called back at all) is left as-is — it may
+    // still succeed on the next call, unlike a genuine GIS-reported
+    // rejection, so the existing token is kept rather than torn down.
+    it('leaves the stale token in place when the refresh merely times out', async () => {
+      const onStatusChange = vi.fn()
+      localStorage.setItem('driveClientId', 'real-client-id.apps.googleusercontent.com')
+      stubFetch({ [USERINFO_URL]: () => jsonResponse({ name: 'Test User' }) })
+      const provider = new GoogleDriveSyncProvider({ onStatusChange })
+      await provider.connect()
+
+      tokenClientState.mode = 'hang'
+      vi.useFakeTimers()
+      try {
+        const pushPromise = provider.push({ projects: {} }).catch(() => {})
+        await vi.advanceTimersByTimeAsync(56 * 60 * 1000 + 15_000)
+        await pushPromise
+      } finally {
+        vi.useRealTimers()
+      }
+
+      expect(provider.getStatus().connected).toBe(true)
+      expect(onStatusChange).not.toHaveBeenCalledWith('offline')
     })
   })
 })

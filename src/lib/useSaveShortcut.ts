@@ -14,11 +14,17 @@ import { useEffect, useRef } from 'preact/hooks'
  * handler can `stopPropagation()` it away.
  *
  * `e.preventDefault()` always runs once the chord matches — this app owns
- * Ctrl+S, the browser's native "Save Page" dialog is never useful here — but
- * `onSave` itself is skipped while a `[role="dialog"]` is open (mirrors the
- * dialog escape-hatch `app.tsx` already uses in its own `useOutsideClick`
- * call), so the shortcut can't fire behind a modal the user is still
- * interacting with.
+ * Ctrl+S, the browser's native "Save Page" dialog is never useful here — and
+ * `onSave` always fires too, deliberately including while a dialog (e.g. the
+ * Drive sync panel itself, or an unrelated rename dialog) is open. An
+ * earlier version skipped `onSave` whenever any `[role="dialog"]` was
+ * present, mirroring `app.tsx`'s sidebar-dismissal guard — but the Drive
+ * modal IS this shortcut's own destination UI: once connected with that
+ * modal still open, every subsequent Ctrl+S would silently do nothing,
+ * since the modal that proves you're set up to sync is exactly what blocked
+ * the shortcut. Triggering the sync callback while some other dialog
+ * happens to be open is harmless (it's an independent, non-blocking async
+ * action), so there is no reason to special-case dialogs at all here.
  *
  * Ignores `e.repeat` (an OS-repeated keydown from a held-down chord) and
  * `e.isComposing` (an IME composition in progress, where `key` can
@@ -40,7 +46,6 @@ export function useSaveShortcut(onSave: () => void): void {
       if (e.key.toLowerCase() !== 's') return
 
       e.preventDefault()
-      if (document.querySelector('[role="dialog"]')) return
       onSaveRef.current()
     }
 

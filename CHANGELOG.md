@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   content already saves on every keystroke, with or without this. If Drive
   isn't connected yet, the shortcut opens the connection panel instead of
   doing nothing.
+- The app can now silently resume a previous Google Drive connection when
+  you reload the page, with no popup and no consent screen, so Ctrl+S works
+  immediately rather than requiring a fresh "Conectar com Google" click
+  every load. This relies on a new, non-secret flag stored locally (just
+  "this browser connected before" — never a credential; the Drive access
+  token itself is still never persisted, see `docs/data-and-privacy.md`),
+  set when you connect and cleared when you disconnect.
 
 ### Changed
 

@@ -197,10 +197,7 @@ export class GoogleDriveSyncProvider implements SyncProvider {
 
     const epoch = ++this.connectionEpoch
     await this.acquireAccessToken(clientId, { epoch })
-    await this.fetchDriveUser()
-    localStorageAdapter.set(AUTO_RECONNECT_STORAGE_KEY, 'true')
-    this.options.onStatusChange?.('connected')
-    this.options.onNotify?.('✅ Drive conectado', 'success')
+    await this.finishConnecting(epoch, { notifySuccess: true })
   }
 
   /**
@@ -212,6 +209,10 @@ export class GoogleDriveSyncProvider implements SyncProvider {
    * Skips the attempt entirely if this browser has never connected before
    * (see `AUTO_RECONNECT_STORAGE_KEY`) — there is no Google session to
    * silently reuse in that case, so it would just be a wasted round-trip.
+   * Bounded by the same 15s timeout as `ensureFreshAccessToken`'s silent
+   * refresh, so a GIS request that never invokes either callback (a
+   * documented real-world quirk of `prompt: ''` acquisition) can't leave
+   * this hanging forever on every page load.
    *
    * Returns whether it reconnected, so the caller can decide whether to
    * update its own status UI.
@@ -220,24 +221,69 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     if (localStorageAdapter.get(AUTO_RECONNECT_STORAGE_KEY) !== 'true') return false
 
     const clientId = getStoredClientId()
-    if (isPlaceholderClientId(clientId)) return false
+    if (!isClientIdConfigured(clientId)) return false
 
     const epoch = ++this.connectionEpoch
     try {
-      await this.acquireAccessToken(clientId, { epoch, notifyOnError: false, silent: true })
+      await this.raceWithTimeout(
+        this.acquireAccessToken(clientId, { epoch, notifyOnError: false, silent: true }),
+        15_000,
+        'Drive silent reconnect timed out',
+      )
     } catch {
       return false
     }
-    // Stale: `disconnect()`/another `connect()` ran while this was in
-    // flight — matches the guard already inside `acquireAccessToken`, but
-    // that guard only skips setting `this.accessToken`; without this,
-    // `fetchDriveUser()` below would still run and could resurrect
-    // `driveUser`/the status callback for a connection the user ended.
+
+    return this.finishConnecting(epoch, { notifySuccess: false })
+  }
+
+  /**
+   * Shared tail of `connect()` and `reconnectSilently()`, run once
+   * `acquireAccessToken` has already resolved for `epoch`. Rechecks
+   * staleness AFTER `fetchDriveUser()` too, not just before it — a
+   * `disconnect()` (or a newer `connect()`/`reconnectSilently()`) landing
+   * during that network round-trip must not resurrect a connection that's
+   * already been superseded, the same hazard `acquireAccessToken`'s own
+   * epoch guard exists to prevent for the token-acquisition step itself.
+   * `notifySuccess` gates the "✅ Drive conectado" toast — shown for an
+   * explicit `connect()` click, never for a silent reconnect.
+   */
+  private async finishConnecting(
+    epoch: number,
+    { notifySuccess }: { notifySuccess: boolean },
+  ): Promise<boolean> {
     if (epoch !== this.connectionEpoch || !this.accessToken) return false
 
     await this.fetchDriveUser()
+    if (epoch !== this.connectionEpoch || !this.accessToken) return false
+
+    localStorageAdapter.set(AUTO_RECONNECT_STORAGE_KEY, 'true')
     this.options.onStatusChange?.('connected')
+    if (notifySuccess) {
+      this.options.onNotify?.('✅ Drive conectado', 'success')
+    }
     return true
+  }
+
+  /**
+   * Races `promise` against a timeout — used for every silent (`prompt:
+   * ''`) token request, none of which are backed by a user gesture, so
+   * none can rely on a click handler's own timeout/cancellation. GIS can,
+   * in some browser/session states, invoke neither `callback` nor
+   * `error_callback` for a failed silent request, which would otherwise
+   * hang the awaiting caller indefinitely.
+   */
+  private raceWithTimeout<T>(
+    promise: Promise<T>,
+    timeoutMs: number,
+    timeoutMessage: string,
+  ): Promise<T> {
+    return Promise.race([
+      promise,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs),
+      ),
+    ])
   }
 
   /**
@@ -291,8 +337,14 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     })
 
     if (response.error || !response.access_token) {
-      console.error('Drive auth error:', response)
-      if (notifyOnError) {
+      // 'popup_closed' means the user themselves closed the account-picker
+      // popup — an ordinary cancellation, not a failure worth logging or
+      // showing a scary "Erro ao conectar" toast for. Every other error
+      // (bad client ID, blocked popup, no session to silently reuse, etc.)
+      // still logs/notifies exactly as before, gated on `notifyOnError`.
+      const isUserCancelled = response.error === 'popup_closed'
+      if (notifyOnError && !isUserCancelled) {
+        console.error('Drive auth error:', response)
         this.options.onNotify?.('Erro ao conectar: ' + response.error, 'error')
       }
       throw new Error(response.error || 'Drive auth failed')
@@ -318,6 +370,15 @@ export class GoogleDriveSyncProvider implements SyncProvider {
    * visible UI when the user still has an active Google session, so no
    * re-auth prompt interrupts routine sync) instead of letting the upcoming
    * fetch fail with an opaque 401 mid-session.
+   *
+   * A silent-only refresh has no interactive fallback: if the user's Google
+   * session has genuinely expired or consent was revoked, GIS reports that
+   * via `error_callback` rather than ever succeeding. When that happens
+   * (as opposed to merely timing out, which may still resolve next time),
+   * the stale token is cleared and status flips to 'offline' — otherwise
+   * the panel would keep claiming "Conectado" with a "Desconectar" button
+   * while every sync silently fails, forcing the user to disconnect before
+   * they can even see a "Conectar" button to try again.
    */
   private async ensureFreshAccessToken(): Promise<void> {
     if (!this.accessToken || !this.tokenClientId) return
@@ -333,17 +394,28 @@ export class GoogleDriveSyncProvider implements SyncProvider {
       // request — see startAutoSync's tick) can't hang the caller
       // indefinitely if the browser silently blocks/never resolves an
       // interactive consent popup here.
-      await Promise.race([
+      await this.raceWithTimeout(
         this.acquireAccessToken(this.tokenClientId, { epoch, notifyOnError: false, silent: true }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Drive silent token refresh timed out')), 15_000),
-        ),
-      ])
+        15_000,
+        'Drive silent token refresh timed out',
+      )
     } catch (err) {
-      // Leave the (soon-to-expire) token in place — the caller's Drive
-      // request may still succeed, and if not, its own error handling will
-      // surface a clear "sync failed" message rather than us throwing here.
       console.error('Drive silent token refresh failed:', err)
+
+      const isTimeout =
+        err instanceof Error && err.message === 'Drive silent token refresh timed out'
+      if (!isTimeout && epoch === this.connectionEpoch) {
+        // A genuine GIS-reported failure, not a transient timeout that
+        // might still succeed next call — the stale token is not going to
+        // start working. Only clear it if this is still the current
+        // connection generation; a stale epoch means the user already
+        // disconnected/reconnected, whose own state changes must win.
+        this.accessToken = null
+        this.tokenExpiresAt = null
+        this.tokenClientId = null
+        this.driveUser = null
+        this.options.onStatusChange?.('offline')
+      }
     }
   }
 
@@ -500,6 +572,13 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     }
 
     await this.ensureFreshAccessToken()
+    // ensureFreshAccessToken can now clear this.accessToken (a genuinely
+    // failed silent refresh, not just a timeout — see its doc comment)
+    // instead of always leaving the soon-to-expire token in place. Without
+    // this re-check, uploadSnapshot would still fire with a null token,
+    // producing a raw "Invalid Credentials" API error instead of the
+    // silent no-op this method already uses for "not connected" above.
+    if (!this.accessToken) return
     await this.uploadSnapshot(snapshot)
   }
 
@@ -515,6 +594,9 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     if (!this.accessToken) throw new Error('Not connected to Drive')
 
     await this.ensureFreshAccessToken()
+    // See push()'s identical re-check: ensureFreshAccessToken can now clear
+    // this.accessToken on a genuine (non-timeout) silent-refresh failure.
+    if (!this.accessToken) throw new Error('Not connected to Drive')
     const existing = await this.findDriveFile()
     if (!existing) return null
 

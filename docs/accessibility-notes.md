@@ -147,8 +147,10 @@ in `docs/data-and-privacy.md`.
 
 The browser's native "Save Page" action is suppressed (`preventDefault()`)
 whenever the chord matches, so this shortcut takes priority over that
-default in this app. It does not fire while a `role="dialog"` element is
-open, so it can't act behind a modal the user is still interacting with.
+default in this app. It fires regardless of whether a dialog happens to be
+open — including the Drive sync panel itself, which the shortcut is meant
+to act on — since triggering a sync is a harmless, non-blocking action from
+any other dialog's point of view.
 
 ## 7. Manual verification performed
 

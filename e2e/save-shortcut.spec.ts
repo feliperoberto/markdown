@@ -13,6 +13,15 @@ test.describe('Ctrl+S/Cmd+S sync shortcut', () => {
   test('opens the Drive config panel when Drive is not configured yet', async ({ page }) => {
     await page.goto('/app.html')
 
+    // Auto-waits for the header (and therefore useSaveShortcut's effect,
+    // which attaches its document keydown listener on mount) to have
+    // actually rendered before dispatching the shortcut. `toBeHidden()` on
+    // `#drive-client-id` alone provides no such synchronization — that
+    // locator resolves instantly whether or not the element will ever
+    // exist, since the Modal doesn't render it into the DOM at all until
+    // opened, so it can't be used to wait for app readiness.
+    await expect(page.getByRole('button', { name: 'Sincronização com Google Drive' })).toBeVisible()
+
     const clientIdInput = page.locator('#drive-client-id')
     await expect(clientIdInput).toBeHidden()
 
