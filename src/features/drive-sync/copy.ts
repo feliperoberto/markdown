@@ -33,7 +33,12 @@ export const driveSyncCopy = {
   syncButtonLabel: 'Sincronizar',
   syncButtonDescription:
     'Baixa e envia alterações, mantendo sempre a versão mais recente de cada arquivo',
-  syncCompleteToast: '🔄 Sincronizado',
+  syncCompleteToast: '☁️ Sincronizado',
+
+  /** Ctrl+S/Cmd+S (`useSaveShortcut`) with Drive not connected/configured yet — explains why the modal just opened instead of syncing. */
+  syncNeedsConnectionToast: 'Conecte o Google Drive para sincronizar',
+  /** Header cloud-icon button `title` — the shortcut has no other in-app affordance pointing at it. */
+  syncShortcutHint: 'Sincronização com Google Drive (Ctrl+S / Cmd+S)',
 
   notConnectedStatus: 'Conecte sua conta Google para sincronizar seus projetos.',
   neverSyncedStatus: '⚠️ Nunca sincronizado',

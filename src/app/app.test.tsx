@@ -84,3 +84,43 @@ describe('App sidebar drawer', () => {
     }
   })
 })
+
+// Ctrl+S/Cmd+S (useSaveShortcut) is bound at document level in app.tsx, not
+// on the editor textarea, specifically so it works regardless of what
+// currently has focus. This exercises that end-to-end through the real App
+// (drive-sync isn't stubbed here — see the file's header comment — so with
+// no Client ID configured the observable effect is the config modal
+// opening, which is enough to prove the keystroke reached app.tsx's
+// handler from a document-level dispatch).
+describe('App keyboard shortcuts', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    document.documentElement.removeAttribute('data-theme')
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockImplementation((query: string) => ({
+        matches: false,
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    )
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('Ctrl+S reaches the app and opens the Drive modal even when focus is elsewhere (not the editor)', () => {
+    renderApp()
+
+    // Focus something other than the editor textarea, to prove the
+    // shortcut isn't scoped to it.
+    document.getElementById('sidebarMenuButton')?.focus()
+    expect(screen.queryByRole('dialog')).toBeNull()
+
+    fireEvent.keyDown(document, { key: 's', ctrlKey: true })
+
+    expect(screen.getByRole('dialog')).not.toBeNull()
+  })
+})

@@ -12,6 +12,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reordering files and projects in the sidebar: drag a file's or project's
   handle to a new position, or use the "⬆ Mover para cima"/"⬇ Mover para
   baixo" items in its "⋮" menu.
+- Ctrl+S (Windows/Linux) / Cmd+S (macOS) now syncs with Google Drive, from
+  anywhere in the app — not just while the editor is focused. It's a
+  shortcut for the header's existing ☁️ button, not a new save action: local
+  content already saves on every keystroke, with or without this. If Drive
+  isn't connected yet, the shortcut opens the connection panel instead of
+  doing nothing.
+- The app can now silently resume a previous Google Drive connection when
+  you reload the page, with no popup and no consent screen, so Ctrl+S works
+  immediately rather than requiring a fresh "Conectar com Google" click
+  every load. This relies on a new, non-secret flag stored locally (just
+  "this browser connected before" — never a credential; the Drive access
+  token itself is still never persisted, see `docs/data-and-privacy.md`),
+  set when you connect and cleared when you disconnect.
 
 ### Changed
 
@@ -113,6 +126,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   editing a file's content was incidentally invalidating the project name
   list used to compute each row's move-up/move-down menu items, even
   though the actual list of projects hadn't changed.
+- Google Drive no longer asks you to reauthorize on almost every sync. Token
+  refreshes and a reload's automatic reconnect now request Google's silent
+  flow correctly, instead of unintentionally always showing the account
+  picker and consent screen — an explicit "Conectar com Google" click still
+  shows it, as expected the first time.
 
 ## [0.1.0] - 2026-07-05
 
