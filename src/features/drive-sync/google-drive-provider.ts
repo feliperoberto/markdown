@@ -1,15 +1,17 @@
 /**
  * Google Drive implementation of `SyncProvider` (issue #21).
  *
- * Extracted from the original `index.html` inline script. The OAuth flow
- * and the naive hash + 60s polling trigger for *when* auto-sync runs a
- * tick are preserved as they behaved before. What each tick (and the
- * manual "Sincronizar" button) actually *does* has since changed: instead
- * of blindly overwriting one side with the other (push-only "Sincronizar
- * Agora", local-always-wins "Restaurar do Drive"), `pull`/`push` are dumb
- * download/upload primitives and the actual sync decision — a freshness
- * merge keyed on each file's `timestamp` — is injected from `src/app/`
- * (see `SyncProvider`'s doc comment for why that logic can't live here).
+ * Extracted from the original `index.html` inline script. What sync
+ * actually *does* has since changed: instead of blindly overwriting one
+ * side with the other (push-only "Sincronizar Agora", local-always-wins
+ * "Restaurar do Drive"), `pull`/`push` are dumb download/upload primitives
+ * and the actual sync decision — a freshness merge keyed on each file's
+ * `timestamp` — is injected from `src/app/` (see `SyncProvider`'s doc
+ * comment for why that logic can't live here). Sync only ever runs from an
+ * explicit user action (connect, or the "Sincronizar" button/Ctrl+S) — the
+ * original naive-hash + 60s background polling loop that used to trigger it
+ * automatically was removed (issue #92: its periodic token re-request popped
+ * a Google auth window that stole focus from the editor mid-typing).
  * Token-expiry/refresh hardening (issue #30) tracks acquisition time +
  * `expires_in`, and proactively re-requests a token via silent re-auth when
  * near expiry, rather than letting a Drive API call fail opaquely mid-session.
@@ -33,6 +35,7 @@ import {
 } from './google-identity'
 import { driveSyncCopy } from './copy'
 import { localStorageAdapter } from '@/lib/storage-adapter'
+import { isNavigatorOnline } from '@/lib/useOnlineStatus'
 
 /**
  * Thrown (instead of letting a raw fetch/TypeError bubble up) when a sync
@@ -45,21 +48,6 @@ export class DriveSyncOfflineError extends Error {
     super(driveSyncCopy.offlineWillRetrySync)
     this.name = 'DriveSyncOfflineError'
   }
-}
-
-/**
- * True when the runtime reports no network connectivity at all.
- *
- * Note: this is a second, independent connectivity signal from
- * `useOnlineStatus()` (used elsewhere in the UI, e.g. `DriveSyncPanel`'s
- * offline badge). Both ultimately read `navigator.onLine`, but they are not
- * unified into one shared primitive, so they could in theory drift (e.g.
- * different re-render timing around 'online'/'offline' events). Left as-is
- * for now — unifying connectivity detection into one shared hook/module is
- * a separate follow-up, not a quick fix.
- */
-function isOffline(): boolean {
-  return typeof navigator !== 'undefined' && navigator.onLine === false
 }
 
 /**
@@ -78,14 +66,6 @@ const DRIVE_FILENAME = 'markdown-editor-backup.json'
 const TOKEN_REFRESH_MARGIN_MS = 5 * 60 * 1000
 
 const LAST_SYNC_STORAGE_KEY = 'lastDriveSync'
-const PROJECTS_LAST_MODIFIED_STORAGE_KEY = 'projectsLastModified'
-
-/** Auto-sync poll interval — checked every minute, exactly as before. */
-const AUTO_SYNC_POLL_INTERVAL_MS = 60 * 1000
-/** Force a sync if this much time has passed, regardless of local changes. */
-const AUTO_SYNC_MAX_STALE_MS = 10 * 60 * 1000
-/** If local data changed, still wait at least this long before re-syncing. */
-const AUTO_SYNC_MIN_INTERVAL_AFTER_CHANGE_MS = 5 * 60 * 1000
 
 export type DriveSyncDotStatus = 'offline' | 'connected' | 'connected-offline' | 'syncing' | 'error'
 
@@ -98,40 +78,10 @@ export interface GoogleDriveSyncProviderOptions {
   onNotify?: (message: string, kind: 'success' | 'error' | 'warning') => void
 }
 
-/**
- * Naive content hash used purely to detect "did the local data change"
- * between polling ticks. Preserved byte-for-byte from the original
- * implementation — do not "fix" this into something cryptographically
- * meaningful, that is explicitly a separate future task.
- */
-function naiveHash(value: string): string {
-  return value
-    .split('')
-    .reduce((hash, char) => ((hash << 5) - hash + char.charCodeAt(0)) | 0, 0)
-    .toString()
-}
-
-/**
- * Reads `key` as an epoch-ms timestamp, treating a missing OR non-numeric
- * stored value as 0 rather than `NaN`. A corrupt/hand-edited
- * `lastDriveSync` value previously produced `parseInt(...) === NaN`,
- * which poisons every downstream arithmetic comparison (`now - NaN`,
- * `NaN > threshold`) to `false` — silently stopping auto-sync forever,
- * since neither the "stale" nor "changed recently" trigger could ever
- * fire again.
- */
-function readStoredTimestamp(key: string): number {
-  const raw = localStorageAdapter.get(key)
-  if (raw === null) return 0
-  const parsed = parseInt(raw, 10)
-  return Number.isNaN(parsed) ? 0 : parsed
-}
-
 export class GoogleDriveSyncProvider implements SyncProvider {
   private accessToken: string | null = null
   private driveFileId: string | null = null
   private driveUser: string | null = null
-  private autoSyncIntervalId: ReturnType<typeof setInterval> | null = null
   /** Epoch ms when `this.accessToken` is expected to expire, per `expires_in`. */
   private tokenExpiresAt: number | null = null
   /** Client ID used to acquire the current token — reused for silent re-auth. */
@@ -253,9 +203,9 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     const epoch = this.connectionEpoch
     try {
       // Bounded so a background refresh (no user gesture backing the GIS
-      // request — see startAutoSync's tick) can't hang the caller
-      // indefinitely if the browser silently blocks/never resolves an
-      // interactive consent popup here.
+      // request — this can run ahead of any push()/pull() call) can't hang
+      // the caller indefinitely if the browser silently blocks/never
+      // resolves an interactive consent popup here.
       await Promise.race([
         this.acquireAccessToken(this.tokenClientId, { epoch, notifyOnError: false }),
         new Promise<never>((_, reject) =>
@@ -278,7 +228,6 @@ export class GoogleDriveSyncProvider implements SyncProvider {
         .then((google) => google.accounts.oauth2.revoke(tokenToRevoke, () => {}))
         .catch(() => {})
     }
-    this.stopAutoSync()
     this.accessToken = null
     this.tokenExpiresAt = null
     this.tokenClientId = null
@@ -333,16 +282,10 @@ export class GoogleDriveSyncProvider implements SyncProvider {
   }
 
   /**
-   * Uploads `snapshot` to Drive and, on success, records the post-upload
-   * bookkeeping (`lastDriveSync` + `projectsLastModified`) here — the one
-   * place that actually knows the upload succeeded and already has the
-   * hash inputs in scope. Previously only `runAutoSyncTick` wrote
-   * `projectsLastModified`; a manual sync via `push` left
-   * it stale, so the *next* auto-sync tick saw a hash mismatch against
-   * data that was already just uploaded and re-uploaded it redundantly.
+   * Uploads `snapshot` to Drive and, on success, records `lastDriveSync`
+   * here — the one place that actually knows the upload succeeded.
    */
   private async uploadSnapshot(snapshot: ProjectsSnapshot): Promise<void> {
-    const projectsJson = JSON.stringify(snapshot.projects)
     const payload = JSON.stringify(
       {
         version: 1,
@@ -394,16 +337,13 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     this.driveFileId = result.id
 
     localStorageAdapter.set(LAST_SYNC_STORAGE_KEY, Date.now().toString())
-    localStorageAdapter.set(PROJECTS_LAST_MODIFIED_STORAGE_KEY, naiveHash(projectsJson))
   }
 
   /**
    * Uploads `snapshot`, replacing whatever is currently remote. A pure
    * primitive — no toasts here; the manual "Sincronizar" flow
    * (`DriveSyncPanel.handleSync`) owns messaging for the whole
-   * pull→reconcile→push sequence as one outcome, and the background
-   * auto-sync tick stays silent on success/failure exactly as before (it
-   * calls `uploadSnapshot` directly, bypassing this method).
+   * pull→reconcile→push sequence as one outcome.
    */
   async push(snapshot: ProjectsSnapshot): Promise<void> {
     if (!this.accessToken) return
@@ -412,7 +352,7 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     // "will retry" state instead of a raw fetch/TypeError (issue #24). Local
     // data is untouched — projects are already saved to localStorage
     // independently of Drive sync.
-    if (isOffline()) {
+    if (!isNavigatorOnline()) {
       // Distinct from the never-connected 'offline' status: the access
       // token is still valid, only the network is down (see finding #1) —
       // the panel should keep showing this as "connected", not revert to
@@ -471,86 +411,6 @@ export class GoogleDriveSyncProvider implements SyncProvider {
       // (reconcileWithRemote) treats `undefined` the same as "nothing to
       // merge in", not an error.
       tombstones: data.tombstones as Record<string, unknown> | undefined,
-    }
-  }
-
-  /**
-   * Naive hash + polling auto-sync loop, preserved as-is from the
-   * original implementation:
-   * - Checks every 60s.
-   * - Forces a sync if it's been >10 min since the last one.
-   * - Otherwise syncs if the content hash changed AND >5 min elapsed.
-   *
-   * `reconcile` is the same freshness-based merge callback the manual
-   * "Sincronizar" button uses (injected from `src/app/`, since it needs
-   * `projects`-feature knowledge this provider deliberately doesn't have —
-   * see `SyncProvider`'s doc comment). Threading it through here closes
-   * the same blind-overwrite hole in the background path: two
-   * auto-syncing devices can no longer clobber each other, since every
-   * tick pulls + merges by freshness before pushing, instead of blindly
-   * uploading whatever is local.
-   */
-  startAutoSync(
-    getSnapshot: () => ProjectsSnapshot,
-    reconcile: (remote: ProjectsSnapshot | null) => ProjectsSnapshot,
-  ): void {
-    this.stopAutoSync()
-
-    this.autoSyncIntervalId = setInterval(() => {
-      void this.runAutoSyncTick(getSnapshot, reconcile)
-    }, AUTO_SYNC_POLL_INTERVAL_MS)
-  }
-
-  stopAutoSync(): void {
-    if (this.autoSyncIntervalId) {
-      clearInterval(this.autoSyncIntervalId)
-      this.autoSyncIntervalId = null
-    }
-  }
-
-  private async runAutoSyncTick(
-    getSnapshot: () => ProjectsSnapshot,
-    reconcile: (remote: ProjectsSnapshot | null) => ProjectsSnapshot,
-  ): Promise<void> {
-    if (!this.accessToken) return
-
-    const snapshot = getSnapshot()
-    const currentHash = naiveHash(JSON.stringify(snapshot.projects))
-
-    const lastSync = readStoredTimestamp(LAST_SYNC_STORAGE_KEY)
-    const lastModifiedHash = localStorageAdapter.get(PROJECTS_LAST_MODIFIED_STORAGE_KEY) || '0'
-    const now = Date.now()
-    const timeSinceSync = now - lastSync
-
-    const isStale = timeSinceSync > AUTO_SYNC_MAX_STALE_MS
-    const hasChangedRecently =
-      currentHash !== lastModifiedHash && timeSinceSync > AUTO_SYNC_MIN_INTERVAL_AFTER_CHANGE_MS
-
-    if (!isStale && !hasChangedRecently) return
-
-    // Offline: skip this tick's network attempt entirely rather than
-    // letting a fetch/TypeError land in the console as an 'error' status
-    // (issue #24). The interval keeps running, so the next tick after
-    // connectivity returns will pick this back up automatically.
-    if (isOffline()) {
-      // Same distinction as push() above (finding #1): still
-      // authenticated, just no network right now.
-      this.options.onStatusChange?.('connected-offline')
-      return
-    }
-
-    try {
-      await this.ensureFreshAccessToken()
-      const remote = await this.pull()
-      const merged = reconcile(remote)
-      // Bookkeeping (lastDriveSync + projectsLastModified) is recorded by
-      // uploadSnapshot itself on success — see its doc comment.
-      await this.uploadSnapshot(merged)
-      this.options.onStatusChange?.('connected')
-      // Silent success - no toast, matching the original behavior.
-    } catch (err) {
-      console.error('Auto-sync error:', err)
-      this.options.onStatusChange?.('error')
     }
   }
 }

@@ -70,6 +70,6 @@ export interface SyncProvider {
   /** Uploads `snapshot`, replacing whatever is currently remote. */
   push(snapshot: ProjectsSnapshot): Promise<void>
 
-  /** Tears down the session (revokes tokens, stops polling, clears memory). */
+  /** Tears down the session (revokes tokens, clears memory). */
   disconnect(): void
 }

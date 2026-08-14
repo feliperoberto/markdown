@@ -100,12 +100,7 @@ describe('GoogleDriveSyncProvider', () => {
   })
 
   describe('uploadSnapshot bookkeeping', () => {
-    // Regression test: projectsLastModified was previously written ONLY by
-    // the auto-sync tick, never by a manual sync — so after "Sincronizar"
-    // the next auto-sync tick saw a stale hash and redundantly re-uploaded
-    // identical data. Bookkeeping is now centralized in uploadSnapshot, so
-    // a manual push() records both keys.
-    it('records lastDriveSync and projectsLastModified after a successful manual push', async () => {
+    it('records lastDriveSync after a successful manual push', async () => {
       const provider = await connectedProvider()
       stubFetch({
         [FILES_LIST_URL]: () => jsonResponse({ files: [] }),
@@ -113,12 +108,11 @@ describe('GoogleDriveSyncProvider', () => {
           jsonResponse({ id: 'new-file-id' }),
       })
 
-      expect(localStorage.getItem('projectsLastModified')).toBeNull()
+      expect(localStorage.getItem('lastDriveSync')).toBeNull()
 
       await provider.push({ projects: { A: {} } })
 
       expect(localStorage.getItem('lastDriveSync')).not.toBeNull()
-      expect(localStorage.getItem('projectsLastModified')).not.toBeNull()
     })
 
     it('PATCHes (not POSTs) when a backup file already exists', async () => {
@@ -272,41 +266,6 @@ describe('GoogleDriveSyncProvider', () => {
 
       const result = await provider.pull()
       expect(result?.tombstones).toBeUndefined()
-    })
-  })
-
-  describe('startAutoSync', () => {
-    // Regression-shaped test for the freshness-sync change: a background
-    // tick used to blindly re-upload whatever `getSnapshot()` returned,
-    // which could clobber a newer remote edit made by another device.
-    // It must now pull the remote snapshot and run it through the
-    // caller-supplied `reconcile` before pushing, exactly like the manual
-    // "Sincronizar" button.
-    it('pulls and reconciles the remote snapshot before pushing, instead of blindly uploading local state', async () => {
-      const provider = await connectedProvider()
-      stubFetch({
-        [FILES_LIST_URL]: () =>
-          jsonResponse({ files: [{ id: 'file-id', name: 'x', modifiedTime: 't' }] }),
-        'https://www.googleapis.com/drive/v3/files/file-id?alt=media': () =>
-          jsonResponse({ version: 1, projects: { Remote: {} } }),
-        'https://www.googleapis.com/upload/drive/v3/files/file-id?uploadType=media': () =>
-          jsonResponse({ id: 'file-id' }),
-      })
-
-      const reconcile = vi.fn((remote: { projects: Record<string, unknown> } | null) => ({
-        projects: { Merged: {}, ...(remote?.projects ?? {}) },
-      }))
-
-      vi.useFakeTimers()
-      try {
-        provider.startAutoSync(() => ({ projects: { Local: {} } }), reconcile)
-        await vi.advanceTimersByTimeAsync(60_000)
-      } finally {
-        provider.stopAutoSync()
-        vi.useRealTimers()
-      }
-
-      expect(reconcile).toHaveBeenCalledWith({ projects: { Remote: {} } })
     })
   })
 
