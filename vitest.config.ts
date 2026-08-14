@@ -39,8 +39,6 @@ export default defineConfig({
       // coverage beyond these two directories is still out of scope (see
       // issue #32).
       include: ['src/lib/**/*.{ts,tsx}', 'src/features/projects/**/*.{ts,tsx}'],
-      // useOnlineStatus.ts: a thin browser-API hook, same reasoning as
-      // pwa-register.ts below.
       // pwa-register.ts: imports the build-time `virtual:pwa-register`
       // module (ADR-0003), which only exists under the real Vite/PWA
       // build — this config deliberately doesn't load VitePWA (see the
@@ -51,7 +49,7 @@ export default defineConfig({
       // the wait-for-event-or-timeout primitive it uses — are extracted
       // into useServiceWorkerUpdate.ts and waitForEvent.ts respectively,
       // both fully covered.
-      exclude: ['src/lib/useOnlineStatus.ts', 'src/lib/pwa-register.ts'],
+      exclude: ['src/lib/pwa-register.ts'],
       thresholds: {
         lines: 70,
         statements: 70,
