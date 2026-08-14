@@ -1,6 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { GoogleDriveSyncProvider } from './google-drive-provider'
 
+/**
+ * Shared mutable state the `./google-identity` mock below reads/writes.
+ * Declared via `vi.hoisted` so it exists before `vi.mock`'s factory runs
+ * (factories are hoisted above the rest of the module) — a plain
+ * module-level `let` referenced inside the factory would hit a TDZ error.
+ * `configs` records every `initTokenClient` call's `prompt` (so tests can
+ * assert silent vs interactive acquisition); `mode` lets a test force the
+ * next `requestAccessToken()` to report failure via `error_callback`
+ * instead of succeeding via `callback`.
+ */
+const tokenClientState = vi.hoisted(() => ({
+  configs: [] as Array<{ prompt?: string }>,
+  mode: 'success' as 'success' | 'error',
+}))
+
 // Never hit real Google endpoints in tests: the GIS script loader resolves
 // synchronously with a fake token instead of any real popup/redirect flow.
 vi.mock('./google-identity', () => ({
@@ -8,11 +23,25 @@ vi.mock('./google-identity', () => ({
     accounts: {
       oauth2: {
         initTokenClient: (config: {
-          callback: (response: { access_token: string; expires_in: number }) => void
-        }) => ({
-          requestAccessToken: () =>
-            config.callback({ access_token: 'fake-token', expires_in: 3600 }),
-        }),
+          prompt?: string
+          callback: (response: {
+            access_token?: string
+            expires_in?: number
+            error?: string
+          }) => void
+          error_callback?: (error: { type?: string; message?: string }) => void
+        }) => {
+          tokenClientState.configs.push({ prompt: config.prompt })
+          return {
+            requestAccessToken: () => {
+              if (tokenClientState.mode === 'error') {
+                config.error_callback?.({ type: 'popup_failed_to_open' })
+              } else {
+                config.callback({ access_token: 'fake-token', expires_in: 3600 })
+              }
+            },
+          }
+        },
         revoke: (_token: string, done: () => void) => done(),
       },
     },
@@ -56,6 +85,8 @@ async function connectedProvider(): Promise<GoogleDriveSyncProvider> {
 describe('GoogleDriveSyncProvider', () => {
   beforeEach(() => {
     localStorage.clear()
+    tokenClientState.configs = []
+    tokenClientState.mode = 'success'
   })
 
   describe('findDriveFile via uploadSnapshot — res.ok handling', () => {
@@ -332,6 +363,80 @@ describe('GoogleDriveSyncProvider', () => {
       const provider = new GoogleDriveSyncProvider()
 
       expect(provider.getStatus().lastSyncedAt).toBe(1700000000000)
+    })
+  })
+
+  describe('silent vs interactive token acquisition (prompt / error_callback)', () => {
+    // An explicit "Conectar com Google" click expects the account picker —
+    // connect() must never request a token with prompt: '' (silent).
+    it("connect() does not request a silent (prompt: '') token", async () => {
+      await connectedProvider()
+
+      expect(tokenClientState.configs.at(-1)?.prompt).toBeUndefined()
+    })
+
+    // This is the actual fix for "Drive asks to authorize almost every
+    // time": omitting `prompt` (GIS's default) shows the account picker +
+    // consent screen on every acquisition. reconnectSilently (mount-time
+    // reconnect) must request prompt: '' so it never shows any Google UI.
+    it("reconnectSilently() requests a silent (prompt: '') token", async () => {
+      localStorage.setItem('driveClientId', 'real-client-id.apps.googleusercontent.com')
+      localStorage.setItem('driveAutoReconnect', 'true')
+      stubFetch({ [USERINFO_URL]: () => jsonResponse({ name: 'Test User' }) })
+      const provider = new GoogleDriveSyncProvider()
+
+      const reconnected = await provider.reconnectSilently()
+
+      expect(reconnected).toBe(true)
+      expect(tokenClientState.configs.at(-1)?.prompt).toBe('')
+    })
+
+    // No hint that this browser ever connected before — reconnectSilently
+    // must not even talk to GIS, let alone show any prompt.
+    it('reconnectSilently() makes no GIS request when the auto-reconnect hint is not set', async () => {
+      localStorage.setItem('driveClientId', 'real-client-id.apps.googleusercontent.com')
+
+      const provider = new GoogleDriveSyncProvider()
+      const reconnected = await provider.reconnectSilently()
+
+      expect(reconnected).toBe(false)
+      expect(tokenClientState.configs).toEqual([])
+    })
+
+    // GIS reports a silent-acquisition failure (e.g. no active session to
+    // reuse, or a blocked popup) via error_callback rather than callback —
+    // without wiring it up, this would hang instead of failing fast.
+    // reconnectSilently must resolve to false without throwing or
+    // notifying, exactly as if it had never been attempted (issue #92: no
+    // surprise UI/toast from a background reconnect).
+    it('reconnectSilently() fails silently when GIS reports an error via error_callback', async () => {
+      localStorage.setItem('driveClientId', 'real-client-id.apps.googleusercontent.com')
+      localStorage.setItem('driveAutoReconnect', 'true')
+      tokenClientState.mode = 'error'
+      const onNotify = vi.fn()
+      const provider = new GoogleDriveSyncProvider({ onNotify })
+
+      await expect(provider.reconnectSilently()).resolves.toBe(false)
+      expect(onNotify).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('driveAutoReconnect hint (non-secret, not the access token itself)', () => {
+    it('is written after a successful connect()', async () => {
+      expect(localStorage.getItem('driveAutoReconnect')).toBeNull()
+
+      await connectedProvider()
+
+      expect(localStorage.getItem('driveAutoReconnect')).toBe('true')
+    })
+
+    it('is removed on disconnect()', async () => {
+      const provider = await connectedProvider()
+      expect(localStorage.getItem('driveAutoReconnect')).toBe('true')
+
+      provider.disconnect()
+
+      expect(localStorage.getItem('driveAutoReconnect')).toBeNull()
     })
   })
 })

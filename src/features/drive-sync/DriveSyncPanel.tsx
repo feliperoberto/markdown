@@ -35,6 +35,16 @@ export interface DriveSyncPanelProps {
    * icon trigger doesn't need this.
    */
   openSignal?: number
+  /**
+   * Same "fire an event" counter convention as `openSignal`, but for
+   * running a sync instead of opening the modal — the Ctrl+S/Cmd+S shortcut
+   * (`useSaveShortcut`, wired in `src/app/`) bumps this instead of calling
+   * anything on this component directly, since a save shortcut has no
+   * business reaching into a sibling feature's internals (see
+   * CONTRIBUTING.md's "Feature taxonomy"). `undefined` on mount, same as
+   * `openSignal`, so nothing fires at startup.
+   */
+  syncSignal?: number
 }
 
 const TITLE_ID = 'drive-sync-panel-title'
@@ -46,7 +56,11 @@ const TITLE_ID = 'drive-sync-panel-title'
  * drives a full bidirectional, freshness-based reconcile — see
  * `handleSync`'s doc comment.
  */
-export function DriveSyncPanel({ reconcile, openSignal }: DriveSyncPanelProps): JSX.Element {
+export function DriveSyncPanel({
+  reconcile,
+  openSignal,
+  syncSignal,
+}: DriveSyncPanelProps): JSX.Element {
   const showToast = useToast()
   const [open, setOpen] = useState(false)
   const [status, setStatus] = useState<DriveSyncDotStatus>('offline')
@@ -79,11 +93,36 @@ export function DriveSyncPanel({ reconcile, openSignal }: DriveSyncPanelProps): 
   const providerRef = useRef(provider)
   providerRef.current = provider
 
+  // Guards against overlapping `pull → reconcile → push` sequences from
+  // rapid repeat Ctrl+S presses (or a mash of the button + the shortcut).
+  // `busy` (state) isn't enough on its own: a keypress dispatched before
+  // React/Preact has committed the `setBusy(true)` from a previous press
+  // could still read the old `busy` value and pass the check. A ref is
+  // updated synchronously, so the second call sees the first one's guard
+  // immediately, with no render in between.
+  const syncInFlightRef = useRef(false)
+
   // Revokes the token if this panel ever unmounts while connected. It
   // never unmounts in the current app shell (always rendered in the
   // header), so this is a latent-only safety net.
   useEffect(() => {
     return () => providerRef.current.disconnect()
+  }, [])
+
+  // Silently resumes a Drive connection on mount, so Ctrl+S/Cmd+S (and the
+  // Sincronizar button) work without a fresh "Conectar com Google" click on
+  // every page load — the access token itself is memory-only by design (see
+  // docs/data-and-privacy.md) and never survives a reload, so this is the
+  // silent-reauth path, not a persisted-credential one. `reconnectSilently`
+  // itself no-ops (no Google request at all) unless this browser connected
+  // before; skipped here entirely while offline, matching every other sync
+  // action's online precheck. Deliberately does NOT run a sync afterwards —
+  // making Ctrl+S itself instant is the goal, not a surprise network
+  // round-trip at startup.
+  useEffect(() => {
+    if (!isClientIdConfigured(getStoredClientId()) || !isOnline) return
+    void providerRef.current.reconnectSilently()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only: re-running on every isOnline flip would re-attempt on each reconnect, not just once at startup.
   }, [])
 
   // Any change to openSignal's value (a simple incrementing counter) opens
@@ -93,6 +132,28 @@ export function DriveSyncPanel({ reconcile, openSignal }: DriveSyncPanelProps): 
   useEffect(() => {
     if (openSignal !== undefined) setOpen(true)
   }, [openSignal])
+
+  // Same "fire an event" semantics, but for the Ctrl+S/Cmd+S shortcut
+  // (`useSaveShortcut`, wired in `src/app/app.tsx`) requesting a sync
+  // instead of just opening the modal. Deps deliberately stay `[syncSignal]`
+  // only, same reasoning as the openSignal effect above, but here it
+  // matters more: `configured`/`connected`/`handleSync` are read fresh via
+  // closure from whichever render last changed `syncSignal`, not tracked as
+  // dependencies — if they were, this would re-fire (and re-sync) merely
+  // because e.g. `connected` flipped from a manual Connect click, with no
+  // new keypress at all.
+  useEffect(() => {
+    if (syncSignal === undefined) return
+    if (!configured || !connected) {
+      // Explains itself instead of silently doing nothing — the shortcut
+      // still "did something" from the user's point of view.
+      setOpen(true)
+      showToast(driveSyncCopy.syncNeedsConnectionToast, 'warning')
+      return
+    }
+    void handleSync()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncSignal])
 
   // Derived from the PERSISTED client ID (what `connect()` actually
   // reads), not the live/unsaved input — see Fix 5.
@@ -189,8 +250,12 @@ export function DriveSyncPanel({ reconcile, openSignal }: DriveSyncPanelProps): 
   }
 
   // Manual "Sincronizar" button handler: wraps performSync with the
-  // online-precheck and busy state.
+  // online-precheck, the busy state, and the in-flight guard (see
+  // `syncInFlightRef`) — the button is already `disabled={busy}`, but the
+  // Ctrl+S/Cmd+S shortcut (the `syncSignal` effect above) can call this
+  // directly, so the guard can't rely on the button's disabled state alone.
   async function handleSync() {
+    if (syncInFlightRef.current) return
     if (!isOnline) {
       // Fail fast with the reassuring offline copy instead of letting the
       // request hit the network and surface a raw "Failed to fetch"
@@ -198,10 +263,12 @@ export function DriveSyncPanel({ reconcile, openSignal }: DriveSyncPanelProps): 
       showToast(driveSyncCopy.offlineSyncSkippedToast, 'warning')
       return
     }
+    syncInFlightRef.current = true
     setBusy(true)
     try {
       await performSync()
     } finally {
+      syncInFlightRef.current = false
       setBusy(false)
     }
   }
@@ -219,6 +286,7 @@ export function DriveSyncPanel({ reconcile, openSignal }: DriveSyncPanelProps): 
         <IconButton
           icon="☁️"
           label="Sincronização com Google Drive"
+          title={driveSyncCopy.syncShortcutHint}
           ariaHasPopup="dialog"
           onClick={() => setOpen(true)}
         />

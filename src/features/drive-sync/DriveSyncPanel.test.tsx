@@ -145,6 +145,103 @@ describe('DriveSyncPanel', () => {
     await waitFor(() => expect(reconcile).toHaveBeenCalledWith(null))
   })
 
+  // Ctrl+S/Cmd+S (useSaveShortcut, wired in src/app/app.tsx) bumps
+  // `syncSignal` instead of calling anything on this component directly —
+  // this is the receiving end of that signal.
+  describe('syncSignal (Ctrl+S/Cmd+S)', () => {
+    it('runs a sync when bumped while connected', async () => {
+      const reconcile = vi.fn(
+        (remote: ProjectsSnapshot | null): ProjectsSnapshot => remote ?? { projects: {} },
+      )
+      const { rerender } = render(
+        <ToastProvider>
+          <DriveSyncPanel reconcile={reconcile} />
+        </ToastProvider>,
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: 'Sincronização com Google Drive' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Conectar com Google' }))
+      // Wait for the connect-time sync (issue #92) to actually finish, not
+      // just for "Conectado como" to appear — that text lands as soon as
+      // connect()'s fetchDriveUser resolves, before the still-in-flight
+      // connect-time performSync's own reconcile() call fires.
+      await waitFor(() => expect(reconcile).toHaveBeenCalledWith(null))
+
+      reconcile.mockClear()
+      rerender(
+        <ToastProvider>
+          <DriveSyncPanel reconcile={reconcile} syncSignal={1} />
+        </ToastProvider>,
+      )
+
+      await waitFor(() => expect(reconcile).toHaveBeenCalledWith(null))
+    })
+
+    it('opens the modal with an explanatory toast instead of syncing when not connected', async () => {
+      const reconcile = vi.fn(
+        (remote: ProjectsSnapshot | null): ProjectsSnapshot => remote ?? { projects: {} },
+      )
+      const { rerender } = render(
+        <ToastProvider>
+          <DriveSyncPanel reconcile={reconcile} />
+        </ToastProvider>,
+      )
+
+      expect(screen.queryByRole('dialog')).toBeNull()
+
+      rerender(
+        <ToastProvider>
+          <DriveSyncPanel reconcile={reconcile} syncSignal={1} />
+        </ToastProvider>,
+      )
+
+      await waitFor(() =>
+        expect(screen.getByText('Conecte o Google Drive para sincronizar')).not.toBeNull(),
+      )
+      expect(screen.getByRole('dialog')).not.toBeNull()
+      expect(screen.getByRole('button', { name: 'Conectar com Google' })).not.toBeNull()
+      expect(reconcile).not.toHaveBeenCalled()
+    })
+
+    // Re-entrancy guard: two Ctrl+S presses batched before the first
+    // pull→reconcile→push settles must not run two overlapping sequences.
+    it('two rapid bumps in flight only run one sync sequence', async () => {
+      const reconcile = vi.fn(
+        (remote: ProjectsSnapshot | null): ProjectsSnapshot => remote ?? { projects: {} },
+      )
+      const { rerender } = render(
+        <ToastProvider>
+          <DriveSyncPanel reconcile={reconcile} />
+        </ToastProvider>,
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: 'Sincronização com Google Drive' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Conectar com Google' }))
+      // See the previous test's comment: wait for the connect-time sync to
+      // actually finish before clearing, not just for the "Conectado como"
+      // text.
+      await waitFor(() => expect(reconcile).toHaveBeenCalledWith(null))
+
+      reconcile.mockClear()
+      rerender(
+        <ToastProvider>
+          <DriveSyncPanel reconcile={reconcile} syncSignal={1} />
+        </ToastProvider>,
+      )
+      rerender(
+        <ToastProvider>
+          <DriveSyncPanel reconcile={reconcile} syncSignal={2} />
+        </ToastProvider>,
+      )
+
+      await waitFor(() => expect(reconcile).toHaveBeenCalledTimes(1))
+      // Give any accidental second sequence a chance to also resolve before
+      // asserting it never happened.
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      expect(reconcile).toHaveBeenCalledTimes(1)
+    })
+  })
+
   // Regression test for issue #92: connecting must NOT start a background
   // polling loop (the loop's periodic token re-request popped a Google
   // auth window that stole editor focus). After the one connect-time sync

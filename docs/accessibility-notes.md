@@ -132,7 +132,25 @@ Any new custom dialog built for #16 should call `openModal`/`closeModal`
 directly (or `trapFocus` alone, for non-overlay contexts like a
 menu/popover) rather than re-implementing focus management.
 
-## 6. Manual verification performed
+## 6. App-level keyboard shortcuts
+
+**Ctrl+S (Windows/Linux) / Cmd+S (macOS) — sync with Google Drive.** Bound
+document-wide (`src/lib/useSaveShortcut.ts`, wired in `src/app/app.tsx`),
+not scoped to the editor `<textarea>`, so it works regardless of which
+control currently has focus. It duplicates the header's ☁️ "Sincronização
+com Google Drive" button (WCAG 2.1 SC 2.1.1: no functionality is
+keyboard-shortcut-only) — pressing the button always works, with or without
+this shortcut. Local content is already saved on every keystroke
+independent of this shortcut, so it has nothing to do with "not losing
+work"; it only triggers the Drive sync pull→reconcile→push cycle described
+in `docs/data-and-privacy.md`.
+
+The browser's native "Save Page" action is suppressed (`preventDefault()`)
+whenever the chord matches, so this shortcut takes priority over that
+default in this app. It does not fire while a `role="dialog"` element is
+open, so it can't act behind a modal the user is still interacting with.
+
+## 7. Manual verification performed
 
 - Keyboard-only pass: tabbed through header icon buttons, sidebar footer
   buttons, create/rename/delete file flow (via the project `⋮` menu and

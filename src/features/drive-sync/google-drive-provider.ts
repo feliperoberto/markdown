@@ -11,13 +11,22 @@
  * merge keyed on each file's `timestamp` — is injected from `src/app/`
  * (see `SyncProvider`'s doc comment for why that logic can't live here).
  * Token-expiry/refresh hardening (issue #30) tracks acquisition time +
- * `expires_in`, and proactively re-requests a token via silent re-auth when
- * near expiry, rather than letting a Drive API call fail opaquely mid-session.
+ * `expires_in`, and proactively re-requests a token near expiry, rather than
+ * letting a Drive API call fail opaquely mid-session. That refresh (and
+ * `reconnectSilently`'s mount-time reconnect) requests the token with
+ * `prompt: ''` (see `google-identity.ts`), which is what actually makes it
+ * silent — omitting `prompt` (GIS's default) shows the account picker and
+ * consent screen on every acquisition, which previously made routine sync
+ * feel like it was re-authenticating almost every time it ran.
  *
  * Security property preserved: the Drive access token (`this.accessToken`)
  * lives only as an in-memory instance field. It is never written to
- * `localStorage`, `sessionStorage`, or any other persistent store. Only
- * the (non-secret) OAuth Client ID is persisted, via `config.ts`.
+ * `localStorage`, `sessionStorage`, or any other persistent store — it does
+ * not survive a reload, silent reconnect or not. Only non-secret data is
+ * persisted: the OAuth Client ID (`config.ts`), and a boolean hint that this
+ * browser has connected before (`AUTO_RECONNECT_STORAGE_KEY`, below) used
+ * only to decide whether attempting a silent reconnect on mount is worth
+ * it — see `docs/data-and-privacy.md`.
  */
 import type { ProjectsSnapshot, SyncProvider, SyncStatus } from './types'
 import {
@@ -79,6 +88,16 @@ const TOKEN_REFRESH_MARGIN_MS = 5 * 60 * 1000
 
 const LAST_SYNC_STORAGE_KEY = 'lastDriveSync'
 const PROJECTS_LAST_MODIFIED_STORAGE_KEY = 'projectsLastModified'
+/**
+ * Non-secret hint ("this browser has connected to Drive before"), NOT a
+ * credential — the access token itself stays memory-only (see
+ * `docs/data-and-privacy.md`) and is lost on every reload regardless of
+ * this flag. Read on mount to decide whether a silent reconnect attempt is
+ * worth making at all; a browser that never connected has no active Google
+ * session to reuse, so skipping the attempt there avoids a pointless GIS
+ * round-trip.
+ */
+const AUTO_RECONNECT_STORAGE_KEY = 'driveAutoReconnect'
 
 /** Auto-sync poll interval — checked every minute, exactly as before. */
 const AUTO_SYNC_POLL_INTERVAL_MS = 60 * 1000
@@ -179,13 +198,50 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     const epoch = ++this.connectionEpoch
     await this.acquireAccessToken(clientId, { epoch })
     await this.fetchDriveUser()
+    localStorageAdapter.set(AUTO_RECONNECT_STORAGE_KEY, 'true')
     this.options.onStatusChange?.('connected')
     this.options.onNotify?.('✅ Drive conectado', 'success')
   }
 
   /**
-   * Requests (or silently re-requests, if the user already has an active
-   * Google session) an access token via GIS, and records its expiry so
+   * Attempts to silently resume a Drive connection on mount, without any
+   * visible Google UI and without ever surfacing an error toast — a failed
+   * attempt just leaves the app disconnected, exactly as if this had never
+   * been called (recall issue #92: a background token request stealing
+   * focus from the editor is the regression this must not reintroduce).
+   * Skips the attempt entirely if this browser has never connected before
+   * (see `AUTO_RECONNECT_STORAGE_KEY`) — there is no Google session to
+   * silently reuse in that case, so it would just be a wasted round-trip.
+   *
+   * Returns whether it reconnected, so the caller can decide whether to
+   * update its own status UI.
+   */
+  async reconnectSilently(): Promise<boolean> {
+    if (localStorageAdapter.get(AUTO_RECONNECT_STORAGE_KEY) !== 'true') return false
+
+    const clientId = getStoredClientId()
+    if (isPlaceholderClientId(clientId)) return false
+
+    const epoch = ++this.connectionEpoch
+    try {
+      await this.acquireAccessToken(clientId, { epoch, notifyOnError: false, silent: true })
+    } catch {
+      return false
+    }
+    // Stale: `disconnect()`/another `connect()` ran while this was in
+    // flight — matches the guard already inside `acquireAccessToken`, but
+    // that guard only skips setting `this.accessToken`; without this,
+    // `fetchDriveUser()` below would still run and could resurrect
+    // `driveUser`/the status callback for a connection the user ended.
+    if (epoch !== this.connectionEpoch || !this.accessToken) return false
+
+    await this.fetchDriveUser()
+    this.options.onStatusChange?.('connected')
+    return true
+  }
+
+  /**
+   * Requests an access token via GIS, and records its expiry so
    * `ensureFreshAccessToken` can proactively refresh it later.
    *
    * `epoch` pins this call to the connection generation active when it
@@ -197,10 +253,28 @@ export class GoogleDriveSyncProvider implements SyncProvider {
    * refresh, where a scary "Erro ao conectar" toast during routine
    * auto-sync would be misleading (the caller's own error handling covers
    * that case instead).
+   *
+   * `silent` passes `prompt: ''` to GIS, requesting a token with no visible
+   * UI — this only succeeds if the user still has an active Google session
+   * and has already granted consent for `DRIVE_SCOPE`; otherwise GIS
+   * reports failure via `error_callback` (routed into the same
+   * `GoogleTokenResponse` shape as an ordinary `callback` error) rather
+   * than showing a popup. Used by `ensureFreshAccessToken` and
+   * `reconnectSilently` — an explicit "Conectar com Google" click always
+   * omits it, since a user who just clicked Connect expects the account
+   * picker.
    */
   private async acquireAccessToken(
     clientId: string,
-    { epoch, notifyOnError = true }: { epoch: number; notifyOnError?: boolean },
+    {
+      epoch,
+      notifyOnError = true,
+      silent = false,
+    }: {
+      epoch: number
+      notifyOnError?: boolean
+      silent?: boolean
+    },
   ): Promise<void> {
     const google = await loadGoogleIdentity()
 
@@ -208,7 +282,10 @@ export class GoogleDriveSyncProvider implements SyncProvider {
       const client: GoogleTokenClient = google.accounts.oauth2.initTokenClient({
         client_id: clientId,
         scope: DRIVE_SCOPE,
+        ...(silent ? { prompt: '' } : {}),
         callback: resolve,
+        error_callback: (error) =>
+          resolve({ error: error.type || error.message || 'unknown_error' }),
       })
       client.requestAccessToken()
     })
@@ -237,10 +314,10 @@ export class GoogleDriveSyncProvider implements SyncProvider {
   /**
    * Called before any Drive API request. If the current token is missing,
    * expired, or within `TOKEN_REFRESH_MARGIN_MS` of expiring, transparently
-   * re-requests a fresh one (GIS resolves this silently when the user still
-   * has an active Google session, so no visible re-auth prompt is shown in
-   * the common case) instead of letting the upcoming fetch fail with an
-   * opaque 401 mid-session.
+   * re-requests a fresh one with `prompt: ''` (silent — resolved without any
+   * visible UI when the user still has an active Google session, so no
+   * re-auth prompt interrupts routine sync) instead of letting the upcoming
+   * fetch fail with an opaque 401 mid-session.
    */
   private async ensureFreshAccessToken(): Promise<void> {
     if (!this.accessToken || !this.tokenClientId) return
@@ -257,7 +334,7 @@ export class GoogleDriveSyncProvider implements SyncProvider {
       // indefinitely if the browser silently blocks/never resolves an
       // interactive consent popup here.
       await Promise.race([
-        this.acquireAccessToken(this.tokenClientId, { epoch, notifyOnError: false }),
+        this.acquireAccessToken(this.tokenClientId, { epoch, notifyOnError: false, silent: true }),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error('Drive silent token refresh timed out')), 15_000),
         ),
@@ -284,6 +361,7 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     this.tokenClientId = null
     this.driveUser = null
     this.driveFileId = null
+    localStorageAdapter.remove(AUTO_RECONNECT_STORAGE_KEY)
     this.options.onStatusChange?.('offline')
     this.options.onNotify?.('Desconectado do Drive', 'success')
   }

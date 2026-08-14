@@ -22,6 +22,7 @@ import { SplashScreen } from '@/features/onboarding'
 import { BatchDownloadArea, Breadcrumbs, IconButton, useToast } from '@/components'
 import { copyToClipboard } from '@/lib/copyToClipboard'
 import { useOutsideClick } from '@/lib/useOutsideClick'
+import { useSaveShortcut } from '@/lib/useSaveShortcut'
 
 function downloadBlob(blob: Blob, fileName: string): void {
   const url = URL.createObjectURL(blob)
@@ -73,6 +74,18 @@ export function App(): JSX.Element {
   // an open request, so starting at a defined number would pop the
   // modal open immediately on mount.
   const [driveConfigOpenSignal, setDriveConfigOpenSignal] = useState<number | undefined>(undefined)
+
+  // Same "fire an event" counter convention as driveConfigOpenSignal, but
+  // for the Ctrl+S/Cmd+S shortcut (useSaveShortcut, wired below) requesting
+  // a Drive sync — bumped instead of calling anything on DriveSyncPanel
+  // directly, since composing editor + drive-sync behavior belongs here in
+  // src/app/, not in either feature (see CONTRIBUTING.md's "Feature
+  // taxonomy"). Starts `undefined` for the same reason as
+  // driveConfigOpenSignal: a defined starting value would fire on mount.
+  const [driveSyncRequestSignal, setDriveSyncRequestSignal] = useState<number | undefined>(
+    undefined,
+  )
+  useSaveShortcut(() => setDriveSyncRequestSignal((n) => (n ?? 0) + 1))
 
   // Sidebar drawer visibility. Starts `false` (visible) matching the
   // prototype's static markup, which never has a `hidden` class on
@@ -301,6 +314,7 @@ export function App(): JSX.Element {
                 return { projects: result.projects, tombstones: result.tombstones }
               }}
               openSignal={driveConfigOpenSignal}
+              syncSignal={driveSyncRequestSignal}
             />
             <FontSizeButton onCycle={cycleFontSize} />
             <ThemeToggle />
