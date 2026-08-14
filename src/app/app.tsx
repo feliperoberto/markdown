@@ -22,6 +22,7 @@ import { SplashScreen } from '@/features/onboarding'
 import { BatchDownloadArea, Breadcrumbs, IconButton, useToast } from '@/components'
 import { copyToClipboard } from '@/lib/copyToClipboard'
 import { useOutsideClick } from '@/lib/useOutsideClick'
+import { useSaveShortcut } from '@/lib/useSaveShortcut'
 
 function downloadBlob(blob: Blob, fileName: string): void {
   const url = URL.createObjectURL(blob)
@@ -65,14 +66,25 @@ export function App(): JSX.Element {
     ReadonlyArray<{ projectName: string; fileName: string }>
   >([])
 
-  // Incrementing this opens the Drive/Config modal from a second entry
-  // point (the sidebar's "⚙️ Config" footer button, matching the
-  // prototype's separate gear icon) without spawning a second
-  // DriveSyncPanel instance with its own disconnected state. Starts
-  // `undefined` (not 0) — DriveSyncPanel treats "any defined value" as
-  // an open request, so starting at a defined number would pop the
-  // modal open immediately on mount.
-  const [driveConfigOpenSignal, setDriveConfigOpenSignal] = useState<number | undefined>(undefined)
+  // "Fire an event" signal for DriveSyncPanel's two entry points that live
+  // outside that component: the sidebar's "⚙️ Config" footer button
+  // (matching the prototype's separate gear icon) and the Ctrl+S/Cmd+S
+  // shortcut (useSaveShortcut, wired below) requesting a sync. Bumped
+  // instead of calling anything on DriveSyncPanel directly, since composing
+  // editor + drive-sync behavior belongs here in src/app/, not in either
+  // feature (see CONTRIBUTING.md's "Feature taxonomy"). Starts `undefined`
+  // — DriveSyncPanel treats any defined value as a request, so starting
+  // defined would fire on mount — and `nonce` (not just a changed `action`)
+  // is what actually re-triggers its effect, so two same-action requests in
+  // a row are each observed, not just the first.
+  const [driveActionSignal, setDriveActionSignal] = useState<
+    { action: 'open' | 'sync'; nonce: number } | undefined
+  >(undefined)
+  const requestDriveConfigOpen = () =>
+    setDriveActionSignal((prev) => ({ action: 'open', nonce: (prev?.nonce ?? 0) + 1 }))
+  const requestDriveSync = () =>
+    setDriveActionSignal((prev) => ({ action: 'sync', nonce: (prev?.nonce ?? 0) + 1 }))
+  useSaveShortcut(requestDriveSync)
 
   // Sidebar drawer visibility. Starts `false` (visible) matching the
   // prototype's static markup, which never has a `hidden` class on
@@ -300,7 +312,7 @@ export function App(): JSX.Element {
                 const result = reconcileWithRemote(remote?.projects ?? null, remote?.tombstones)
                 return { projects: result.projects, tombstones: result.tombstones }
               }}
-              openSignal={driveConfigOpenSignal}
+              actionSignal={driveActionSignal}
             />
             <FontSizeButton onCycle={cycleFontSize} />
             <ThemeToggle />
@@ -325,7 +337,7 @@ export function App(): JSX.Element {
             onExportProject={handleExportProjectFromMenu}
             onUploadFiles={handleUploadFilesToProject}
             onImportZip={handleImportZip}
-            onOpenConfig={() => setDriveConfigOpenSignal((n) => (n ?? 0) + 1)}
+            onOpenConfig={requestDriveConfigOpen}
             onMoveFile={moveFile}
             onMoveProject={moveProject}
             archivedProjects={archivedProjects}

@@ -19,6 +19,11 @@ export interface GoogleTokenResponse {
   expires_in?: number
 }
 
+interface GoogleTokenClientError {
+  type?: string
+  message?: string
+}
+
 export interface GoogleTokenClient {
   requestAccessToken(): void
 }
@@ -27,6 +32,21 @@ export interface GoogleTokenClientConfig {
   client_id: string
   scope: string
   callback: (response: GoogleTokenResponse) => void
+  /**
+   * `''` requests a token with no visible UI, resolved silently when the
+   * user still has an active Google session and has already granted
+   * consent for `scope` — omitting it (GIS's default) always shows the
+   * account picker + consent screen, even for a routine background
+   * refresh. See `google-drive-provider.ts`'s `acquireAccessToken`.
+   */
+  prompt?: string
+  /**
+   * Reports failures GIS doesn't route through `callback` at all — e.g. a
+   * blocked popup, or no consent to silently reuse when `prompt: ''` is
+   * set. Without this, a silent acquisition attempt can hang indefinitely
+   * instead of failing fast.
+   */
+  error_callback?: (error: GoogleTokenClientError) => void
 }
 
 export interface GoogleIdentityGlobal {

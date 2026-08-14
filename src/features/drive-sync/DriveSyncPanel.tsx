@@ -28,13 +28,19 @@ export interface DriveSyncPanelProps {
    */
   reconcile: (remote: ProjectsSnapshot | null) => ProjectsSnapshot
   /**
-   * Lets a second entry point (the sidebar's prototype-matching "⚙️
-   * Config" footer button) open the SAME modal instance instead of
-   * spawning a second one with its own disconnected state. Uncontrolled
-   * (manages its own open/close) when omitted — the header's own cloud
-   * icon trigger doesn't need this.
+   * "Fire an event" signal from `src/app/` for the two entry points that
+   * live outside this component: the sidebar's "⚙️ Config" footer button
+   * (`action: 'open'`) and the Ctrl+S/Cmd+S shortcut (`action: 'sync'`,
+   * `useSaveShortcut`). A save shortcut has no business reaching into a
+   * sibling feature's internals directly (see CONTRIBUTING.md's "Feature
+   * taxonomy"), so `src/app/app.tsx` bumps `nonce` instead of calling
+   * anything on this component. `nonce` (not just `action` changing) is
+   * what actually triggers the effect below — two 'sync' requests in a row
+   * must each be observed, not just the first. Uncontrolled (manages its
+   * own open/close) when omitted — the header's own cloud icon trigger
+   * doesn't need this. `undefined` on mount so nothing fires at startup.
    */
-  openSignal?: number
+  actionSignal?: { action: 'open' | 'sync'; nonce: number }
 }
 
 const TITLE_ID = 'drive-sync-panel-title'
@@ -46,7 +52,7 @@ const TITLE_ID = 'drive-sync-panel-title'
  * drives a full bidirectional, freshness-based reconcile — see
  * `handleSync`'s doc comment.
  */
-export function DriveSyncPanel({ reconcile, openSignal }: DriveSyncPanelProps): JSX.Element {
+export function DriveSyncPanel({ reconcile, actionSignal }: DriveSyncPanelProps): JSX.Element {
   const showToast = useToast()
   const [open, setOpen] = useState(false)
   const [status, setStatus] = useState<DriveSyncDotStatus>('offline')
@@ -79,6 +85,19 @@ export function DriveSyncPanel({ reconcile, openSignal }: DriveSyncPanelProps): 
   const providerRef = useRef(provider)
   providerRef.current = provider
 
+  // Guards against overlapping `pull → reconcile → push` sequences —
+  // rapid repeat Ctrl+S presses, a mash of the button + the shortcut, or a
+  // shortcut press landing while the connect-time sync (handleConnect's own
+  // performSync call, below) is still in flight. `busy` (state) isn't
+  // enough on its own: a call dispatched before React/Preact has committed
+  // a previous `setBusy(true)` could still read the old `busy` value and
+  // pass the check. A ref is updated synchronously, so a second call sees
+  // the first one's guard immediately, with no render in between. Lives on
+  // `performSync` itself (the one shared entry point every caller funnels
+  // through — handleSync AND handleConnect) rather than on any individual
+  // caller, so no future caller can bypass it by forgetting to check it.
+  const syncInFlightRef = useRef(false)
+
   // Revokes the token if this panel ever unmounts while connected. It
   // never unmounts in the current app shell (always rendered in the
   // header), so this is a latent-only safety net.
@@ -86,13 +105,58 @@ export function DriveSyncPanel({ reconcile, openSignal }: DriveSyncPanelProps): 
     return () => providerRef.current.disconnect()
   }, [])
 
-  // Any change to openSignal's value (a simple incrementing counter) opens
-  // the modal — this is a "fire an event" signal, not a value to sync
-  // against, so it intentionally does NOT compare against a previous
-  // value; effect deps already guarantee it only re-runs on an actual change.
+  // Silently resumes a Drive connection on mount, so Ctrl+S/Cmd+S (and the
+  // Sincronizar button) work without a fresh "Conectar com Google" click on
+  // every page load — the access token itself is memory-only by design (see
+  // docs/data-and-privacy.md) and never survives a reload, so this is the
+  // silent-reauth path, not a persisted-credential one. `reconnectSilently`
+  // itself no-ops (no Google request at all) unless this browser connected
+  // before. Deliberately does NOT run a sync afterwards — making Ctrl+S
+  // itself instant is the goal, not a surprise network round-trip at
+  // startup.
+  //
+  // `attemptedRef` makes this "retry once, the first time isOnline is true"
+  // rather than "only ever check at the very first render": the app opening
+  // while briefly offline (a captive portal, a flaky connection at boot)
+  // would otherwise skip the attempt forever, since a plain `[]`-deps effect
+  // never re-runs once connectivity returns. Once an attempt has actually
+  // been made, it never retries again on later online/offline flips within
+  // the same page load — a dropped-then-restored connection mid-session
+  // isn't a new "first load", and reconnectSilently's own internal state
+  // (connectionEpoch) already means a stale attempt can't resurrect a
+  // connection anyway.
+  const reconnectAttemptedRef = useRef(false)
   useEffect(() => {
-    if (openSignal !== undefined) setOpen(true)
-  }, [openSignal])
+    if (reconnectAttemptedRef.current) return
+    if (!providerRef.current.isConfigured() || !isOnline) return
+    reconnectAttemptedRef.current = true
+    void providerRef.current.reconnectSilently()
+  }, [isOnline])
+
+  // "Fire an event" signal from src/app/ — see actionSignal's doc comment.
+  // `nonce` alone drives the deps array (not `action`), so two same-action
+  // requests in a row are each observed. `configured`/`connected`/
+  // `handleSync` are deliberately NOT tracked as dependencies and are read
+  // fresh via closure from whichever render last changed `nonce` — if they
+  // were tracked, this would re-fire (and re-sync) merely because e.g.
+  // `connected` flipped from a manual Connect click, with no new keypress
+  // or menu click at all.
+  useEffect(() => {
+    if (actionSignal === undefined) return
+    if (actionSignal.action === 'open') {
+      setOpen(true)
+      return
+    }
+    if (!configured || !connected) {
+      // Explains itself instead of silently doing nothing — the shortcut
+      // still "did something" from the user's point of view.
+      setOpen(true)
+      showToast(driveSyncCopy.syncNeedsConnectionToast, 'warning')
+      return
+    }
+    void handleSync()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actionSignal?.nonce])
 
   // Derived from the PERSISTED client ID (what `connect()` actually
   // reads), not the live/unsaved input — see Fix 5.
@@ -170,7 +234,15 @@ export function DriveSyncPanel({ reconcile, openSignal }: DriveSyncPanelProps): 
   // synced when nothing was pushed. `silentSuccess` suppresses only the
   // success toast (used on connect, to avoid stacking it on "Drive
   // conectado"); errors always show.
+  //
+  // `syncInFlightRef` is checked/set here, not in `handleSync` — this is
+  // the actual shared entry point for every pull→reconcile→push caller
+  // (both `handleSync` and `handleConnect`'s own post-connect sync below),
+  // so no caller can start an overlapping sequence, not just the ones that
+  // remember to check a guard themselves.
   async function performSync({ silentSuccess = false } = {}) {
+    if (syncInFlightRef.current) return
+    syncInFlightRef.current = true
     try {
       const remote = await providerRef.current.pull()
       const merged = reconcile(remote)
@@ -185,11 +257,15 @@ export function DriveSyncPanel({ reconcile, openSignal }: DriveSyncPanelProps): 
         console.error('Sync error:', error)
         showToast(`Erro ao sincronizar: ${(error as Error).message}`, 'error')
       }
+    } finally {
+      syncInFlightRef.current = false
     }
   }
 
   // Manual "Sincronizar" button handler: wraps performSync with the
-  // online-precheck and busy state.
+  // online-precheck and the busy state (the button is already
+  // `disabled={busy}`, but the Ctrl+S/Cmd+S shortcut's `actionSignal`
+  // effect above calls this directly, bypassing that disabled attribute).
   async function handleSync() {
     if (!isOnline) {
       // Fail fast with the reassuring offline copy instead of letting the
@@ -219,6 +295,7 @@ export function DriveSyncPanel({ reconcile, openSignal }: DriveSyncPanelProps): 
         <IconButton
           icon="☁️"
           label="Sincronização com Google Drive"
+          title={driveSyncCopy.syncShortcutHint}
           ariaHasPopup="dialog"
           onClick={() => setOpen(true)}
         />

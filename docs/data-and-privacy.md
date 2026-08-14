@@ -45,11 +45,31 @@ What this actually does, technically:
   your Drive data — is never persisted.** It is kept in memory only, for the
   current page session, and is never written to `localStorage`,
   `sessionStorage`, or any other persistent store. Closing or reloading the
-  tab requires reconnecting (see `src/features/drive-sync/google-drive-provider.ts`).
+  tab always loses it (see `src/features/drive-sync/google-drive-provider.ts`).
   This is also why app updates ask before reloading: accepting the
   "Atualizar" prompt reloads the page, which disconnects Drive the same way
   any other reload does — see
   [ADR-0003](./adr/0003-user-prompted-service-worker-updates.md).
+- **On reload, the app may silently reconnect to Drive** — with no popup, no
+  consent screen, and no visible interruption — instead of requiring a fresh
+  "Conectar com Google" click every time. This only works if your browser
+  still has an active Google session and had already granted this app
+  access; if either is missing, it fails silently and you're simply
+  disconnected, same as before this existed. It's what makes Ctrl+S/Cmd+S
+  (the sync shortcut) feel instant on a page you already connected once,
+  rather than triggering a full consent screen on every reload. What makes
+  this possible, and what's actually stored:
+  - **The access token itself is still never persisted** — the point above
+    is unchanged. A silent reconnect requests a brand-new token from
+    Google; it does not resurrect an old one from storage, because there is
+    none to resurrect.
+  - The only thing written to `localStorage` for this is a single boolean
+    flag (`driveAutoReconnect`) meaning "this browser connected to Drive at
+    least once before." It is **not a credential and cannot be used to
+    access your Drive data on its own** — it only decides whether the app
+    bothers attempting a silent reconnect at all on the next page load, so
+    a browser that never connected doesn't make a pointless request. It's
+    set when you connect and removed when you disconnect.
 - **Your notes are stored in Google's `appDataFolder`**, a special, hidden
   Drive space that only this app can see and use
   (`spaces=appDataFolder` / `parents: ['appDataFolder']`, requested with the
@@ -78,7 +98,9 @@ What this actually does, technically:
 - `src/features/drive-sync/config.ts` — Client ID storage (public, non-secret
   identifier).
 - `src/features/drive-sync/google-drive-provider.ts` — access token kept
-  in-memory only; `appDataFolder`/`drive.appdata` scope usage.
+  in-memory only; `appDataFolder`/`drive.appdata` scope usage; the
+  `driveAutoReconnect` boolean flag and `reconnectSilently()`, which never
+  shows Google UI and never surfaces an error if it fails.
 - `src/features/drive-sync/copy.ts` and `DriveSyncPanel.tsx` — the
   in-app (pt-BR) disclosure shown to users before they connect Google Drive.
 
