@@ -7,11 +7,19 @@ import { useEffect, useState } from 'preact/hooks'
  * Previously that provider had its own independent `navigator.onLine ===
  * false` check, duplicating this exact logic; the two could in theory drift
  * (e.g. different re-render timing around `online`/`offline` events).
- * Defaults to online (`true`) outside a browser (SSR/tests), where there's
- * no meaningful "offline" to report.
+ *
+ * Deliberately `!== false` rather than returning `navigator.onLine` as-is:
+ * treats anything other than a strict `false` — no `navigator`, no `onLine`
+ * property, or any other non-boolean value a non-standard runtime might
+ * expose — as online. `Navigator.onLine`'s ambient type claims `boolean`
+ * unconditionally, but that's not runtime-guaranteed everywhere this is
+ * called from (e.g. Node has a global `navigator` with no `onLine` at all);
+ * defaulting to "online" on anything but an explicit `false` means an
+ * unusual runtime falls back to attempting the network call and getting a
+ * real error, rather than silently refusing to sync.
  */
 export function isNavigatorOnline(): boolean {
-  return typeof navigator === 'undefined' ? true : navigator.onLine
+  return typeof navigator === 'undefined' || navigator.onLine !== false
 }
 
 /**

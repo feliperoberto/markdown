@@ -8,7 +8,7 @@
  * and the actual sync decision — a freshness merge keyed on each file's
  * `timestamp` — is injected from `src/app/` (see `SyncProvider`'s doc
  * comment for why that logic can't live here). Sync only ever runs from an
- * explicit user action (connect, or the "Sincronizar" button/Ctrl+S) — the
+ * explicit user action (connect, or the "Sincronizar" button) — the
  * original naive-hash + 60s background polling loop that used to trigger it
  * automatically was removed (issue #92: its periodic token re-request popped
  * a Google auth window that stole focus from the editor mid-typing).
@@ -67,7 +67,7 @@ const TOKEN_REFRESH_MARGIN_MS = 5 * 60 * 1000
 
 const LAST_SYNC_STORAGE_KEY = 'lastDriveSync'
 
-export type DriveSyncDotStatus = 'offline' | 'connected' | 'connected-offline' | 'syncing' | 'error'
+export type DriveSyncDotStatus = 'offline' | 'connected' | 'connected-offline' | 'syncing'
 
 export interface GoogleDriveSyncProviderOptions {
   /** Called whenever the connection/sync visual state changes (for a status dot, etc). */
@@ -143,10 +143,10 @@ export class GoogleDriveSyncProvider implements SyncProvider {
    * ran before this resolves, the result is discarded instead of silently
    * resurrecting a connection the user already ended. `notifyOnError`
    * controls whether an auth failure surfaces a user-facing toast — true
-   * for an explicit `connect()` click, false for a background silent
-   * refresh, where a scary "Erro ao conectar" toast during routine
-   * auto-sync would be misleading (the caller's own error handling covers
-   * that case instead).
+   * for an explicit `connect()` click, false for a silent token refresh
+   * ahead of a push()/pull() call, where a scary "Erro ao conectar" toast
+   * would be misleading (the caller's own error handling covers that case
+   * instead).
    */
   private async acquireAccessToken(
     clientId: string,

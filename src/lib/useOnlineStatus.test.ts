@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, renderHook } from '@testing-library/preact'
 import { isNavigatorOnline, useOnlineStatus } from './useOnlineStatus'
 
@@ -16,6 +16,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  vi.unstubAllGlobals()
   // @ts-expect-error cleaning up a test-only stub
   delete navigator.onLine
 })
@@ -26,6 +27,26 @@ describe('isNavigatorOnline', () => {
 
     online = false
     expect(isNavigatorOnline()).toBe(false)
+  })
+
+  // Regression test: some runtimes have a `navigator` global whose `onLine`
+  // isn't a real boolean at all (e.g. Node 21+'s built-in `navigator` has no
+  // `onLine` property, so reading it is `undefined`). Only a strict `false`
+  // should mean offline — anything else falls back to "assume online"
+  // rather than silently refusing to sync.
+  it('treats a non-boolean navigator.onLine as online', () => {
+    Object.defineProperty(navigator, 'onLine', {
+      configurable: true,
+      get: () => undefined,
+    })
+
+    expect(isNavigatorOnline()).toBe(true)
+  })
+
+  it('treats a missing navigator global as online', () => {
+    vi.stubGlobal('navigator', undefined)
+
+    expect(isNavigatorOnline()).toBe(true)
   })
 })
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import type { RegisterServiceWorkerUpdates, ServiceWorkerUpdater } from '@/lib/pwa-register'
+import { isNavigatorOnline } from '@/lib/useOnlineStatus'
 
 const DEFAULT_MIN_CHECK_INTERVAL_MS = 60_000
 
@@ -61,7 +62,7 @@ export function useServiceWorkerUpdate({
     // A hidden tab must not probe — `visibilitychange` also fires on hide.
     if (document.visibilityState !== 'visible') return
     // Skip a guaranteed-failing fetch.
-    if (typeof navigator !== 'undefined' && !navigator.onLine) return
+    if (!isNavigatorOnline()) return
     // No registration yet (still in flight, or unsupported) — nothing to
     // probe. Checked BEFORE the throttle timestamp is touched: a
     // focus/visibilitychange racing ahead of registration completing must

@@ -56,12 +56,12 @@ export function DriveSyncPanel({ reconcile, openSignal }: DriveSyncPanelProps): 
   const isOnline = useOnlineStatus()
 
   // Always dereferenced fresh from the provider's onNotify callback, so
-  // showToast's identity never needs to be a useMemo dependency below.
-  // Previously the provider was recreated whenever showToast changed
-  // (harmless today only because Toast.tsx happens to return a stable
-  // reference) — a provider rebuild mid-session would orphan the OLD
-  // instance's running auto-sync setInterval with no way to stop it from
-  // the UI, since providerRef would only ever point at the new instance.
+  // showToast's identity never needs to be a useMemo dependency below —
+  // the provider below is created exactly once (empty deps) and should
+  // stay that way, since a rebuild mid-session would orphan the OLD
+  // instance's in-memory accessToken/connection state with no way to
+  // disconnect it from the UI (providerRef would only ever point at the
+  // new instance).
   const showToastRef = useRef(showToast)
   showToastRef.current = showToast
 
