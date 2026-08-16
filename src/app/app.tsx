@@ -338,6 +338,7 @@ export function App(): JSX.Element {
               open={syncModalOpen}
               onClose={() => setSyncModalOpen(false)}
               onClickCloudButton={() => setSyncModalOpen(true)}
+              onRequestConfig={requestDriveConfigOpen}
             />
             <DriveConfigPanel
               open={configModalOpen}

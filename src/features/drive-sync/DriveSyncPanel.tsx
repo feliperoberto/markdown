@@ -60,6 +60,11 @@ export interface DriveSyncPanelProps {
    * Callback when user clicks the cloud sync button to open the modal.
    */
   onClickCloudButton?: () => void
+  /**
+   * Callback when Ctrl+S/Cmd+S is pressed but Drive is not configured yet.
+   * Should open the config modal so user can configure.
+   */
+  onRequestConfig?: () => void
 }
 
 const TITLE_ID = 'drive-sync-panel-title'
@@ -73,7 +78,7 @@ const TITLE_ID = 'drive-sync-panel-title'
  */
 export const DriveSyncPanel = forwardRef<DriveSyncPanelRef, DriveSyncPanelProps>(
   function DriveSyncPanelImpl(
-    { reconcile, actionSignal, open, onClose, onClickCloudButton }: DriveSyncPanelProps,
+    { reconcile, actionSignal, open, onClose, onClickCloudButton, onRequestConfig }: DriveSyncPanelProps,
     ref,
   ): JSX.Element {
   const showToast = useToast()
@@ -179,25 +184,30 @@ export const DriveSyncPanel = forwardRef<DriveSyncPanelRef, DriveSyncPanelProps>
   // "Fire an event" signal from src/app/ for the Ctrl+S/Cmd+S shortcut —
   // see actionSignal's doc comment. `nonce` alone drives the deps array,
   // so two same-action requests in a row are each observed. `configured`/
-  // `connected`/`handleSync` are deliberately NOT tracked as dependencies
-  // and are read fresh via closure from whichever render last changed
-  // `nonce` — if they were tracked, this would re-fire (and re-sync) merely
-  // because e.g. `connected` flipped from a manual Connect click, with no
-  // new keypress.
+  // `connected`/`handleSync`/`onRequestConfig` are deliberately NOT
+  // tracked as dependencies and are read fresh via closure from whichever
+  // render last changed `nonce` — if they were tracked, this would re-fire
+  // (and re-sync) merely because e.g. `connected` flipped from a manual
+  // Connect click, with no new keypress.
   useEffect(() => {
     if (actionSignal === undefined) return
     if (!configured || !connected) {
-      // Not configured/connected — the shortcut still "did something" from
-      // the user's point of view (a warning toast), but can't actually sync.
-      // User should use Config button to set up first.
+      // Not configured/connected — guide user to config panel so they can
+      // set up Drive first. Show warning toast and open config modal.
       showToast(driveSyncCopy.syncNeedsConnectionToast, 'warning')
+      onRequestConfig?.()
       return
     }
     void handleSync()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actionSignal?.nonce])
 
-  const [storedClientId] = useState(() => getStoredClientId())
+  // Read fresh from localStorage each render to pick up changes from
+  // DriveConfigPanel (which runs in a separate modal and writes to
+  // localStorage directly). Using state initialized on mount would cache
+  // the old value and cause the 'configured' check to be stale if the user
+  // saves a Client ID in the config panel while the sync modal is open.
+  const storedClientId = getStoredClientId()
   const configured = isClientIdConfigured(storedClientId)
 
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(

@@ -163,13 +163,14 @@ describe('DriveSyncPanel', () => {
       await waitFor(() => expect(reconcile).toHaveBeenCalledWith(null))
     })
 
-    it('shows a warning toast instead of syncing when not connected', async () => {
+    it('shows a warning toast and requests config when not connected', async () => {
       const reconcile = vi.fn(
         (remote: ProjectsSnapshot | null): ProjectsSnapshot => remote ?? { projects: {} },
       )
+      const onRequestConfig = vi.fn()
       const { rerender } = render(
         <ToastProvider>
-          <DriveSyncPanel reconcile={reconcile} open={true} onClose={() => {}} />
+          <DriveSyncPanel reconcile={reconcile} open={true} onClose={() => {}} onRequestConfig={onRequestConfig} />
         </ToastProvider>,
       )
 
@@ -177,7 +178,7 @@ describe('DriveSyncPanel', () => {
 
       rerender(
         <ToastProvider>
-          <DriveSyncPanel reconcile={reconcile} open={true} onClose={() => {}} actionSignal={{ action: 'sync', nonce: 1 }} />
+          <DriveSyncPanel reconcile={reconcile} open={true} onClose={() => {}} actionSignal={{ action: 'sync', nonce: 1 }} onRequestConfig={onRequestConfig} />
         </ToastProvider>,
       )
 
@@ -185,7 +186,7 @@ describe('DriveSyncPanel', () => {
         expect(screen.getByText('Conecte o Google Drive para sincronizar')).not.toBeNull(),
       )
       expect(screen.getByRole('dialog')).not.toBeNull()
-      expect(screen.getByRole('button', { name: 'Conectar com Google' })).not.toBeNull()
+      expect(onRequestConfig).toHaveBeenCalled()
       expect(reconcile).not.toHaveBeenCalled()
     })
 
