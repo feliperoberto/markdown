@@ -1,5 +1,6 @@
 import type { JSX } from 'preact'
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
+import { forwardRef } from 'preact/compat'
 import { Button, IconButton, Modal, useToast } from '@/components'
 import { useOnlineStatus } from '@/lib/useOnlineStatus'
 import { appVersion } from '@/lib/app-version'
@@ -16,6 +17,14 @@ import {
 import type { ProjectsSnapshot } from './types'
 import styles from './DriveSyncPanel.module.css'
 
+export interface DriveSyncPanelRef {
+  getStatus: () => {
+    connected: boolean
+    userName: string | null
+    lastSyncedAt: number | null
+  }
+}
+
 export interface DriveSyncPanelProps {
   /**
    * Reconciles a just-pulled remote snapshot (`null` if nothing has been
@@ -28,19 +37,29 @@ export interface DriveSyncPanelProps {
    */
   reconcile: (remote: ProjectsSnapshot | null) => ProjectsSnapshot
   /**
-   * "Fire an event" signal from `src/app/` for the two entry points that
-   * live outside this component: the sidebar's "⚙️ Config" footer button
-   * (`action: 'open'`) and the Ctrl+S/Cmd+S shortcut (`action: 'sync'`,
-   * `useSaveShortcut`). A save shortcut has no business reaching into a
-   * sibling feature's internals directly (see CONTRIBUTING.md's "Feature
+   * "Fire an event" signal from `src/app/` for the Ctrl+S/Cmd+S shortcut
+   * (`action: 'sync'`, `useSaveShortcut`). A save shortcut has no business
+   * reaching into this component directly (see CONTRIBUTING.md's "Feature
    * taxonomy"), so `src/app/app.tsx` bumps `nonce` instead of calling
    * anything on this component. `nonce` (not just `action` changing) is
-   * what actually triggers the effect below — two 'sync' requests in a row
-   * must each be observed, not just the first. Uncontrolled (manages its
-   * own open/close) when omitted — the header's own cloud icon trigger
-   * doesn't need this. `undefined` on mount so nothing fires at startup.
+   * what actually triggers the effect — two 'sync' requests in a row must
+   * each be observed, not just the first. `undefined` on mount so nothing
+   * fires at startup.
    */
-  actionSignal?: { action: 'open' | 'sync'; nonce: number }
+  actionSignal?: { action: 'sync'; nonce: number }
+  /**
+   * Whether the modal should be open (controlled by parent). When true,
+   * displays sync status and controls.
+   */
+  open: boolean
+  /**
+   * Callback when user wants to close the modal.
+   */
+  onClose: () => void
+  /**
+   * Callback when user clicks the cloud sync button to open the modal.
+   */
+  onClickCloudButton?: () => void
 }
 
 const TITLE_ID = 'drive-sync-panel-title'
@@ -52,12 +71,14 @@ const TITLE_ID = 'drive-sync-panel-title'
  * drives a full bidirectional, freshness-based reconcile — see
  * `handleSync`'s doc comment.
  */
-export function DriveSyncPanel({ reconcile, actionSignal }: DriveSyncPanelProps): JSX.Element {
+export const DriveSyncPanel = forwardRef<DriveSyncPanelRef, DriveSyncPanelProps>(
+  function DriveSyncPanelImpl(
+    { reconcile, actionSignal, open, onClose, onClickCloudButton }: DriveSyncPanelProps,
+    ref,
+  ): JSX.Element {
   const showToast = useToast()
-  const [open, setOpen] = useState(false)
   const [status, setStatus] = useState<DriveSyncDotStatus>('offline')
   const [user, setUser] = useState<string | null>(null)
-  const [clientId, setClientIdInput] = useState(() => getStoredClientId())
   const [busy, setBusy] = useState(false)
   const isOnline = useOnlineStatus()
 
@@ -133,24 +154,42 @@ export function DriveSyncPanel({ reconcile, actionSignal }: DriveSyncPanelProps)
     void providerRef.current.reconnectSilently()
   }, [isOnline])
 
-  // "Fire an event" signal from src/app/ — see actionSignal's doc comment.
-  // `nonce` alone drives the deps array (not `action`), so two same-action
-  // requests in a row are each observed. `configured`/`connected`/
-  // `handleSync` are deliberately NOT tracked as dependencies and are read
-  // fresh via closure from whichever render last changed `nonce` — if they
-  // were tracked, this would re-fire (and re-sync) merely because e.g.
-  // `connected` flipped from a manual Connect click, with no new keypress
-  // or menu click at all.
+  // Expose status to parent via ref for DriveConfigPanel to access
+  useEffect(() => {
+    if (!ref) return
+    if (typeof ref === 'function') {
+      ref({
+        getStatus: () => ({
+          connected,
+          userName: user,
+          lastSyncedAt,
+        }),
+      })
+    } else {
+      ref.current = {
+        getStatus: () => ({
+          connected,
+          userName: user,
+          lastSyncedAt,
+        }),
+      }
+    }
+  }, [ref, connected, user, lastSyncedAt])
+
+  // "Fire an event" signal from src/app/ for the Ctrl+S/Cmd+S shortcut —
+  // see actionSignal's doc comment. `nonce` alone drives the deps array,
+  // so two same-action requests in a row are each observed. `configured`/
+  // `connected`/`handleSync` are deliberately NOT tracked as dependencies
+  // and are read fresh via closure from whichever render last changed
+  // `nonce` — if they were tracked, this would re-fire (and re-sync) merely
+  // because e.g. `connected` flipped from a manual Connect click, with no
+  // new keypress.
   useEffect(() => {
     if (actionSignal === undefined) return
-    if (actionSignal.action === 'open') {
-      setOpen(true)
-      return
-    }
     if (!configured || !connected) {
-      // Explains itself instead of silently doing nothing — the shortcut
-      // still "did something" from the user's point of view.
-      setOpen(true)
+      // Not configured/connected — the shortcut still "did something" from
+      // the user's point of view (a warning toast), but can't actually sync.
+      // User should use Config button to set up first.
       showToast(driveSyncCopy.syncNeedsConnectionToast, 'warning')
       return
     }
@@ -158,36 +197,12 @@ export function DriveSyncPanel({ reconcile, actionSignal }: DriveSyncPanelProps)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actionSignal?.nonce])
 
-  // Derived from the PERSISTED client ID (what `connect()` actually
-  // reads), not the live/unsaved input — see Fix 5.
-  const [storedClientId, setStoredClientIdState] = useState(() => getStoredClientId())
+  const [storedClientId] = useState(() => getStoredClientId())
   const configured = isClientIdConfigured(storedClientId)
 
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(
     () => providerRef.current.getStatus().lastSyncedAt,
   )
-
-  function handleSaveClientId(event: Event) {
-    event.preventDefault()
-    const trimmed = clientId.trim()
-    if (!trimmed) {
-      // Prototype parity: an empty/whitespace Client ID was rejected
-      // rather than silently persisted with a success toast, which left
-      // Connect disabled with no explanation of why.
-      showToast(driveSyncCopy.clientIdEmptyWarning, 'warning')
-      return
-    }
-    setStoredClientId(trimmed)
-    setStoredClientIdState(trimmed)
-    showToast(driveSyncCopy.clientIdSavedToast, 'success')
-  }
-
-  function handleClearClientId() {
-    clearStoredClientId()
-    setClientIdInput(getStoredClientId())
-    setStoredClientIdState(getStoredClientId())
-    showToast(driveSyncCopy.clientIdClearedToast, 'success')
-  }
 
   async function handleConnect() {
     if (!isOnline) {
@@ -294,10 +309,10 @@ export function DriveSyncPanel({ reconcile, actionSignal }: DriveSyncPanelProps)
       <span class={styles.iconWrapper}>
         <IconButton
           icon="☁️"
-          label="Sincronização com Google Drive"
+          label="Sincronizar com Google Drive"
           title={driveSyncCopy.syncShortcutHint}
           ariaHasPopup="dialog"
-          onClick={() => setOpen(true)}
+          onClick={onClickCloudButton}
         />
         {!isOnline && (
           <span class={styles.offlineBadge} role="status" title={driveSyncCopy.offlineBadgeTitle}>
@@ -305,34 +320,9 @@ export function DriveSyncPanel({ reconcile, actionSignal }: DriveSyncPanelProps)
           </span>
         )}
       </span>
-      <Modal open={open} onClose={() => setOpen(false)} titleId={TITLE_ID} title="Google Drive">
+      <Modal open={open} onClose={onClose} titleId={TITLE_ID} title="Sincronizar com Google Drive">
         <div class={styles.modalBody}>
           {!isOnline && <p class={styles.offlineNotice}>{driveSyncCopy.offlineStatus}</p>}
-          <form class={styles.clientIdForm} onSubmit={handleSaveClientId}>
-            <label class="config-label" htmlFor="drive-client-id">
-              {driveSyncCopy.clientIdLabel}
-            </label>
-            <input
-              id="drive-client-id"
-              class="config-input"
-              type="text"
-              value={clientId}
-              placeholder={driveSyncCopy.clientIdPlaceholder}
-              onInput={(event) => setClientIdInput((event.target as HTMLInputElement).value)}
-            />
-            <div class={`config-status ${configured ? 'configured' : 'not-configured'}`}>
-              {configured ? driveSyncCopy.configuredStatus : driveSyncCopy.notConfiguredStatus}
-            </div>
-            <p class={styles.disclosureNote}>{driveSyncCopy.helpText}</p>
-            <div class={styles.actionRow}>
-              <Button type="submit" variant="default">
-                Salvar Client ID
-              </Button>
-              <Button variant="default" onClick={handleClearClientId}>
-                Limpar
-              </Button>
-            </div>
-          </form>
 
           <div class="drive-status">
             <span class="drive-status-icon" aria-hidden="true">
@@ -346,6 +336,7 @@ export function DriveSyncPanel({ reconcile, actionSignal }: DriveSyncPanelProps)
               <span class="drive-status-text">{driveSyncCopy.notConnectedStatus}</span>
             )}
           </div>
+
           {connected && (
             <p class={styles.disclosureNote}>
               {formatLastSynced(lastSyncedAt)
@@ -354,23 +345,34 @@ export function DriveSyncPanel({ reconcile, actionSignal }: DriveSyncPanelProps)
             </p>
           )}
 
+          {!connected && (
+            <p class={styles.disclosureNote}>
+              Configure sua conta Google Drive usando o botão de configurações para sincronizar
+              seus projetos.
+            </p>
+          )}
+
           <div class={styles.actionRow}>
             {connected ? (
-              <Button variant="danger" disabled={busy} onClick={handleDisconnect}>
-                {driveSyncCopy.disconnectButtonLabel}
-              </Button>
+              <>
+                <Button variant="danger" disabled={busy} onClick={handleDisconnect}>
+                  {driveSyncCopy.disconnectButtonLabel}
+                </Button>
+                <Button variant="default" disabled={busy} onClick={handleSync}>
+                  {driveSyncCopy.syncButtonLabel}
+                </Button>
+              </>
             ) : (
-              <Button variant="primary" disabled={busy || !configured} onClick={handleConnect}>
-                {driveSyncCopy.connectButtonLabel}
-              </Button>
+              <p class={styles.disclosureNote}>
+                Use o botão de configurações (⚙️) na barra lateral para conectar sua conta Google
+                Drive.
+              </p>
             )}
-            <Button variant="default" disabled={busy || !connected} onClick={handleSync}>
-              {driveSyncCopy.syncButtonLabel}
-            </Button>
           </div>
           <p class={styles.appVersion}>{`Versão ${appVersion}`}</p>
         </div>
       </Modal>
     </>
   )
-}
+  },
+)

@@ -57,13 +57,11 @@ describe('DriveSyncPanel', () => {
   it('connecting to Drive moves the panel from disconnected to connected sync state', async () => {
     render(
       <ToastProvider>
-        <DriveSyncPanel reconcile={identityReconcile()} />
+        <DriveSyncPanel reconcile={identityReconcile()} open={true} onClose={() => {}} />
       </ToastProvider>,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sincronização com Google Drive' }))
-
-    expect(screen.getByRole('button', { name: 'Conectar com Google' })).not.toBeNull()
+    expect(screen.queryByText('Configure sua conta Google Drive')).not.toBeNull()
     expect(screen.queryByText(/Conectado como/)).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: 'Conectar com Google' }))
@@ -73,29 +71,19 @@ describe('DriveSyncPanel', () => {
     expect(screen.queryByRole('button', { name: 'Conectar com Google' })).toBeNull()
   })
 
-  // Regression test: handleSaveClientId previously saved an empty/
-  // whitespace Client ID and showed a SUCCESS toast, leaving Connect
-  // silently disabled with no explanation. The prototype rejected it.
-  it('rejects an empty Client ID with a warning instead of saving it', async () => {
+  // Regression test: the cloud icon button should trigger opening the modal.
+  // With the split, clicking the cloud button doesn't directly open the modal
+  // anymore (modal is controlled by parent), so we test that it's rendered
+  // when the open prop is true.
+  it('renders the sync modal when open prop is true', () => {
     render(
       <ToastProvider>
-        <DriveSyncPanel reconcile={identityReconcile()} />
+        <DriveSyncPanel reconcile={identityReconcile()} open={true} onClose={() => {}} />
       </ToastProvider>,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sincronização com Google Drive' }))
-    const input = screen.getByLabelText('Client ID')
-    fireEvent.input(input, { target: { value: '   ' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Salvar Client ID' }))
-
-    await waitFor(() => expect(screen.getByText('Client ID não pode estar vazio')).not.toBeNull())
-
-    // The already-configured Client ID from beforeEach must be untouched —
-    // Connect stays enabled, not silently broken by an empty save.
-    expect(screen.getByRole('button', { name: 'Conectar com Google' })).not.toHaveProperty(
-      'disabled',
-      true,
-    )
+    expect(screen.getByRole('dialog')).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Sincronizar' })).not.toBeNull()
   })
 
   it('accepts a valid Client ID and shows a success toast', async () => {
@@ -123,11 +111,10 @@ describe('DriveSyncPanel', () => {
     )
     render(
       <ToastProvider>
-        <DriveSyncPanel reconcile={reconcile} />
+        <DriveSyncPanel reconcile={reconcile} open={true} onClose={() => {}} />
       </ToastProvider>,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sincronização com Google Drive' }))
     fireEvent.click(screen.getByRole('button', { name: 'Conectar com Google' }))
     await waitFor(() => expect(screen.queryByText('Conectado como Test User')).not.toBeNull())
 
@@ -155,11 +142,10 @@ describe('DriveSyncPanel', () => {
       )
       const { rerender } = render(
         <ToastProvider>
-          <DriveSyncPanel reconcile={reconcile} />
+          <DriveSyncPanel reconcile={reconcile} open={true} onClose={() => {}} />
         </ToastProvider>,
       )
 
-      fireEvent.click(screen.getByRole('button', { name: 'Sincronização com Google Drive' }))
       fireEvent.click(screen.getByRole('button', { name: 'Conectar com Google' }))
       // Wait for the connect-time sync (issue #92) to actually finish, not
       // just for "Conectado como" to appear — that text lands as soon as
@@ -170,28 +156,28 @@ describe('DriveSyncPanel', () => {
       reconcile.mockClear()
       rerender(
         <ToastProvider>
-          <DriveSyncPanel reconcile={reconcile} actionSignal={{ action: 'sync', nonce: 1 }} />
+          <DriveSyncPanel reconcile={reconcile} open={true} onClose={() => {}} actionSignal={{ action: 'sync', nonce: 1 }} />
         </ToastProvider>,
       )
 
       await waitFor(() => expect(reconcile).toHaveBeenCalledWith(null))
     })
 
-    it('opens the modal with an explanatory toast instead of syncing when not connected', async () => {
+    it('shows a warning toast instead of syncing when not connected', async () => {
       const reconcile = vi.fn(
         (remote: ProjectsSnapshot | null): ProjectsSnapshot => remote ?? { projects: {} },
       )
       const { rerender } = render(
         <ToastProvider>
-          <DriveSyncPanel reconcile={reconcile} />
+          <DriveSyncPanel reconcile={reconcile} open={true} onClose={() => {}} />
         </ToastProvider>,
       )
 
-      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(screen.queryByRole('dialog')).not.toBeNull()
 
       rerender(
         <ToastProvider>
-          <DriveSyncPanel reconcile={reconcile} actionSignal={{ action: 'sync', nonce: 1 }} />
+          <DriveSyncPanel reconcile={reconcile} open={true} onClose={() => {}} actionSignal={{ action: 'sync', nonce: 1 }} />
         </ToastProvider>,
       )
 
@@ -211,11 +197,10 @@ describe('DriveSyncPanel', () => {
       )
       const { rerender } = render(
         <ToastProvider>
-          <DriveSyncPanel reconcile={reconcile} />
+          <DriveSyncPanel reconcile={reconcile} open={true} onClose={() => {}} />
         </ToastProvider>,
       )
 
-      fireEvent.click(screen.getByRole('button', { name: 'Sincronização com Google Drive' }))
       fireEvent.click(screen.getByRole('button', { name: 'Conectar com Google' }))
       // See the previous test's comment: wait for the connect-time sync to
       // actually finish before clearing, not just for the "Conectado como"
@@ -225,12 +210,12 @@ describe('DriveSyncPanel', () => {
       reconcile.mockClear()
       rerender(
         <ToastProvider>
-          <DriveSyncPanel reconcile={reconcile} actionSignal={{ action: 'sync', nonce: 1 }} />
+          <DriveSyncPanel reconcile={reconcile} open={true} onClose={() => {}} actionSignal={{ action: 'sync', nonce: 1 }} />
         </ToastProvider>,
       )
       rerender(
         <ToastProvider>
-          <DriveSyncPanel reconcile={reconcile} actionSignal={{ action: 'sync', nonce: 2 }} />
+          <DriveSyncPanel reconcile={reconcile} open={true} onClose={() => {}} actionSignal={{ action: 'sync', nonce: 2 }} />
         </ToastProvider>,
       )
 
@@ -278,11 +263,10 @@ describe('DriveSyncPanel', () => {
 
       const { rerender } = render(
         <ToastProvider>
-          <DriveSyncPanel reconcile={reconcile} />
+          <DriveSyncPanel reconcile={reconcile} open={true} onClose={() => {}} />
         </ToastProvider>,
       )
 
-      fireEvent.click(screen.getByRole('button', { name: 'Sincronização com Google Drive' }))
       fireEvent.click(screen.getByRole('button', { name: 'Conectar com Google' }))
 
       // connect() itself has resolved (status is 'connected') but its own
@@ -295,7 +279,7 @@ describe('DriveSyncPanel', () => {
 
       rerender(
         <ToastProvider>
-          <DriveSyncPanel reconcile={reconcile} actionSignal={{ action: 'sync', nonce: 1 }} />
+          <DriveSyncPanel reconcile={reconcile} open={true} onClose={() => {}} actionSignal={{ action: 'sync', nonce: 1 }} />
         </ToastProvider>,
       )
 
@@ -316,11 +300,10 @@ describe('DriveSyncPanel', () => {
     try {
       render(
         <ToastProvider>
-          <DriveSyncPanel reconcile={identityReconcile()} />
+          <DriveSyncPanel reconcile={identityReconcile()} open={true} onClose={() => {}} />
         </ToastProvider>,
       )
 
-      fireEvent.click(screen.getByRole('button', { name: 'Sincronização com Google Drive' }))
       fireEvent.click(screen.getByRole('button', { name: 'Conectar com Google' }))
       await vi.waitFor(() => expect(screen.queryByText(/Última sincronização/)).not.toBeNull())
 

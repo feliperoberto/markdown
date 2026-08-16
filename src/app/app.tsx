@@ -1,5 +1,5 @@
 import type { JSX } from 'preact'
-import { useState } from 'preact/hooks'
+import { useRef, useState } from 'preact/hooks'
 import { EditorFeature, FontSizeButton, useEditorFontSize } from '@/features/editor'
 import { ProjectsSidebar, useProjects } from '@/features/projects'
 import {
@@ -13,7 +13,7 @@ import {
   exportBatchFileName,
 } from '@/features/import-export'
 import type { BatchSelectionEntry } from '@/features/import-export'
-import { DriveSyncPanel } from '@/features/drive-sync'
+import { DriveSyncPanel, DriveConfigPanel, type DriveSyncPanelRef } from '@/features/drive-sync'
 import { PwaInstallPrompt } from '@/features/pwa-install'
 import { PwaUpdatePrompt } from '@/features/pwa-update'
 import { ThemeToggle } from '@/features/theme'
@@ -66,24 +66,45 @@ export function App(): JSX.Element {
     ReadonlyArray<{ projectName: string; fileName: string }>
   >([])
 
-  // "Fire an event" signal for DriveSyncPanel's two entry points that live
-  // outside that component: the sidebar's "⚙️ Config" footer button
-  // (matching the prototype's separate gear icon) and the Ctrl+S/Cmd+S
-  // shortcut (useSaveShortcut, wired below) requesting a sync. Bumped
-  // instead of calling anything on DriveSyncPanel directly, since composing
-  // editor + drive-sync behavior belongs here in src/app/, not in either
-  // feature (see CONTRIBUTING.md's "Feature taxonomy"). Starts `undefined`
-  // — DriveSyncPanel treats any defined value as a request, so starting
-  // defined would fire on mount — and `nonce` (not just a changed `action`)
-  // is what actually re-triggers its effect, so two same-action requests in
-  // a row are each observed, not just the first.
-  const [driveActionSignal, setDriveActionSignal] = useState<
-    { action: 'open' | 'sync'; nonce: number } | undefined
+  // Ref to access DriveSyncPanel's connection status for DriveConfigPanel
+  const driveSyncPanelRef = useRef<DriveSyncPanelRef>(null)
+
+  // Modal state for Drive sync and config panels. Each panel manages its
+  // own modal open/close; app.tsx coordinates which is visible.
+  const [syncModalOpen, setSyncModalOpen] = useState(false)
+  const [configModalOpen, setConfigModalOpen] = useState(false)
+
+  // Cached status from DriveSyncPanel to pass to DriveConfigPanel
+  const [driveStatus, setDriveStatus] = useState<{
+    connected: boolean
+    userName: string | null
+    lastSyncedAt: number | null
+  }>({ connected: false, userName: null, lastSyncedAt: null })
+
+  // "Fire an event" signal for DriveSyncPanel from the Ctrl+S/Cmd+S
+  // shortcut (useSaveShortcut, wired below). Bumped instead of calling
+  // anything on DriveSyncPanel directly, since composing editor +
+  // drive-sync behavior belongs here in src/app/, not in either feature
+  // (see CONTRIBUTING.md's "Feature taxonomy"). Starts `undefined` —
+  // DriveSyncPanel treats any defined value as a request, so starting
+  // defined would fire on mount — and `nonce` (not just `action`) is what
+  // actually triggers the effect, so two same requests in a row are each
+  // observed.
+  const [driveSyncSignal, setDriveSyncSignal] = useState<
+    { action: 'sync'; nonce: number } | undefined
   >(undefined)
-  const requestDriveConfigOpen = () =>
-    setDriveActionSignal((prev) => ({ action: 'open', nonce: (prev?.nonce ?? 0) + 1 }))
+
+  const requestDriveConfigOpen = () => {
+    // Update cached status before opening config modal
+    const status = driveSyncPanelRef.current?.getStatus()
+    if (status) {
+      setDriveStatus(status)
+    }
+    setConfigModalOpen(true)
+  }
+
   const requestDriveSync = () =>
-    setDriveActionSignal((prev) => ({ action: 'sync', nonce: (prev?.nonce ?? 0) + 1 }))
+    setDriveSyncSignal((prev) => ({ action: 'sync', nonce: (prev?.nonce ?? 0) + 1 }))
   useSaveShortcut(requestDriveSync)
 
   // Sidebar drawer visibility. Starts `false` (visible) matching the
@@ -308,11 +329,22 @@ export function App(): JSX.Element {
           </div>
           <div className="header-right">
             <DriveSyncPanel
+              ref={driveSyncPanelRef}
               reconcile={(remote) => {
                 const result = reconcileWithRemote(remote?.projects ?? null, remote?.tombstones)
                 return { projects: result.projects, tombstones: result.tombstones }
               }}
-              actionSignal={driveActionSignal}
+              actionSignal={driveSyncSignal}
+              open={syncModalOpen}
+              onClose={() => setSyncModalOpen(false)}
+              onClickCloudButton={() => setSyncModalOpen(true)}
+            />
+            <DriveConfigPanel
+              open={configModalOpen}
+              onClose={() => setConfigModalOpen(false)}
+              connectionStatus={driveStatus.connected ? 'connected' : 'disconnected'}
+              userName={driveStatus.userName}
+              lastSyncedAt={driveStatus.lastSyncedAt}
             />
             <FontSizeButton onCycle={cycleFontSize} />
             <ThemeToggle />
