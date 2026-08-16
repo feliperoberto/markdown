@@ -4,24 +4,17 @@ import { ToastProvider } from '@/components'
 import { DriveSyncPanel } from './DriveSyncPanel'
 import type { DriveSyncPanelProps } from './DriveSyncPanel'
 
-// DriveSyncPanel is purely presentational (issue #110): all connection/
-// sync state and the Connect/Disconnect/save-Client-ID actions live in
-// `useDriveSync` (see useDriveSync.test.ts) and `DriveConfigPanel`
-// (DriveConfigPanel.test.tsx). This suite covers only what the panel
-// itself owns: rendering from props, wiring the Sync button to the `sync`
-// prop, and the Ctrl+S/Cmd+S `actionSignal` effect.
+// DriveSyncPanel is a header icon + keyboard shortcut handler (issue #110).
+// This suite covers: rendering the cloud icon, handling the Ctrl+S/Cmd+S
+// `actionSignal` effect, and wiring the `onClickCloudButton` callback.
+// All other connection/sync state and actions live in `useDriveSync`
+// (see useDriveSync.test.ts) and `DriveConfigPanel` (DriveConfigPanel.test.tsx).
 function baseProps(overrides: Partial<DriveSyncPanelProps> = {}): DriveSyncPanelProps {
   return {
     connected: false,
-    userName: null,
-    busy: false,
     isOnline: true,
-    lastSyncedAt: null,
     configured: true,
     sync: vi.fn().mockResolvedValue(undefined),
-    disconnect: vi.fn(),
-    open: true,
-    onClose: vi.fn(),
     ...overrides,
   }
 }
@@ -29,49 +22,6 @@ function baseProps(overrides: Partial<DriveSyncPanelProps> = {}): DriveSyncPanel
 describe('DriveSyncPanel', () => {
   afterEach(() => {
     cleanup()
-  })
-
-  it('shows disconnected guidance when not connected', () => {
-    render(
-      <ToastProvider>
-        <DriveSyncPanel {...baseProps()} />
-      </ToastProvider>,
-    )
-
-    expect(screen.getByRole('dialog')).not.toBeNull()
-    expect(screen.queryByText(/Conectado como/)).toBeNull()
-    expect(
-      screen.getByText(
-        'Use o botão de configurações (⚙️) na barra lateral para conectar sua conta Google Drive.',
-      ),
-    ).not.toBeNull()
-    expect(screen.queryByRole('button', { name: 'Sincronizar' })).toBeNull()
-  })
-
-  it('shows connected status and a working Sincronizar button', async () => {
-    const sync = vi.fn().mockResolvedValue(undefined)
-    render(
-      <ToastProvider>
-        <DriveSyncPanel {...baseProps({ connected: true, userName: 'Test User', sync })} />
-      </ToastProvider>,
-    )
-
-    expect(screen.getByText('Conectado como Test User')).not.toBeNull()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Sincronizar' }))
-    await waitFor(() => expect(sync).toHaveBeenCalledTimes(1))
-  })
-
-  it('the Desconectar button calls the disconnect prop', () => {
-    const disconnect = vi.fn()
-    render(
-      <ToastProvider>
-        <DriveSyncPanel {...baseProps({ connected: true, userName: 'Test User', disconnect })} />
-      </ToastProvider>,
-    )
-
-    fireEvent.click(screen.getByRole('button', { name: 'Desconectar' }))
-    expect(disconnect).toHaveBeenCalledTimes(1)
   })
 
   it('clicking the header cloud button calls onClickCloudButton', () => {

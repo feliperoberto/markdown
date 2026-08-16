@@ -78,18 +78,10 @@ export function App(): JSX.Element {
     },
   })
 
-  // Modal state for the Drive sync and config panels. Mutually exclusive:
-  // opening one closes the other, so the cloud button and the sidebar gear
-  // button never end up with two overlapping full-screen modals at once.
-  const [syncModalOpen, setSyncModalOpen] = useState(false)
+  // Modal state for the Drive config panel.
   const [configModalOpen, setConfigModalOpen] = useState(false)
 
-  const openSyncModal = () => {
-    setConfigModalOpen(false)
-    setSyncModalOpen(true)
-  }
   const openConfigModal = () => {
-    setSyncModalOpen(false)
     setConfigModalOpen(true)
   }
 
@@ -109,6 +101,15 @@ export function App(): JSX.Element {
   const requestDriveSync = () =>
     setDriveSyncSignal((prev) => ({ action: 'sync', nonce: (prev?.nonce ?? 0) + 1 }))
   useSaveShortcut(requestDriveSync)
+
+  // Cloud icon behavior: if not configured, open config panel; if configured, sync directly.
+  const handleCloudButtonClick = () => {
+    if (!driveSync.configured) {
+      openConfigModal()
+    } else {
+      void driveSync.sync()
+    }
+  }
 
   // Sidebar drawer visibility. Starts `false` (visible) matching the
   // prototype's static markup, which never has a `hidden` class on
@@ -333,17 +334,11 @@ export function App(): JSX.Element {
           <div className="header-right">
             <DriveSyncPanel
               connected={driveSync.connected}
-              userName={driveSync.userName}
-              busy={driveSync.busy}
-              isOnline={driveSync.isOnline}
-              lastSyncedAt={driveSync.lastSyncedAt}
               configured={driveSync.configured}
+              isOnline={driveSync.isOnline}
               sync={driveSync.sync}
-              disconnect={driveSync.disconnect}
               actionSignal={driveSyncSignal}
-              open={syncModalOpen}
-              onClose={() => setSyncModalOpen(false)}
-              onClickCloudButton={openSyncModal}
+              onClickCloudButton={handleCloudButtonClick}
               onRequestConfig={openConfigModal}
             />
             <DriveConfigPanel
