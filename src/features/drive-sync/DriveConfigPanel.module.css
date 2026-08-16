@@ -29,3 +29,16 @@
   gap: 0.75rem;
   flex-wrap: wrap;
 }
+
+/**
+ * Build identity (ADR-0003), so a bug report can cite exactly what's
+ * deployed. Set apart with its own top border rather than folded into
+ * .disclosureNote — this modal's version line is unrelated diagnostic
+ * info, not Drive disclosure copy.
+ */
+.appVersion {
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}

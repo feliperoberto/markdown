@@ -17,6 +17,8 @@ export type {
   GoogleTokenResponse,
 } from './google-identity'
 export { DriveSyncPanel } from './DriveSyncPanel'
-export type { DriveSyncPanelProps, DriveSyncPanelRef } from './DriveSyncPanel'
+export type { DriveSyncPanelProps } from './DriveSyncPanel'
 export { DriveConfigPanel } from './DriveConfigPanel'
 export type { DriveConfigPanelProps } from './DriveConfigPanel'
+export { useDriveSync } from './useDriveSync'
+export type { UseDriveSyncOptions, UseDriveSyncResult } from './useDriveSync'

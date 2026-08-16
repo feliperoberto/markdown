@@ -1,75 +1,80 @@
 import type { JSX } from 'preact'
 import { useState } from 'preact/hooks'
-import { Button, Modal, useToast } from '@/components'
-import {
-  clearStoredClientId,
-  getStoredClientId,
-  isClientIdConfigured,
-  setStoredClientId,
-} from './config'
+import { Button, Modal } from '@/components'
 import { driveSyncCopy } from './copy'
+import { formatLastSynced } from './formatLastSynced'
+import { DriveConnectionStatus } from './DriveConnectionStatus'
+import { appVersion } from '@/lib/app-version'
 import styles from './DriveConfigPanel.module.css'
 
 export interface DriveConfigPanelProps {
   open: boolean
   onClose: () => void
-  connectionStatus: 'connected' | 'disconnected'
+  connected: boolean
   userName: string | null
+  busy: boolean
+  isOnline: boolean
   lastSyncedAt: number | null
+  configured: boolean
+  /** The persisted Client ID, used to seed the form's initial value. */
+  storedClientId: string
+  connect: () => Promise<void>
+  disconnect: () => void
+  /** Validates, persists, and reflects a new Client ID; returns whether it was accepted. */
+  saveClientId: (value: string) => boolean
+  clearClientId: () => void
 }
 
 const TITLE_ID = 'drive-config-panel-title'
 
+/**
+ * Sidebar gear-icon entry point + panel for Google Drive configuration
+ * (issue #110: split out of the combined config+sync panel — this half
+ * owns Client ID setup and the Connect/Disconnect action, never the manual
+ * "Sincronizar" trigger, which lives in `DriveSyncPanel`). All
+ * connection/sync state is owned by `useDriveSync` in `src/app/app.tsx`
+ * and passed down as props, so this panel and `DriveSyncPanel` always
+ * agree on the current connection status instead of each holding its own
+ * possibly-stale copy.
+ */
 export function DriveConfigPanel({
   open,
   onClose,
-  connectionStatus,
+  connected,
   userName,
+  busy,
+  isOnline,
   lastSyncedAt,
+  configured,
+  storedClientId,
+  connect,
+  disconnect,
+  saveClientId,
+  clearClientId,
 }: DriveConfigPanelProps): JSX.Element {
-  const showToast = useToast()
-  const [clientId, setClientIdInput] = useState(() => getStoredClientId())
-  const [storedClientId, setStoredClientIdState] = useState(() => getStoredClientId())
-  const configured = isClientIdConfigured(storedClientId)
+  // Local, unsaved form value — deliberately separate from `storedClientId`
+  // (the persisted value `configured` is derived from). Seeded once from
+  // the persisted value at mount; typing here doesn't need to react to
+  // external changes to storage.
+  const [clientId, setClientIdInput] = useState(storedClientId)
 
   function handleSaveClientId(event: Event) {
     event.preventDefault()
-    const trimmed = clientId.trim()
-    if (!trimmed) {
-      showToast(driveSyncCopy.clientIdEmptyWarning, 'warning')
-      return
+    if (saveClientId(clientId)) {
+      setClientIdInput(clientId.trim())
     }
-    setStoredClientId(trimmed)
-    setStoredClientIdState(trimmed)
-    showToast(driveSyncCopy.clientIdSavedToast, 'success')
   }
 
   function handleClearClientId() {
-    clearStoredClientId()
-    setClientIdInput(getStoredClientId())
-    setStoredClientIdState(getStoredClientId())
-    showToast(driveSyncCopy.clientIdClearedToast, 'success')
-  }
-
-  const formatLastSynced = (timestamp: number | null) => {
-    if (!timestamp) return null
-    const date = new Date(timestamp)
-    const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
-    const diffMins = Math.floor(diffMs / 60000)
-    const diffHours = Math.floor(diffMs / 3600000)
-    const diffDays = Math.floor(diffMs / 86400000)
-
-    if (diffMins < 1) return 'agora'
-    if (diffMins < 60) return `${diffMins}m atrás`
-    if (diffHours < 24) return `${diffHours}h atrás`
-    if (diffDays < 7) return `${diffDays}d atrás`
-    return date.toLocaleDateString('pt-BR')
+    clearClientId()
+    setClientIdInput('')
   }
 
   return (
     <Modal open={open} onClose={onClose} titleId={TITLE_ID} title="Configurações do Google Drive">
       <div class={styles.modalBody}>
+        {!isOnline && <p class={styles.disclosureNote}>{driveSyncCopy.offlineStatus}</p>}
+
         <form class={styles.clientIdForm} onSubmit={handleSaveClientId}>
           <label class="config-label" htmlFor="drive-client-id">
             {driveSyncCopy.clientIdLabel}
@@ -96,26 +101,28 @@ export function DriveConfigPanel({
           </div>
         </form>
 
-        <div class="drive-status">
-          <span class="drive-status-icon" aria-hidden="true">
-            {userName ? '✅' : '☁️'}
-          </span>
-          {userName ? (
-            <div class="drive-status-text">
-              <span class="drive-status-name">{`Conectado como ${userName}`}</span>
-            </div>
-          ) : (
-            <span class="drive-status-text">{driveSyncCopy.notConnectedStatus}</span>
-          )}
-        </div>
+        <DriveConnectionStatus userName={userName} />
 
-        {connectionStatus === 'connected' && lastSyncedAt && (
+        {connected && (
           <p class={styles.disclosureNote}>
             {formatLastSynced(lastSyncedAt)
               ? `🕐 Última sincronização: ${formatLastSynced(lastSyncedAt)}`
               : driveSyncCopy.neverSyncedStatus}
           </p>
         )}
+
+        <div class={styles.actionRow}>
+          {connected ? (
+            <Button variant="danger" disabled={busy} onClick={disconnect}>
+              {driveSyncCopy.disconnectButtonLabel}
+            </Button>
+          ) : (
+            <Button variant="primary" disabled={busy || !configured} onClick={() => void connect()}>
+              {driveSyncCopy.connectButtonLabel}
+            </Button>
+          )}
+        </div>
+        <p class={styles.appVersion}>{`Versão ${appVersion}`}</p>
       </div>
     </Modal>
   )

@@ -47,7 +47,7 @@ test.describe('offline golden path', () => {
     // cloud icon, plus the in-panel notice once opened.
     await expect(page.getByRole('status', { name: 'Offline' })).toBeVisible()
 
-    await page.getByRole('button', { name: 'Sincronização com Google Drive' }).click()
+    await page.getByRole('button', { name: 'Sincronizar com Google Drive' }).click()
     await expect(
       page.getByText(
         'Você está offline. A edição local continua funcionando — a sincronização com o Drive será retomada automaticamente quando a conexão voltar.',

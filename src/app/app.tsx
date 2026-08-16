@@ -1,5 +1,5 @@
 import type { JSX } from 'preact'
-import { useRef, useState } from 'preact/hooks'
+import { useState } from 'preact/hooks'
 import { EditorFeature, FontSizeButton, useEditorFontSize } from '@/features/editor'
 import { ProjectsSidebar, useProjects } from '@/features/projects'
 import {
@@ -13,7 +13,7 @@ import {
   exportBatchFileName,
 } from '@/features/import-export'
 import type { BatchSelectionEntry } from '@/features/import-export'
-import { DriveSyncPanel, DriveConfigPanel, type DriveSyncPanelRef } from '@/features/drive-sync'
+import { DriveSyncPanel, DriveConfigPanel, useDriveSync } from '@/features/drive-sync'
 import { PwaInstallPrompt } from '@/features/pwa-install'
 import { PwaUpdatePrompt } from '@/features/pwa-update'
 import { ThemeToggle } from '@/features/theme'
@@ -66,20 +66,32 @@ export function App(): JSX.Element {
     ReadonlyArray<{ projectName: string; fileName: string }>
   >([])
 
-  // Ref to access DriveSyncPanel's connection status for DriveConfigPanel
-  const driveSyncPanelRef = useRef<DriveSyncPanelRef>(null)
+  // Single source of truth for all Drive connection/sync/config state
+  // (issue #110) — shared between DriveSyncPanel (cloud header button,
+  // sync-only) and DriveConfigPanel (sidebar gear button, config-only) so
+  // the two panels can never disagree about whether Drive is connected or
+  // configured.
+  const driveSync = useDriveSync({
+    reconcile: (remote) => {
+      const result = reconcileWithRemote(remote?.projects ?? null, remote?.tombstones)
+      return { projects: result.projects, tombstones: result.tombstones }
+    },
+  })
 
-  // Modal state for Drive sync and config panels. Each panel manages its
-  // own modal open/close; app.tsx coordinates which is visible.
+  // Modal state for the Drive sync and config panels. Mutually exclusive:
+  // opening one closes the other, so the cloud button and the sidebar gear
+  // button never end up with two overlapping full-screen modals at once.
   const [syncModalOpen, setSyncModalOpen] = useState(false)
   const [configModalOpen, setConfigModalOpen] = useState(false)
 
-  // Cached status from DriveSyncPanel to pass to DriveConfigPanel
-  const [driveStatus, setDriveStatus] = useState<{
-    connected: boolean
-    userName: string | null
-    lastSyncedAt: number | null
-  }>({ connected: false, userName: null, lastSyncedAt: null })
+  const openSyncModal = () => {
+    setConfigModalOpen(false)
+    setSyncModalOpen(true)
+  }
+  const openConfigModal = () => {
+    setSyncModalOpen(false)
+    setConfigModalOpen(true)
+  }
 
   // "Fire an event" signal for DriveSyncPanel from the Ctrl+S/Cmd+S
   // shortcut (useSaveShortcut, wired below). Bumped instead of calling
@@ -93,15 +105,6 @@ export function App(): JSX.Element {
   const [driveSyncSignal, setDriveSyncSignal] = useState<
     { action: 'sync'; nonce: number } | undefined
   >(undefined)
-
-  const requestDriveConfigOpen = () => {
-    // Update cached status before opening config modal
-    const status = driveSyncPanelRef.current?.getStatus()
-    if (status) {
-      setDriveStatus(status)
-    }
-    setConfigModalOpen(true)
-  }
 
   const requestDriveSync = () =>
     setDriveSyncSignal((prev) => ({ action: 'sync', nonce: (prev?.nonce ?? 0) + 1 }))
@@ -329,23 +332,34 @@ export function App(): JSX.Element {
           </div>
           <div className="header-right">
             <DriveSyncPanel
-              ref={driveSyncPanelRef}
-              reconcile={(remote) => {
-                const result = reconcileWithRemote(remote?.projects ?? null, remote?.tombstones)
-                return { projects: result.projects, tombstones: result.tombstones }
-              }}
+              connected={driveSync.connected}
+              userName={driveSync.userName}
+              busy={driveSync.busy}
+              isOnline={driveSync.isOnline}
+              lastSyncedAt={driveSync.lastSyncedAt}
+              configured={driveSync.configured}
+              sync={driveSync.sync}
+              disconnect={driveSync.disconnect}
               actionSignal={driveSyncSignal}
               open={syncModalOpen}
               onClose={() => setSyncModalOpen(false)}
-              onClickCloudButton={() => setSyncModalOpen(true)}
-              onRequestConfig={requestDriveConfigOpen}
+              onClickCloudButton={openSyncModal}
+              onRequestConfig={openConfigModal}
             />
             <DriveConfigPanel
               open={configModalOpen}
               onClose={() => setConfigModalOpen(false)}
-              connectionStatus={driveStatus.connected ? 'connected' : 'disconnected'}
-              userName={driveStatus.userName}
-              lastSyncedAt={driveStatus.lastSyncedAt}
+              connected={driveSync.connected}
+              userName={driveSync.userName}
+              busy={driveSync.busy}
+              isOnline={driveSync.isOnline}
+              lastSyncedAt={driveSync.lastSyncedAt}
+              configured={driveSync.configured}
+              storedClientId={driveSync.storedClientId}
+              connect={driveSync.connect}
+              disconnect={driveSync.disconnect}
+              saveClientId={driveSync.saveClientId}
+              clearClientId={driveSync.clearClientId}
             />
             <FontSizeButton onCycle={cycleFontSize} />
             <ThemeToggle />
@@ -370,7 +384,7 @@ export function App(): JSX.Element {
             onExportProject={handleExportProjectFromMenu}
             onUploadFiles={handleUploadFilesToProject}
             onImportZip={handleImportZip}
-            onOpenConfig={requestDriveConfigOpen}
+            onOpenConfig={openConfigModal}
             onMoveFile={moveFile}
             onMoveProject={moveProject}
             archivedProjects={archivedProjects}
