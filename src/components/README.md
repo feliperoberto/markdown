@@ -87,8 +87,9 @@ and `IconButton` (icon-only, e.g. toolbar/sidebar).
   accessible names) — `title` may additionally be set for the mouse tooltip
   but never replaces `aria-label`. Mirrors current `fontSizeBtn`, `driveBtn`,
   `themeToggle` markup.
-- Buttons that open a modal: `aria-haspopup="dialog"` (see `driveBtn`,
-  `configBtn`).
+- Buttons that open a modal: `aria-haspopup="dialog"` (see `configBtn`).
+  `driveBtn` (the header cloud icon) does NOT set this — it conditionally
+  syncs directly instead of always opening a modal (issue #110).
 - Toggle buttons (e.g. hamburger menu): `aria-expanded` reflecting open state,
   `aria-controls` pointing at the controlled region id.
 - `danger` variant: no extra ARIA role change — semantics come from the

@@ -20,7 +20,7 @@ test.describe('Ctrl+S/Cmd+S sync shortcut', () => {
     // locator resolves instantly whether or not the element will ever
     // exist, since the Modal doesn't render it into the DOM at all until
     // opened, so it can't be used to wait for app readiness.
-    await expect(page.getByRole('button', { name: 'Sincronização com Google Drive' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Sincronizar com Google Drive' })).toBeVisible()
 
     const clientIdInput = page.locator('#drive-client-id')
     await expect(clientIdInput).toBeHidden()

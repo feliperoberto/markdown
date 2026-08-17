@@ -44,10 +44,15 @@ test.describe('offline golden path', () => {
     await expect(page.locator('#preview').locator('h1')).toHaveText('Still editable offline')
 
     // Drive sync surfaces the offline state: the toolbar badge next to the
-    // cloud icon, plus the in-panel notice once opened.
+    // cloud icon, plus an offline notice in whichever panel the cloud icon
+    // opens. Drive is never configured in this fixture, so clicking it
+    // opens the *config* modal (not a sync attempt) — assert on that
+    // modal's title explicitly so this isn't relying on both panels
+    // coincidentally sharing the same offline copy.
     await expect(page.getByRole('status', { name: 'Offline' })).toBeVisible()
 
-    await page.getByRole('button', { name: 'Sincronização com Google Drive' }).click()
+    await page.getByRole('button', { name: 'Sincronizar com Google Drive' }).click()
+    await expect(page.getByRole('dialog', { name: 'Configurações do Google Drive' })).toBeVisible()
     await expect(
       page.getByText(
         'Você está offline. A edição local continua funcionando — a sincronização com o Drive será retomada automaticamente quando a conexão voltar.',
