@@ -41,6 +41,16 @@ export interface UseDriveSyncResult {
   lastSyncedAt: number | null
   /** Whether a real (non-empty, non-placeholder) Client ID is stored. */
   configured: boolean
+  /**
+   * True whenever an action that needs a working Drive connection
+   * (clicking the cloud icon, Ctrl+S/Cmd+S) should open the config modal
+   * instead of attempting to sync — i.e. `!configured || !connected`.
+   * Centralized here, rather than left for each caller to re-derive its
+   * own `!configured || !connected` check, so the cloud-icon click handler
+   * (`app.tsx`) and the Ctrl+S handler (`DriveSyncPanel`) can never
+   * silently disagree about when to sync vs. when to redirect to config.
+   */
+  needsConfig: boolean
   /** The persisted Client ID, for seeding the config form's initial value. */
   storedClientId: string
   connect: () => Promise<void>
@@ -278,6 +288,7 @@ export function useDriveSync({ reconcile }: UseDriveSyncOptions): UseDriveSyncRe
     isOnline,
     lastSyncedAt,
     configured,
+    needsConfig: !configured || !connected,
     storedClientId,
     connect,
     disconnect,

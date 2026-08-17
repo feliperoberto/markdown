@@ -26,13 +26,6 @@ export const driveSyncCopy = {
   disconnectButtonLabel: 'Desconectar',
   disconnectButtonDescription: 'Remove acesso desta sessão',
 
-  // One button, replacing the old "Sincronizar Agora" (blind push) /
-  // "Restaurar do Drive" (blind local-wins pull) pair: always reconciles
-  // both directions by per-file freshness, so neither side can silently
-  // overwrite the other's newer edits.
-  syncButtonLabel: 'Sincronizar',
-  syncButtonDescription:
-    'Baixa e envia alterações, mantendo sempre a versão mais recente de cada arquivo',
   syncCompleteToast: '☁️ Sincronizado',
 
   /** Ctrl+S/Cmd+S (`useSaveShortcut`) with Drive not connected/configured yet — explains why the modal just opened instead of syncing. */

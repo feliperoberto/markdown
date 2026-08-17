@@ -30,12 +30,12 @@ const TITLE_ID = 'drive-config-panel-title'
 /**
  * Sidebar gear-icon entry point + panel for Google Drive configuration
  * (issue #110: split out of the combined config+sync panel — this half
- * owns Client ID setup and the Connect/Disconnect action, never the manual
- * "Sincronizar" trigger, which lives in `DriveSyncPanel`). All
- * connection/sync state is owned by `useDriveSync` in `src/app/app.tsx`
- * and passed down as props, so this panel and `DriveSyncPanel` always
- * agree on the current connection status instead of each holding its own
- * possibly-stale copy.
+ * owns Client ID setup and the Connect/Disconnect action; the sync
+ * trigger itself is just the header cloud icon in `DriveSyncPanel`, which
+ * has no button of its own — see its doc comment). All connection/sync
+ * state is owned by `useDriveSync` in `src/app/app.tsx` and passed down as
+ * props, so this panel and `DriveSyncPanel` always agree on the current
+ * connection status instead of each holding its own possibly-stale copy.
  */
 export function DriveConfigPanel({
   open,

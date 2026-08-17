@@ -11,9 +11,8 @@ import type { DriveSyncPanelProps } from './DriveSyncPanel'
 // (see useDriveSync.test.ts) and `DriveConfigPanel` (DriveConfigPanel.test.tsx).
 function baseProps(overrides: Partial<DriveSyncPanelProps> = {}): DriveSyncPanelProps {
   return {
-    connected: false,
+    needsConfig: false,
     isOnline: true,
-    configured: true,
     sync: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   }
@@ -39,32 +38,33 @@ describe('DriveSyncPanel', () => {
   // Ctrl+S/Cmd+S (useSaveShortcut, wired in src/app/app.tsx) bumps
   // `actionSignal` (action: 'sync') instead of calling anything on this
   // component directly — this is the receiving end of that signal.
+  // `needsConfig` is a single derived value from `useDriveSync` (see its
+  // doc comment) covering both "not connected" and "connected but not
+  // configured" — the component itself no longer distinguishes them.
   describe('actionSignal: sync (Ctrl+S/Cmd+S)', () => {
-    it('calls sync() when bumped while connected and configured', async () => {
+    it('calls sync() when bumped while needsConfig is false', async () => {
       const sync = vi.fn().mockResolvedValue(undefined)
       const { rerender } = render(
         <ToastProvider>
-          <DriveSyncPanel {...baseProps({ connected: true, sync })} />
+          <DriveSyncPanel {...baseProps({ sync })} />
         </ToastProvider>,
       )
 
       rerender(
         <ToastProvider>
-          <DriveSyncPanel
-            {...baseProps({ connected: true, sync, actionSignal: { action: 'sync', nonce: 1 } })}
-          />
+          <DriveSyncPanel {...baseProps({ sync, actionSignal: { action: 'sync', nonce: 1 } })} />
         </ToastProvider>,
       )
 
       await waitFor(() => expect(sync).toHaveBeenCalledTimes(1))
     })
 
-    it('shows a warning toast and requests config instead of syncing when not connected', async () => {
+    it('shows a warning toast and requests config instead of syncing when needsConfig is true', async () => {
       const sync = vi.fn().mockResolvedValue(undefined)
       const onRequestConfig = vi.fn()
       const { rerender } = render(
         <ToastProvider>
-          <DriveSyncPanel {...baseProps({ connected: false, sync, onRequestConfig })} />
+          <DriveSyncPanel {...baseProps({ needsConfig: true, sync, onRequestConfig })} />
         </ToastProvider>,
       )
 
@@ -72,7 +72,7 @@ describe('DriveSyncPanel', () => {
         <ToastProvider>
           <DriveSyncPanel
             {...baseProps({
-              connected: false,
+              needsConfig: true,
               sync,
               onRequestConfig,
               actionSignal: { action: 'sync', nonce: 1 },
@@ -88,53 +88,20 @@ describe('DriveSyncPanel', () => {
       expect(sync).not.toHaveBeenCalled()
     })
 
-    it('shows a warning toast and requests config when connected but not configured', async () => {
-      const sync = vi.fn().mockResolvedValue(undefined)
-      const onRequestConfig = vi.fn()
-      const { rerender } = render(
-        <ToastProvider>
-          <DriveSyncPanel
-            {...baseProps({ connected: true, configured: false, sync, onRequestConfig })}
-          />
-        </ToastProvider>,
-      )
-
-      rerender(
-        <ToastProvider>
-          <DriveSyncPanel
-            {...baseProps({
-              connected: true,
-              configured: false,
-              sync,
-              onRequestConfig,
-              actionSignal: { action: 'sync', nonce: 1 },
-            })}
-          />
-        </ToastProvider>,
-      )
-
-      await waitFor(() => expect(onRequestConfig).toHaveBeenCalledTimes(1))
-      expect(sync).not.toHaveBeenCalled()
-    })
-
     // Two same-action requests in a row must each be observed — `nonce`
     // (not just `action` changing) is what actually triggers the effect.
     it('two separate nonces each call sync() once', async () => {
       const sync = vi.fn().mockResolvedValue(undefined)
       const { rerender } = render(
         <ToastProvider>
-          <DriveSyncPanel
-            {...baseProps({ connected: true, sync, actionSignal: { action: 'sync', nonce: 1 } })}
-          />
+          <DriveSyncPanel {...baseProps({ sync, actionSignal: { action: 'sync', nonce: 1 } })} />
         </ToastProvider>,
       )
       await waitFor(() => expect(sync).toHaveBeenCalledTimes(1))
 
       rerender(
         <ToastProvider>
-          <DriveSyncPanel
-            {...baseProps({ connected: true, sync, actionSignal: { action: 'sync', nonce: 2 } })}
-          />
+          <DriveSyncPanel {...baseProps({ sync, actionSignal: { action: 'sync', nonce: 2 } })} />
         </ToastProvider>,
       )
 

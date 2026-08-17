@@ -77,6 +77,45 @@ describe('useDriveSync', () => {
     expect(result.current.userName).toBe('Test User')
   })
 
+  // needsConfig is the single source of truth both the cloud-icon click
+  // handler (app.tsx) and the Ctrl+S handler (DriveSyncPanel) read from —
+  // this is a regression test for a bug where the click handler used to
+  // check only `configured`, missing the "configured but not connected"
+  // case that would otherwise attempt an unauthenticated sync.
+  describe('needsConfig', () => {
+    it('is true when no Client ID is stored at all', () => {
+      localStorage.removeItem('driveClientId')
+      const { result } = renderHook(() => useDriveSync({ reconcile: identityReconcile() }), {
+        wrapper,
+      })
+
+      expect(result.current.configured).toBe(false)
+      expect(result.current.connected).toBe(false)
+      expect(result.current.needsConfig).toBe(true)
+    })
+
+    it('is true when configured but not yet connected', () => {
+      const { result } = renderHook(() => useDriveSync({ reconcile: identityReconcile() }), {
+        wrapper,
+      })
+
+      expect(result.current.configured).toBe(true)
+      expect(result.current.connected).toBe(false)
+      expect(result.current.needsConfig).toBe(true)
+    })
+
+    it('is false once configured and connected', async () => {
+      const { result } = renderHook(() => useDriveSync({ reconcile: identityReconcile() }), {
+        wrapper,
+      })
+
+      await act(() => result.current.connect())
+      await waitFor(() => expect(result.current.connected).toBe(true))
+
+      expect(result.current.needsConfig).toBe(false)
+    })
+  })
+
   it('disconnect() clears connection and user', async () => {
     const { result } = renderHook(() => useDriveSync({ reconcile: identityReconcile() }), {
       wrapper,

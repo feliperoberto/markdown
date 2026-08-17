@@ -6,10 +6,9 @@ export interface DriveConnectionStatusProps {
 }
 
 /**
- * "Connected as X" / "not connected" status row — shared markup between
- * `DriveSyncPanel` and `DriveConfigPanel` (issue #110 split both out of a
- * single panel). Kept here instead of copy-pasted in each so a future
- * change to how connection status is displayed only has one place to edit.
+ * "Connected as X" / "not connected" status row, rendered by
+ * `DriveConfigPanel` (issue #110). Extracted out of `DriveConfigPanel.tsx`
+ * so the panel component stays focused on layout/actions.
  */
 export function DriveConnectionStatus({ userName }: DriveConnectionStatusProps): JSX.Element {
   return (

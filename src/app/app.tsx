@@ -102,9 +102,12 @@ export function App(): JSX.Element {
     setDriveSyncSignal((prev) => ({ action: 'sync', nonce: (prev?.nonce ?? 0) + 1 }))
   useSaveShortcut(requestDriveSync)
 
-  // Cloud icon behavior: if not configured, open config panel; if configured, sync directly.
+  // Cloud icon behavior: open the config panel if Drive isn't set up and
+  // connected yet (`needsConfig`), otherwise sync directly. Uses the same
+  // `needsConfig` value as DriveSyncPanel's Ctrl+S handler (see its doc
+  // comment on `useDriveSync`) so the two entry points can't diverge.
   const handleCloudButtonClick = () => {
-    if (!driveSync.configured) {
+    if (driveSync.needsConfig) {
       openConfigModal()
     } else {
       void driveSync.sync()
@@ -333,8 +336,7 @@ export function App(): JSX.Element {
           </div>
           <div className="header-right">
             <DriveSyncPanel
-              connected={driveSync.connected}
-              configured={driveSync.configured}
+              needsConfig={driveSync.needsConfig}
               isOnline={driveSync.isOnline}
               sync={driveSync.sync}
               actionSignal={driveSyncSignal}

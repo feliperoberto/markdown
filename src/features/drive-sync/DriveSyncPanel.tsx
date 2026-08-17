@@ -5,8 +5,13 @@ import { driveSyncCopy } from './copy'
 import styles from './DriveSyncPanel.module.css'
 
 export interface DriveSyncPanelProps {
-  connected: boolean
-  configured: boolean
+  /**
+   * `true` when the cloud icon / Ctrl+S should redirect to the config
+   * modal instead of syncing — see `useDriveSync`'s `needsConfig` doc
+   * comment for why this is a single derived value rather than separate
+   * `configured`/`connected` props re-checked here.
+   */
+  needsConfig: boolean
   isOnline: boolean
   sync: () => Promise<void>
   /**
@@ -39,8 +44,7 @@ export interface DriveSyncPanelProps {
  * the Ctrl+S/Cmd+S signal handler.
  */
 export function DriveSyncPanel({
-  connected,
-  configured,
+  needsConfig,
   isOnline,
   sync,
   actionSignal,
@@ -51,15 +55,15 @@ export function DriveSyncPanel({
 
   // "Fire an event" signal from src/app/ for the Ctrl+S/Cmd+S shortcut —
   // see actionSignal's doc comment. `nonce` alone drives the deps array,
-  // so two same-action requests in a row are each observed. `configured`/
-  // `connected`/`sync`/`onRequestConfig` are deliberately NOT tracked as
-  // dependencies and are read fresh via closure from whichever render last
-  // changed `nonce` — if they were tracked, this would re-fire (and
-  // re-sync) merely because e.g. `connected` flipped from a manual Connect
-  // click, with no new keypress.
+  // so two same-action requests in a row are each observed. `needsConfig`/
+  // `sync`/`onRequestConfig` are deliberately NOT tracked as dependencies
+  // and are read fresh via closure from whichever render last changed
+  // `nonce` — if they were tracked, this would re-fire (and re-sync)
+  // merely because e.g. `needsConfig` flipped from a manual Connect click,
+  // with no new keypress.
   useEffect(() => {
     if (actionSignal === undefined) return
-    if (!configured || !connected) {
+    if (needsConfig) {
       // Not configured/connected — guide the user to the config panel so
       // they can set up Drive first. Show a warning toast and open the
       // config modal.
