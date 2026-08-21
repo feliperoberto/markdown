@@ -67,8 +67,16 @@ and `IconButton` (icon-only, e.g. toolbar/sidebar).
   touch-first app — SWE may alias `:hover` to the existing `:active` rule).
 - **Focus-visible** — `outline: 2px solid var(--accent); outline-offset: 2px`
   (matches `.btn-icon:focus-visible` / `.sidebar-footer-btn:focus-visible`).
-- **Active/pressed** — `background-color: rgba(255,255,255,0.08)` (icon), or
-  `rgba(255,255,255,0.06)` + `border-color: var(--accent)` (labeled).
+- **Active/pressed** — base overlay `rgba(255,255,255,0.06)` (labeled) /
+  `rgba(255,255,255,0.08)` (icon) on every pointer type. On fine-pointer
+  (mouse) devices only (`@media (hover: hover)`), labeled buttons instead
+  preview their final selected look immediately (`default` jumps to
+  `primary`'s colors; `primary`/`danger` keep their own) plus
+  `transform: scale(0.98)`; icon buttons get the same scale without a
+  color change (no variant colors to preview). Gated to fine pointers
+  because WebKit/iOS can leave `:active` visually "stuck" after a tap
+  until the next touch elsewhere — a color-inverted button stuck that way
+  reads far worse than the plain overlay touch devices keep instead.
 - **Disabled** — `opacity: 0.4; cursor: not-allowed;` no pointer events
   (matches `.btn-download:disabled`, `.btn-drive-action:disabled`).
 

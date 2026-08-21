@@ -15,7 +15,8 @@
   transition: var(--transition);
 }
 
-.button:hover {
+.button:hover,
+.button:active {
   background-color: rgba(255, 255, 255, 0.06);
 }
 
@@ -35,21 +36,10 @@
   border-color: rgba(255, 255, 255, 0.12);
 }
 
-.default:active {
-  background-color: var(--accent);
-  border-color: var(--accent);
-  color: var(--ground);
-  transform: scale(0.98);
-}
-
 .primary {
   background-color: var(--accent);
   border-color: var(--accent);
   color: var(--ground);
-}
-
-.primary:active {
-  transform: scale(0.98);
 }
 
 .danger {
@@ -58,11 +48,37 @@
   color: var(--c-coral);
 }
 
-.danger:active {
-  background-color: var(--ground-2);
-  border-color: var(--c-coral);
-  color: var(--c-coral);
-  transform: scale(0.98);
+/**
+ * "Preview final state" on :active — reserved for fine-pointer (mouse)
+ * devices: WebKit/iOS can leave a matched `:active` selector visually
+ * "stuck" after a tap until the next touch elsewhere on the page, and a
+ * button stuck fully color-inverted reads far worse than the plain overlay
+ * above, which touch devices keep instead.
+ *
+ * Each rule restates every property the `.button:hover, .button:active`
+ * rule above could otherwise win at equal specificity: background-color
+ * always (that shared rule sets it unconditionally), border-color/color
+ * only where the variant's own un-pseudo-classed rule doesn't already own
+ * them uncontested. A variant that skips this block still gets the plain
+ * overlay above, never zero feedback.
+ */
+@media (hover: hover) {
+  .default:active {
+    background-color: var(--accent);
+    border-color: var(--accent);
+    color: var(--ground);
+    transform: scale(0.98);
+  }
+
+  .primary:active {
+    background-color: var(--accent);
+    transform: scale(0.98);
+  }
+
+  .danger:active {
+    background-color: var(--ground-2);
+    transform: scale(0.98);
+  }
 }
 
 .iconButton {
@@ -82,6 +98,13 @@
 .iconButton:hover,
 .iconButton:active {
   background-color: rgba(255, 255, 255, 0.08);
+}
+
+.iconButton:active {
+  /* Same tactile press feedback as Button's variants (scale(0.98)) — see
+     that file's :active comment. No color-invert here (icon buttons have
+     no variant colors to preview), so no hover:hover gating is needed. */
+  transform: scale(0.98);
 }
 
 .iconButton:focus-visible {
