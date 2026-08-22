@@ -12,7 +12,13 @@
   color: var(--cream);
   background-color: transparent;
   cursor: pointer;
-  transition: var(--transition);
+  /* transform only — NOT background-color/border-color/color. A linear RGB
+     ease between --ground-2 (violet) and --accent (coral) crosses a muddy,
+     off-palette brown/maroon midpoint (they're near-complementary hues),
+     which reads as a stray "wrong" color rather than a transition. Color
+     changes (hover overlay, :active preview, variant swaps) snap instantly
+     instead; only the press-feedback scale still eases. */
+  transition: transform var(--transition);
 }
 
 .button:hover,
@@ -92,7 +98,7 @@
   background-color: transparent;
   color: var(--cream);
   cursor: pointer;
-  transition: var(--transition);
+  transition: transform var(--transition); /* see Button's own transition comment above */
 }
 
 .iconButton:hover,
