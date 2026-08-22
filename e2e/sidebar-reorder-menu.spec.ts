@@ -164,8 +164,14 @@ test.describe('sidebar reorder ("Mover" menu items)', () => {
     await page.getByRole('button', { name: 'Criar', exact: true }).click()
     await expect(sidebar.getByText(otherProject)).toBeVisible()
 
-    // 'stays-put' is still the active file (creating another project
-    // doesn't change selection) — its trigger stays visible.
+    // Creating `otherProject` selects IT (useProjects' createProject always
+    // switches to the new, empty project — see its own comment), which
+    // moved activity off 'stays-put' and hid its trigger. Re-select it,
+    // same reasoning as the "omitted for the last" test above.
+    await ensureSidebarOpen(page)
+    await page
+      .locator(`[data-dnd-file-project="${sourceProject}"][data-dnd-file="stays-put"]`)
+      .click()
     await page
       .getByRole('button', { name: 'Mais opções do arquivo stays-put', exact: true })
       .click()
