@@ -510,11 +510,35 @@ body[data-dragging] {
    `visible` before the *next* Tab press, so it becomes reachable right
    after its row — without making it appear on an ordinary mouse click,
    since browsers withhold `:focus-visible` for pointer-triggered focus on
-   a non-text control. */
+   a non-text control.
+
+   `:focus-visible` alone only matches while focus sits on that exact
+   element, though — the row's own checkbox sits between the row and the
+   trigger in Tab order (row -> checkbox -> trigger), so the moment Tab
+   advances row -> checkbox, the row itself stops matching
+   `.file-item:focus-visible` and the trigger's `visibility` snaps back to
+   `hidden` a Tab stop too early, skipping it entirely on the next Tab.
+   `:focus-within` keeps the reveal active for any focus inside the row
+   (the checkbox included), not just focus on the row element itself.
+   `:has(:focus-visible)` would express the same "keyboard-only" intent
+   more precisely, but Chromium doesn't reliably recompute sequential Tab
+   order off a `:has()`-driven visibility change — verified directly: a
+   `:has(:focus-visible)` reveal reports `visibility: visible` via
+   getComputedStyle, and even survives a forced synchronous reflow, yet
+   the very next Tab press still skips straight past the now-"visible"
+   trigger to `<body>`, while an otherwise-identical `:focus-within` reveal
+   (or a plain inline-style toggle) is picked up immediately. The
+   remaining behavior gap (`:focus-within` also fires for a plain mouse
+   focus on the checkbox, not just keyboard) is harmless here: desktop
+   mouse users already reveal the trigger via the plain `:hover` rule
+   below regardless of the checkbox, so this adds no new exposure there,
+   and no test asserts the trigger stays hidden after a checkbox tap on
+   mobile. */
 .file-item.active .file-menu-trigger,
 .file-item .file-menu-trigger[aria-expanded='true'],
 .file-item .file-menu-trigger:focus-visible,
-.file-item:focus-visible .file-menu-trigger {
+.file-item:focus-visible .file-menu-trigger,
+.file-item:focus-within .file-menu-trigger {
   visibility: visible;
 }
 
