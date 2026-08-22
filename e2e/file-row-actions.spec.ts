@@ -179,6 +179,7 @@ test.describe('file row actions menu', () => {
     await expect(row.locator('.file-menu-trigger')).toBeVisible()
 
     await page.keyboard.press('Tab') // row -> checkbox
+    await expect(trigger).toBeVisible()
     await page.keyboard.press('Tab') // checkbox -> its own "..." trigger
     await expect(trigger).toBeFocused()
     await expect(trigger).toBeVisible()
