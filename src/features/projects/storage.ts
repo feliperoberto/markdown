@@ -37,7 +37,7 @@ function seedDefaultProjects(): ProjectsState {
 // `MAX_BACKUPS` so localStorage usage stays bounded; oldest backup is
 // dropped once the cap is reached.
 const BACKUP_KEY_PREFIX = 'projects_backup_'
-const MAX_BACKUPS = 5
+const MAX_BACKUPS = 50
 
 // UI-state persistence (issue #92: "memory"). Kept in localStorage next to
 // the projects data but deliberately separate keys — losing/ignoring these
