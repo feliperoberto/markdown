@@ -1,0 +1,396 @@
+# ============================================================================
+# .gitignore — source-control / local-development exclusions
+# ============================================================================
+
+# OS / filesystem metadata
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100/
+.Trashes/
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Editors / IDEs
+.idea/
+*.iml
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+.history/
+.fleet/
+*.sublime-workspace
+*.sublime-project
+
+# Logs / runtime output
+*.log
+*.log.*
+logs/
+log/
+*.pid
+*.seed
+*.pid.lock
+
+# Environment / local configuration / secrets
+.env
+.env.*
+!.env.example
+!.env.sample
+*.local
+*.secret
+*.secrets
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+
+# Generic temporary / backup files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+*.bak
+*.orig
+*.rej
+
+# Coverage / test artifacts
+.coverage
+.coverage.*
+coverage/
+htmlcov/
+.pytest_cache/
+.nox/
+.tox/
+.mypy_cache/
+.pyre/
+.ruff_cache/
+.hypothesis/
+.jest/
+.nyc_output/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.python-version
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.Python
+.pybuild/
+.pdm-python
+__pypackages__/
+*.egg-info/
+.eggs/
+dist/
+build/
+develop-eggs/
+parts/
+sdist/
+wheels/
+
+# Node / JavaScript / TypeScript
+node_modules/
+.npm/
+.yarn/
+.pnpm-store/
+.yarn/cache/
+.yarn/unplugged/
+.yarn/install-state.gz
+.nx/
+.next/
+.nuxt/
+.output/
+.svelte-kit/
+.cache/
+.vite/
+.parcel-cache/
+.turbo/
+
+# Java / Kotlin / Gradle / Maven
+.gradle/
+build/
+out/
+target/
+.classpath
+.project
+.settings/
+*.class
+
+# Go
+bin/
+.coverprofile
+
+# Rust
+target/
+
+# .NET / Visual Studio
+.vs/
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Ruby
+.bundle/
+vendor/bundle/
+coverage/
+*.gem
+
+# PHP
+vendor/
+.phpunit.result.cache
+
+# Flutter / Dart
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+
+# Build systems / generated artifacts
+artifacts/
+artifacts*/
+build-output/
+out/
+release/
+releases/
+.tmp/
+tmp/
+temp/
+
+# Local databases / generated data
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+*.dump
+*.sql.gz
+
+# Package-manager debug files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Terraform / infrastructure local state
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# Serverless / framework-generated local state
+.serverless/
+.aws-sam/
+.cdk.staging/
+.sst/
+
+# ============================================================================
+# .dockerignore — Docker build-context exclusions
+# ============================================================================
+
+# Git metadata / repository-only files
+.git/
+.gitignore
+.gitattributes
+.gitmodules
+
+# Docker metadata not needed inside the build context
+.dockerignore
+Dockerfile.dev
+Dockerfile.test
+Dockerfile.*.dev
+Dockerfile.*.test
+compose.override.yml
+compose.override.yaml
+docker-compose.override.yml
+docker-compose.override.yaml
+
+# Local development dependencies / artifacts
+node_modules/
+__pycache__/
+.pytest_cache/
+.venv/
+venv/
+env/
+.env
+.env.*
+coverage/
+dist/
+build/
+out/
+target/
+
+# Local logs, caches and reports
+*.log
+logs/
+.cache/
+.npm/
+.yarn/cache/
+.pnpm-store/
+
+# Test / benchmark / profiling outputs
+.pytest_cache/
+.nyc_output/
+htmlcov/
+coverage.xml
+*.prof
+*.profraw
+
+# Local infrastructure state / credentials
+.terraform/
+*.tfstate
+*.tfstate.*
+.aws/
+.gcloud/
+.kube/
+
+# ============================================================================
+# .claudeignore — AI-context / agent-noise exclusions
+# NOTE: treat this as context hygiene, not as a security boundary.
+# ============================================================================
+
+# Secrets / credentials / private local state
+.env
+.env.*
+!.env.example
+!.env.sample
+*.pem
+*.key
+*.p12
+*.pfx
+*.secret
+*.secrets
+credentials.json
+credentials*.json
+secrets.json
+secrets*.json
+service-account*.json
+
+# Large dependency / vendor trees
+node_modules/
+vendor/
+.venv/
+venv/
+.terraform/
+.gradle/
+
+# Generated / compiled / bundled output
+build/
+dist/
+out/
+target/
+release/
+releases/
+artifacts/
+coverage/
+htmlcov/
+.next/
+.nuxt/
+.output/
+.svelte-kit/
+.cache/
+.parcel-cache/
+.turbo/
+
+# Language / tool caches
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.pyre/
+.ruff_cache/
+.hypothesis/
+.nox/
+.tox/
+.nyc_output/
+
+# Runtime / diagnostic noise
+*.log
+*.log.*
+logs/
+*.pid
+*.pid.lock
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Large local / generated data
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+*.dump
+*.sql.gz
+*.csv
+*.tsv
+*.parquet
+*.arrow
+*.feather
+*.bin
+*.dat
+
+# Minified / generated web assets
+*.min.js
+*.min.css
+*.map
+
+# Machine-generated documentation / reports / snapshots
+reports/
+report/
+.snapshots/
+snapshots/
+.generated/
+generated/
+
+# WIP / obsolete documentation that should not bias routine code work
+**/wip/
+**/WIP/
+**/drafts/
+**/deprecated/
+**/archive/
+**/archived/
+
+# Security / compliance material that is not required for routine implementation
+**/security-reports/
+**/threat-models/
+**/vulnerability-reports/
+**/pentest/
+**/audit-reports/
+
+# IDE / OS metadata
+.DS_Store
+Thumbs.db
+.idea/
+.history/
+.fleet/
+
+# VCS metadata / worktrees
+.git/
+.git/worktrees/
+
+# Backup / exported copies
+*.bak
+*.backup
+*.orig
+*.rej
+*.patch
+
