@@ -26,7 +26,10 @@ export function renderMarkdown(input: string): string {
   // returned a Promise despite this option, DOMPurify.sanitize(promise)
   // would silently stringify it to "[object Promise]" and render that,
   // rather than throwing where the real cause is obvious.
-  const html = marked.parse(input, { async: false })
+  // { breaks: true } treats single newlines as visible <br> tags, matching
+  // common note-taking WYSIWYG semantics ("press Enter → see a break") rather
+  // than strict CommonMark (single \n = space, blank line = new paragraph).
+  const html = marked.parse(input, { async: false, breaks: true })
   if (typeof html !== 'string') {
     throw new Error('marked.parse() returned a non-string result despite { async: false }')
   }
