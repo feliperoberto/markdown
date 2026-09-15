@@ -85,4 +85,22 @@ describe('renderMarkdown', () => {
     expect(html).toContain('href="https://a.example" rel="noopener noreferrer"')
     expect(html).toContain('href="https://b.example" rel="noopener noreferrer"')
   })
+
+  it('converts single newlines to <br> tags within a paragraph', () => {
+    const html = renderMarkdown('Line one\nLine two\nLine three')
+
+    expect(html).toContain('Line one<br>')
+    expect(html).toContain('Line two<br>')
+    expect(html).toContain('Line three')
+    // Ensure no extra <p> tags — single newlines don't create new paragraphs
+    expect(html).not.toContain('<p>Line one</p>')
+  })
+
+  it('still treats blank lines as paragraph breaks', () => {
+    const html = renderMarkdown('Paragraph one\n\nParagraph two')
+
+    expect(html).toContain('<p>Paragraph one</p>')
+    expect(html).toContain('<p>Paragraph two</p>')
+    expect(html).not.toContain('<br>')
+  })
 })
