@@ -29,6 +29,8 @@ import type { StorageAdapter } from './storage-adapter'
 export interface MirroredStorageAdapter extends StorageAdapter {
   /** Resolves once every queued write has been attempted. */
   flush(): Promise<void>
+  /** True when nothing is queued or in flight — every write has committed. */
+  isSettled(): boolean
 }
 
 export function createMirroredStorageAdapter(
@@ -81,6 +83,9 @@ export function createMirroredStorageAdapter(
       if (!mirror.has(key)) return
       mirror.delete(key)
       queue(key, null)
+    },
+    isSettled() {
+      return inFlight === null && pending.size === 0
     },
     async flush() {
       // Loop because a drain can re-arm itself with writes queued while it

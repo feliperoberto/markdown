@@ -1,5 +1,8 @@
 import { openIndexedDbStore, type AsyncKeyValueStore } from '@/lib/idb-kv'
-import { createMirroredStorageAdapter } from '@/lib/mirrored-storage-adapter'
+import {
+  createMirroredStorageAdapter,
+  type MirroredStorageAdapter,
+} from '@/lib/mirrored-storage-adapter'
 import {
   createMemoryStorageAdapter,
   localStorageAdapter,
@@ -9,7 +12,9 @@ import { mergeProjectsByFreshness } from './model'
 import {
   backupProjects,
   configureProjectsStorage,
+  evictOldestBackup,
   INDEXED_DB_MAX_BACKUPS,
+  isQuotaExceededError,
   LOCAL_STORAGE_MAX_BACKUPS,
   loadTombstones,
   parseProjectsBlob,
@@ -47,6 +52,8 @@ export type ProjectsStorageBackend = 'indexeddb' | 'localstorage' | 'memory'
 const BACKEND_MARKER_KEY = 'projectsBackend'
 const DB_NAME = 'markdown'
 const STORE_NAME = 'kv'
+// Bounds each boot-time IndexedDB step (open, then the initial read): the
+// app does not render until init resolves, so a hang must become a fallback.
 const OPEN_TIMEOUT_MS = 5000
 
 let activeBackend: ProjectsStorageBackend = 'localstorage'
@@ -93,9 +100,57 @@ function fallBackToLocalStorage(legacy: StorageAdapter): ProjectsStorageBackend 
   return activeBackend
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${what} timed out after ${ms}ms`)), ms)
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error: unknown) => {
+        clearTimeout(timer)
+        reject(error)
+      },
+    )
+  })
+}
+
+/**
+ * On IndexedDB a quota failure surfaces only after the write was queued,
+ * so `saveProjects`' synchronous evict-and-retry never sees it. Mirror that
+ * policy here: drop the oldest backup and retry, until the write fits or no
+ * backup is left — only then tell the user.
+ */
+function handleWriteError(adapter: MirroredStorageAdapter, error: unknown): void {
+  if (isQuotaExceededError(error) && evictOldestBackup(adapter)) {
+    console.warn('IndexedDB quota reached; evicted the oldest backup and retrying.')
+    // A macrotask, not a microtask: the failed batch is still marked
+    // in-flight until its promise chain settles, and a flush started
+    // before that would await the dead batch instead of retrying.
+    setTimeout(() => void adapter.flush(), 0)
+    return
+  }
+  reportWriteError(error)
+}
+
 /** Never rejects: every failure resolves to one of the fallbacks above. */
 export async function initProjectsStorage(
   options: InitProjectsStorageOptions = {},
+): Promise<ProjectsStorageBackend> {
+  try {
+    return await initProjectsStorageUnsafe(options)
+  } catch (error) {
+    // Defensive: every step below already handles its own failures. If
+    // something unforeseen still throws, keep whatever backend was
+    // configured so far rather than leave the app unrendered.
+    console.error('Unexpected failure initializing projects storage.', error)
+    return activeBackend
+  }
+}
+
+async function initProjectsStorageUnsafe(
+  options: InitProjectsStorageOptions,
 ): Promise<ProjectsStorageBackend> {
   const legacy = options.legacy ?? localStorageAdapter
   const openStore =
@@ -104,12 +159,21 @@ export async function initProjectsStorage(
       openIndexedDbStore({ dbName: DB_NAME, storeName: STORE_NAME, timeoutMs: OPEN_TIMEOUT_MS }))
   const alreadyMigrated = safeGet(legacy, BACKEND_MARKER_KEY) === 'indexeddb'
   const keys = projectsStorageKeys()
+  // Snapshot the legacy copy BEFORE reading IndexedDB. Another tab
+  // migrating concurrently commits to IndexedDB strictly before deleting
+  // from localStorage, so if this snapshot misses the legacy blob (already
+  // deleted), the later IndexedDB read is guaranteed to see it there.
+  // Reading in the opposite order could see neither and seed a default
+  // over the other tab's migrated data.
+  const legacyPrimary = safeGet(legacy, keys.primary)
+  const legacyBackups =
+    legacyPrimary === null ? [] : keys.backups.map((key) => safeGet(legacy, key))
 
   let store: AsyncKeyValueStore
   let entries: Map<string, string>
   try {
     store = await openStore()
-    entries = await store.getAll()
+    entries = await withTimeout(store.getAll(), OPEN_TIMEOUT_MS, 'IndexedDB initial read')
   } catch (error) {
     if (alreadyMigrated) {
       console.error(
@@ -126,7 +190,6 @@ export async function initProjectsStorage(
     return fallBackToLocalStorage(legacy)
   }
 
-  const legacyPrimary = safeGet(legacy, keys.primary)
   // Blob a pre-IndexedDB tab (ADR-0003: it may run indefinitely) wrote to
   // localStorage AFTER this origin migrated. Reconciled below.
   let staleLegacyPrimary: string | null = null
@@ -134,12 +197,11 @@ export async function initProjectsStorage(
   if (legacyPrimary !== null && !entries.has(keys.primary)) {
     // Backups are compacted to slots 1..k (newest first, order kept) and
     // capped: slots beyond INDEXED_DB_MAX_BACKUPS are the oldest copies.
-    const legacyBackups = keys.backups
-      .map((key) => safeGet(legacy, key))
+    const batch: Array<[string, string]> = [[keys.primary, legacyPrimary]]
+    legacyBackups
       .filter((value): value is string => value !== null)
       .slice(0, INDEXED_DB_MAX_BACKUPS)
-    const batch: Array<[string, string]> = [[keys.primary, legacyPrimary]]
-    legacyBackups.forEach((value, index) => batch.push([keys.backups[index]!, value]))
+      .forEach((value, index) => batch.push([keys.backups[index]!, value]))
     try {
       await store.write(batch)
     } catch (error) {
@@ -152,32 +214,39 @@ export async function initProjectsStorage(
     staleLegacyPrimary = legacyPrimary
   }
 
-  const adapter = createMirroredStorageAdapter(store, entries, reportWriteError)
+  const adapter = createMirroredStorageAdapter(store, entries, (error) =>
+    handleWriteError(adapter, error),
+  )
   configureProjectsStorage(adapter, { maxBackups: INDEXED_DB_MAX_BACKUPS })
   pruneExcessBackups(adapter)
 
   let reconciled = true
   if (staleLegacyPrimary !== null) {
-    const current = parseProjectsBlob(adapter.get(keys.primary)) ?? {}
-    const stale = parseProjectsBlob(staleLegacyPrimary)
-    if (stale) {
-      // Same per-file freshness merge (newer timestamp wins, tombstoned
-      // deletions stay deleted) Drive sync uses, so edits from either build
-      // survive. Back up the IndexedDB side first, like any other merge.
-      const { merged, localChanged } = mergeProjectsByFreshness(
-        current,
-        stale,
-        loadTombstones(legacy),
-      )
-      if (localChanged) {
-        backupProjects(current, adapter)
-        saveProjects(merged, adapter)
-        let failed = false
-        const unsubscribe = onProjectsWriteError(() => (failed = true))
-        await adapter.flush()
-        unsubscribe()
-        reconciled = !failed
+    try {
+      const current = parseProjectsBlob(adapter.get(keys.primary)) ?? {}
+      const stale = parseProjectsBlob(staleLegacyPrimary)
+      if (stale) {
+        // Same per-file freshness merge (newer timestamp wins, tombstoned
+        // deletions stay deleted) Drive sync uses, so edits from either
+        // build survive. Back up the IndexedDB side first, like any other
+        // merge.
+        const { merged, localChanged } = mergeProjectsByFreshness(
+          current,
+          stale,
+          loadTombstones(legacy),
+        )
+        if (localChanged) {
+          backupProjects(current, adapter)
+          saveProjects(merged, adapter)
+          await adapter.flush()
+          // Anything still queued (a failed write, or a quota retry still
+          // pending) means the merge isn't durable yet.
+          reconciled = adapter.isSettled()
+        }
       }
+    } catch (error) {
+      console.error('Failed to reconcile a stale localStorage projects copy; will retry.', error)
+      reconciled = false
     }
   }
 

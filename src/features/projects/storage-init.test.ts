@@ -9,7 +9,11 @@ import {
   resetProjectsStorage,
   saveProjects,
 } from './storage'
-import { getProjectsStorageBackend, initProjectsStorage } from './storage-init'
+import {
+  getProjectsStorageBackend,
+  initProjectsStorage,
+  onProjectsWriteError,
+} from './storage-init'
 import type { ProjectsState } from './types'
 
 const file = (content: string, timestamp = '2026-01-01T00:00:00.000Z') => ({
@@ -169,5 +173,85 @@ describe('initProjectsStorage (issue #120)', () => {
     // The pre-merge IndexedDB state is kept as a backup.
     const backup = JSON.parse((await idbContents()).get('projects_backup_1') ?? '')
     expect(backup.projects.Shared.f.content).toBe('idb (older)')
+  })
+
+  it('does not seed over data a concurrent tab migrated between reads (code review)', async () => {
+    const projects = { Mine: { f: file('real data') } }
+    localStorage.setItem('projects', blob(projects))
+    // Simulates tab A finishing its migration right after this tab's
+    // IndexedDB read: commit to IndexedDB, then drop the localStorage copy.
+    const racingStore = async (): Promise<AsyncKeyValueStore> => {
+      const real = await openStore()
+      return {
+        getAll: async () => {
+          const snapshot = await real.getAll()
+          await real.write([['projects', blob(projects)]])
+          localStorage.removeItem('projects')
+          return snapshot
+        },
+        write: (entries) => real.write(entries),
+      }
+    }
+
+    await initProjectsStorage({ openStore: racingStore })
+    const loaded = loadProjects()
+    await settle()
+
+    expect(loaded).toEqual(projects)
+    expect(JSON.parse((await idbContents()).get('projects') ?? '').projects).toEqual(projects)
+  })
+
+  it('falls back when the initial IndexedDB read hangs (code review)', async () => {
+    vi.useFakeTimers()
+    try {
+      const hanging = async (): Promise<AsyncKeyValueStore> => ({
+        getAll: () => new Promise(() => {}),
+        write: async () => {},
+      })
+      const result = initProjectsStorage({ openStore: hanging })
+      await vi.advanceTimersByTimeAsync(5000)
+
+      expect(await result).toBe('localstorage')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('evicts the oldest backups and retries when an IndexedDB write hits the quota (code review)', async () => {
+    const budget = 1100
+    const stored = new Map<string, string>([
+      ['projects', blob({})],
+      ['projects_backup_1', 'a'.repeat(300)],
+      ['projects_backup_2', 'b'.repeat(300)],
+      ['projects_backup_3', 'c'.repeat(300)],
+    ])
+    const quotaStore = async (): Promise<AsyncKeyValueStore> => ({
+      getAll: async () => new Map(stored),
+      write: async (entries) => {
+        const next = new Map(stored)
+        for (const [key, value] of entries) {
+          if (value === null) next.delete(key)
+          else next.set(key, value)
+        }
+        const size = Array.from(next.values()).reduce((sum, value) => sum + value.length, 0)
+        if (size > budget) {
+          throw new DOMException('The quota has been exceeded.', 'QuotaExceededError')
+        }
+        stored.clear()
+        for (const [key, value] of next) stored.set(key, value)
+      },
+    })
+    const reported = vi.fn()
+    const unsubscribe = onProjectsWriteError(reported)
+    await initProjectsStorage({ openStore: quotaStore })
+
+    const big = { P: { f: file('x'.repeat(380)) } }
+    saveProjects(big)
+
+    await vi.waitFor(() => expect(stored.get('projects')).toBe(blob(big)))
+    expect(stored.has('projects_backup_3')).toBe(false)
+    expect(stored.has('projects_backup_1')).toBe(true)
+    expect(reported).not.toHaveBeenCalled()
+    unsubscribe()
   })
 })

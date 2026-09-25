@@ -215,15 +215,10 @@ export function saveProjects(
     return
   } catch (error) {
     if (!isQuotaExceededError(error)) throw error
-    for (let index = LEGACY_MAX_BACKUPS; index >= 1; index--) {
-      const key = `${BACKUP_KEY_PREFIX}${index}`
-      if (adapter.get(key) === null) continue
-      adapter.remove(key)
+    while (evictOldestBackup(adapter)) {
       try {
         writeEnvelope(envelope, adapter)
-        console.warn(
-          `Storage quota reached; evicted backups down to ${index - 1} to save projects.`,
-        )
+        console.warn('Storage quota reached; evicted old backups to save projects.')
         return
       } catch (retryError) {
         if (!isQuotaExceededError(retryError)) throw retryError
@@ -237,9 +232,26 @@ function writeEnvelope(envelope: StorageEnvelope, adapter: StorageAdapter): void
   adapter.set(PROJECTS_STORAGE_KEY, JSON.stringify(envelope))
 }
 
+/**
+ * Deletes the oldest existing backup slot (scanning up to
+ * LEGACY_MAX_BACKUPS, so orphans above the cap go first). Returns whether
+ * anything was deleted. Shared by `saveProjects`' synchronous quota
+ * recovery and storage-init.ts's asynchronous one (IndexedDB reports quota
+ * failures only after the write was queued).
+ */
+export function evictOldestBackup(adapter: StorageAdapter = projectsAdapter): boolean {
+  for (let index = LEGACY_MAX_BACKUPS; index >= 1; index--) {
+    const key = `${BACKUP_KEY_PREFIX}${index}`
+    if (adapter.get(key) === null) continue
+    adapter.remove(key)
+    return true
+  }
+  return false
+}
+
 // `QuotaExceededError` is the standard name; legacy Firefox used
 // `NS_ERROR_DOM_QUOTA_REACHED`, and old WebKit only set the numeric code 22.
-function isQuotaExceededError(error: unknown): boolean {
+export function isQuotaExceededError(error: unknown): boolean {
   return (
     error instanceof DOMException &&
     (error.name === 'QuotaExceededError' ||

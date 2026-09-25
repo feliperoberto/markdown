@@ -15,13 +15,17 @@ if (!root) {
 // Issue #120 / ADR-0005: the projects blob lives in IndexedDB, which can
 // only be opened asynchronously, while useProjects reads it synchronously
 // on first render — so pick (and, on first run, migrate into) the storage
-// backend before rendering. initProjectsStorage never rejects; every
-// failure resolves to a fallback backend.
-void initProjectsStorage().then(() => {
-  render(
-    <ToastProvider>
-      <App />
-    </ToastProvider>,
-    root,
-  )
-})
+// backend before rendering. initProjectsStorage is designed never to
+// reject (every failure resolves to a fallback backend, and each IndexedDB
+// step is time-bounded); the catch is a last line of defense so a
+// surprise can never leave the page blank.
+void initProjectsStorage()
+  .catch((error: unknown) => console.error('Projects storage init failed.', error))
+  .then(() => {
+    render(
+      <ToastProvider>
+        <App />
+      </ToastProvider>,
+      root,
+    )
+  })

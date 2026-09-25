@@ -74,8 +74,12 @@ its premises did not hold:
    - Marker set but IndexedDB will not open: run in memory only and warn
      the user. Seeding `localStorage` would show an empty state, and its
      writes would compete with the real data on the next successful boot.
-   - Opening IndexedDB is capped at 5 s so a stalled open cannot keep the
-     app from rendering.
+   - Opening IndexedDB and the first read of its contents are each capped
+     at 5 s, so a stall cannot keep the app from rendering.
+   - The existing localStorage copy is read before IndexedDB is opened.
+     A second tab migrating at the same moment writes to IndexedDB before
+     it deletes from localStorage, so this tab always finds the data in
+     one place or the other and never seeds a default over it.
 7. **Harden backups on both backends.**
    - The cap depends on the backend: 3 on `localStorage`, 10 on IndexedDB.
      Rotation rewrites every slot, so each backup costs O(cap × blob).
@@ -84,8 +88,11 @@ its premises did not hold:
      the serialized blob).
    - Backups are written only when something will actually be overwritten:
      no-op deletes and Drive syncs that change nothing locally write none.
-   - On a quota error, `saveProjects` evicts backups oldest-first and
-     retries before giving up.
+   - On a quota error, the oldest backups are evicted one at a time and the
+     save is retried before the user is told it failed. On localStorage
+     this happens inside `saveProjects`. On IndexedDB the error only
+     arrives after the write was queued, so the write-error handler evicts
+     and retries in the background.
 
 ## Consequences
 
