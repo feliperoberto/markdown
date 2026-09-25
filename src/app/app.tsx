@@ -18,6 +18,7 @@ import { PwaInstallPrompt } from '@/features/pwa-install'
 import { PwaUpdatePrompt } from '@/features/pwa-update'
 import { ThemeToggle } from '@/features/theme'
 import { FullscreenToggle } from '@/features/fullscreen'
+import { PdfExportButton, usePrintExport } from '@/features/print-export'
 import { SplashScreen } from '@/features/onboarding'
 import { BatchDownloadArea, Breadcrumbs, IconButton, useToast } from '@/components'
 import { copyToClipboard } from '@/lib/copyToClipboard'
@@ -200,6 +201,13 @@ export function App(): JSX.Element {
 
   const currentFileEntry =
     currentProject && currentFile ? (projects[currentProject]?.[currentFile] ?? null) : null
+
+  // "Exportar PDF" (print-export): the saved PDF is named after the same
+  // file name the Markdown download uses, minus its `.md` extension.
+  const { printDocument } = usePrintExport({
+    content: activeContent,
+    fileName: currentFileEntry ? exportFileName(currentFileEntry) : '',
+  })
 
   // Per-project "Baixar projeto"/"Upload" menu actions (issue: these
   // existed in the prototype's project dropdown but the functions they
@@ -392,13 +400,19 @@ export function App(): JSX.Element {
           <main className="app-main">
             <div className="toolbar">
               <Breadcrumbs projectName={currentProject} fileName={currentFile} />
-              <IconButton
-                icon="⬇️"
-                label="Baixar arquivo atual"
-                title="Baixar arquivo"
-                disabled={!currentFileEntry}
-                onClick={handleDownloadCurrentFile}
-              />
+              <div className="toolbar-actions">
+                <PdfExportButton
+                  onPrint={printDocument}
+                  disabled={!currentFileEntry || showBatchArea}
+                />
+                <IconButton
+                  icon="⬇️"
+                  label="Baixar arquivo atual"
+                  title="Baixar arquivo"
+                  disabled={!currentFileEntry}
+                  onClick={handleDownloadCurrentFile}
+                />
+              </div>
             </div>
             {showBatchArea ? (
               <BatchDownloadArea entries={batchSelectionEntries} onDownload={handleDownloadBatch} />

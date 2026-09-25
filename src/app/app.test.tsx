@@ -217,3 +217,53 @@ describe('App cloud button (handleCloudButtonClick)', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 })
+
+// Wiring for the print-export feature: the PDF button sits first in the
+// toolbar's `.toolbar-actions` group (left of the Markdown download) and
+// prints through the dedicated body-level print root, not #app.
+describe('App PDF export button', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    document.documentElement.removeAttribute('data-theme')
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockImplementation((query: string) => ({
+        matches: false,
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    )
+  })
+
+  afterEach(() => {
+    cleanup()
+    vi.unstubAllGlobals()
+  })
+
+  it('renders before the download button inside .toolbar-actions', () => {
+    renderApp()
+
+    const pdf = screen.getByRole('button', { name: 'Exportar PDF do arquivo atual' })
+    const download = screen.getByRole('button', { name: 'Baixar arquivo atual' })
+    const actions = pdf.parentElement
+    expect(actions?.classList.contains('toolbar-actions')).toBe(true)
+    expect(download.parentElement).toBe(actions)
+    expect(actions?.firstElementChild).toBe(pdf)
+    expect(document.querySelectorAll('body > .print-root')).toHaveLength(1)
+  })
+
+  it('calls window.print() when clicked with a file open', async () => {
+    const printSpy = vi.fn()
+    vi.stubGlobal('print', printSpy)
+    renderApp()
+
+    const pdf = screen.getByRole('button', {
+      name: 'Exportar PDF do arquivo atual',
+    }) as HTMLButtonElement
+    expect(pdf.disabled).toBe(false)
+    fireEvent.click(pdf)
+
+    await waitFor(() => expect(printSpy).toHaveBeenCalledOnce())
+  })
+})

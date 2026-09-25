@@ -13,6 +13,7 @@
 | `#configBtn` (⚙️)                      | "Abrir configurações"                     |
 | `#installBtn` (📲)                     | "Instalar aplicativo"                     |
 | `#downloadBtn` (⬇️)                    | "Baixar arquivo atual"                    |
+| `.toolbar-pdf-btn` (🖨️)                | "Exportar PDF do arquivo atual"           |
 | `#copyBtn` (📋)                        | "Copiar todo o conteúdo do arquivo"       |
 | `#configModalClose` (✕)                | "Fechar configurações"                    |
 | `#driveModalClose` (✕)                 | "Fechar Google Drive"                     |
@@ -152,7 +153,35 @@ open — including the Drive sync panel itself, which the shortcut is meant
 to act on — since triggering a sync is a harmless, non-blocking action from
 any other dialog's point of view.
 
-## 7. Manual verification performed
+## 7. PDF export button and print shortcut
+
+The toolbar's 🖨️ button (`src/features/print-export/PdfExportButton.tsx`)
+is an `IconButton` with `aria-label` "Exportar PDF do arquivo atual" (see
+§1) and a `title` of "Exportar PDF (via impressão)", so the visible tooltip
+also tells sighted users that it goes through the print dialog. The emoji
+glyph itself is decorative; the accessible name comes from the label.
+
+- **Target spacing (WCAG 2.2 SC 2.5.8, Target Size (Minimum)).** The button
+  sits directly left of ⬇️ "Baixar arquivo atual", with a 0.75rem gap and
+  a subtle divider between them, so the two adjacent targets can't be
+  mis-hit for one another. On coarse pointers (`@media (pointer: coarse)`)
+  it keeps a ≥44×44px touch target despite its compact variant — well
+  above the SC's 24×24px minimum.
+- **Visual de-emphasis is not a disabled state.** The compact variant and
+  reduced opacity mark it as secondary to ⬇️ (the primary action); it
+  stays fully focusable and in normal Tab order.
+- **Native Ctrl+P / Cmd+P is preserved, not overridden.** Unlike Ctrl+S
+  (§6), the app does not bind the print chord or call `preventDefault()`
+  on it. Instead, a `beforeprint` listener renders the current file into
+  the print-only container, so the browser's own shortcut and menu item
+  give exactly the same output as the button — including from the edit
+  view (WCAG 2.1 SC 2.1.1: the button and the keyboard path are
+  equivalent).
+- **Hidden, not disabled, on iOS standalone PWAs**, where `window.print()`
+  is unreliable: it is removed from the DOM entirely rather than left as a
+  dead Tab stop.
+
+## 8. Manual verification performed
 
 - Keyboard-only pass: tabbed through header icon buttons, sidebar footer
   buttons, create/rename/delete file flow (via the project `⋮` menu and

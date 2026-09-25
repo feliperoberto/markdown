@@ -25,6 +25,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "this browser connected before" — never a credential; the Drive access
   token itself is still never persisted, see `docs/data-and-privacy.md`),
   set when you connect and cleared when you disconnect.
+- Export the current file as PDF: a new 🖨️ "Exportar PDF do arquivo atual"
+  button in the toolbar, just left of ⬇️, opens the browser's print dialog
+  — choose "Save as PDF" (or "Salvar como PDF") as the destination. Only
+  the rendered document is printed, in the same paper/ink look and fonts
+  as the preview (following the active light/dark theme), with sensible
+  page breaks, and the PDF is named after the file. It works offline and
+  adds no new dependency — everything happens in your browser, nothing is
+  uploaded. The browser's own Ctrl+P / Cmd+P now gives the same result,
+  even from the edit view. The button is deliberately quieter than ⬇️,
+  which stays the primary action, and is hidden in the installed iOS app,
+  where printing is unreliable
+  ([ADR-0006](./docs/adr/0006-browser-native-pdf-export.md)).
 
 ### Changed
 
@@ -97,6 +109,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Printing (Ctrl+P / Cmd+P) no longer cuts the document off after the
+  first page, and no longer prints a blank page when you're in the edit
+  view. The old print stylesheet hid the app with `visibility: hidden`,
+  which left the preview trapped inside the app shell's scroll containers
+  and absent altogether in edit mode; printing now renders the current
+  file into a dedicated print-only container instead
+  ([ADR-0006](./docs/adr/0006-browser-native-pdf-export.md)).
 - "Setting the value exceeded the quota" errors that stopped edits from
   saving once the browser's ~5 MB `localStorage` limit filled up (issue
   #120). Your notes now live in IndexedDB, whose limit is a share of free

@@ -47,6 +47,9 @@ folder below and know what belongs there without reading code first.
 - `src/features/onboarding/` — first-run help/tutorial UI.
 - `src/features/pwa-install/` — Chromium `beforeinstallprompt` button plus
   the iOS "Add to Home Screen" instructional card.
+- `src/features/print-export/` — the 🖨️ "Exportar PDF" button: renders
+  the current file into a print-only container and opens the browser's
+  print dialog (ADR-0006).
 - `src/features/pwa-update/` — notices a waiting service worker and shows
   the user-facing "Atualizar" prompt (ADR-0003).
 - `src/components/` — shared, framework-level "dumb" UI components with no
