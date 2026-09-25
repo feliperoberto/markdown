@@ -97,6 +97,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- "Setting the value exceeded the quota" errors that stopped edits from
+  saving once the browser's ~5 MB `localStorage` limit filled up (issue
+  #120). Your notes now live in IndexedDB, whose limit is a share of free
+  disk space; existing notes move there automatically on first load, and
+  the old `localStorage` copies are removed afterwards. Automatic safety
+  backups are capped at 10 (3 if the browser can't use IndexedDB), identical
+  consecutive backups are no longer duplicated, a Drive sync that changes
+  nothing locally no longer writes one, and if storage ever fills up the
+  oldest backups are discarded before your edit is refused (see ADR-0005).
 - Creating a new file now selects it immediately, so the editor shows the
   new file instead of leaving whatever was open before. A collapsed
   project auto-expands and the mobile drawer closes so the newly active

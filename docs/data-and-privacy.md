@@ -7,9 +7,13 @@
 
 ## 1. Local-first storage (default, always on)
 
-By default, everything you write — projects, files, folders, theme
-preference — is stored in your browser's `localStorage`, on the device
-you're using, in the origin `feliperoberto.com.br`.
+By default, everything you write stays in your browser, on the device
+you're using, in the origin `feliperoberto.com.br`. Your projects and files
+(plus a few automatic safety copies made before destructive actions such as
+deleting or importing) are stored in the browser's IndexedDB; small
+preferences — theme, font size, which projects are collapsed or archived —
+are stored in `localStorage`. Browsers where IndexedDB is unavailable keep
+everything in `localStorage` instead.
 
 That means:
 

@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/preact'
 import { ToastProvider } from '@/components'
 import { encodeArchivedFileKey } from './model'
+import { resetProjectsStorage } from './storage'
+import { initProjectsStorage } from './storage-init'
 import { useProjects } from './useProjects'
 
 /** Exposes a few useProjects actions/state as clickable buttons + text so
@@ -379,6 +381,50 @@ describe('useProjects', () => {
     expect(stateText()).not.toContain('"notes"')
 
     setItemSpy.mockRestore()
+  })
+
+  describe('backups (issue #120)', () => {
+    afterEach(() => resetProjectsStorage())
+
+    it('reconcileWithRemote backs up only when the merge changes local state', async () => {
+      const { container } = renderHarness()
+      const stateText = () => container.querySelector('pre')?.textContent ?? ''
+
+      fireEvent.click(screen.getByText('reconcile'))
+      await waitFor(() => expect(stateText()).toContain('"backup"'))
+      const firstBackup = localStorage.getItem('projects_backup_1')
+      expect(firstBackup).not.toBeNull()
+
+      // Same remote again: nothing local changes, so no second backup.
+      fireEvent.click(screen.getByText('reconcile'))
+
+      expect(localStorage.getItem('projects_backup_1')).toBe(firstBackup)
+      expect(localStorage.getItem('projects_backup_2')).toBeNull()
+    })
+
+    it('a delete of something that does not exist writes no backup', async () => {
+      renderHarness()
+
+      fireEvent.click(screen.getByText('delete-file-notes'))
+
+      await waitFor(() => expect(screen.getByRole('status')).not.toBeNull())
+      expect(localStorage.getItem('projects_backup_1')).toBeNull()
+    })
+
+    it('shows an error toast when an asynchronous IndexedDB write fails', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      await initProjectsStorage({
+        openStore: async () => ({
+          getAll: async () => new Map(),
+          write: () => Promise.reject(new Error('disk full')),
+        }),
+      })
+
+      renderHarness()
+
+      await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('disk full'))
+      vi.restoreAllMocks()
+    })
   })
 
   describe('archive feature', () => {

@@ -33,11 +33,52 @@ function seedDefaultProjects(): ProjectsState {
 
 // Rotating backups, written as an independent safety net immediately
 // before any destructive operation (bulk delete, ZIP import overwrite,
-// restore-from-backup) — see `backupProjects` below. Capped at
-// `MAX_BACKUPS` so localStorage usage stays bounded; oldest backup is
-// dropped once the cap is reached.
+// restore-from-backup) — see `backupProjects` below. Capped so storage
+// usage stays bounded; oldest backup is dropped once the cap is reached.
+//
+// Issue #120: every backup is a FULL copy of the projects blob, so the cap
+// multiplies the footprint — 50 copies of a 100 KB blob alone exhausted
+// localStorage's ~5 MiB per-origin quota, after which the primary
+// `projects` write itself failed and the user could no longer edit. The
+// cap is therefore per backend: tight on localStorage (backups must never
+// crowd out the document they protect), roomier on IndexedDB, whose quota
+// is a share of free disk. Still bounded there because rotation rewrites
+// every slot, so each destructive op costs O(cap × blob) of writes.
 const BACKUP_KEY_PREFIX = 'projects_backup_'
-const MAX_BACKUPS = 50
+export const LOCAL_STORAGE_MAX_BACKUPS = 3
+export const INDEXED_DB_MAX_BACKUPS = 10
+// Highest backup index any shipped build ever wrote (#116 raised the cap to
+// 50). Lowering the cap does NOT reclaim slots above it on its own —
+// rotation only touches indices up to the current cap — so
+// `pruneExcessBackups` sweeps up to this bound to delete the orphans.
+export const LEGACY_MAX_BACKUPS = 50
+
+// Which adapter the projects blob and its backups live in. Defaults to
+// localStorage so tests and any code running before `initProjectsStorage`
+// (storage-init.ts) keep the historical behavior; that bootstrap swaps in
+// the IndexedDB-backed adapter once it's open. The small UI-state sidecars
+// below deliberately always stay on `localStorageAdapter`: they're tiny,
+// and keeping them synchronous and shared across builds is worth more than
+// moving them.
+let projectsAdapter: StorageAdapter = localStorageAdapter
+let maxBackups = LOCAL_STORAGE_MAX_BACKUPS
+
+export function configureProjectsStorage(
+  adapter: StorageAdapter,
+  options: { maxBackups: number },
+): void {
+  projectsAdapter = adapter
+  maxBackups = options.maxBackups
+}
+
+/** Restores the localStorage defaults. Test-only escape hatch. */
+export function resetProjectsStorage(): void {
+  configureProjectsStorage(localStorageAdapter, { maxBackups: LOCAL_STORAGE_MAX_BACKUPS })
+}
+
+export function getProjectsAdapter(): StorageAdapter {
+  return projectsAdapter
+}
 
 // UI-state persistence (issue #92: "memory"). Kept in localStorage next to
 // the projects data but deliberately separate keys — losing/ignoring these
@@ -82,7 +123,7 @@ export interface LastEditedFile {
   file: string
 }
 
-export function loadProjects(adapter: StorageAdapter = localStorageAdapter): ProjectsState {
+export function loadProjects(adapter: StorageAdapter = projectsAdapter): ProjectsState {
   const raw = adapter.get(PROJECTS_STORAGE_KEY)
   if (!raw) {
     const seeded = seedDefaultProjects()
@@ -134,11 +175,57 @@ export function loadProjects(adapter: StorageAdapter = localStorageAdapter): Pro
   return envelope.projects
 }
 
+/**
+ * Side-effect-free counterpart of `loadProjects` for a raw blob read from
+ * somewhere other than the active adapter (storage-init.ts reconciling a
+ * copy a stale tab left in localStorage). Returns `null` when the blob is
+ * absent or unparseable — never seeds, never writes back.
+ */
+export function parseProjectsBlob(raw: string | null): ProjectsState | null {
+  if (!raw) return null
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return null
+  }
+  if (isFutureSchema(parsed)) return parsed.projects
+  return migrateStoredProjects(parsed).projects
+}
+
+/**
+ * Persists the projects blob. Throws on a storage failure (the caller —
+ * useProjects' `persist` — turns that into an error toast and keeps the
+ * previous state on screen).
+ *
+ * Issue #120: backups are best-effort, the document is not. When the write
+ * hits the quota, evict backups oldest-first and retry after each eviction,
+ * so accumulated safety-net copies can never be the reason the user's
+ * actual edit is refused. Only a quota error triggers this — any other
+ * failure is rethrown untouched, and if evicting every backup still isn't
+ * enough the original error propagates.
+ */
 export function saveProjects(
   projects: ProjectsState,
-  adapter: StorageAdapter = localStorageAdapter,
+  adapter: StorageAdapter = projectsAdapter,
 ): void {
-  writeEnvelope({ schemaVersion: CURRENT_SCHEMA_VERSION, projects }, adapter)
+  const envelope: StorageEnvelope = { schemaVersion: CURRENT_SCHEMA_VERSION, projects }
+  try {
+    writeEnvelope(envelope, adapter)
+    return
+  } catch (error) {
+    if (!isQuotaExceededError(error)) throw error
+    while (evictOldestBackup(adapter)) {
+      try {
+        writeEnvelope(envelope, adapter)
+        console.warn('Storage quota reached; evicted old backups to save projects.')
+        return
+      } catch (retryError) {
+        if (!isQuotaExceededError(retryError)) throw retryError
+      }
+    }
+    throw error
+  }
 }
 
 function writeEnvelope(envelope: StorageEnvelope, adapter: StorageAdapter): void {
@@ -146,14 +233,50 @@ function writeEnvelope(envelope: StorageEnvelope, adapter: StorageAdapter): void
 }
 
 /**
+ * Deletes the oldest existing backup slot (scanning up to
+ * LEGACY_MAX_BACKUPS, so orphans above the cap go first). Returns whether
+ * anything was deleted. Shared by `saveProjects`' synchronous quota
+ * recovery and storage-init.ts's asynchronous one (IndexedDB reports quota
+ * failures only after the write was queued).
+ */
+export function evictOldestBackup(adapter: StorageAdapter = projectsAdapter): boolean {
+  for (let index = LEGACY_MAX_BACKUPS; index >= 1; index--) {
+    const key = `${BACKUP_KEY_PREFIX}${index}`
+    if (adapter.get(key) === null) continue
+    adapter.remove(key)
+    return true
+  }
+  return false
+}
+
+// `QuotaExceededError` is the standard name; legacy Firefox used
+// `NS_ERROR_DOM_QUOTA_REACHED`, and old WebKit only set the numeric code 22.
+export function isQuotaExceededError(error: unknown): boolean {
+  return (
+    error instanceof DOMException &&
+    (error.name === 'QuotaExceededError' ||
+      error.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+      error.code === 22)
+  )
+}
+
+/**
  * Independent safety net for destructive operations (bulk delete, ZIP
  * import overwrite, restore-from-backup): snapshots the *current*
  * persisted `projects` state into a rotating backup key
- * (`projects_backup_1` .. `projects_backup_{MAX_BACKUPS}`) before the
+ * (`projects_backup_1` .. `projects_backup_{cap}`, cap per backend) before the
  * caller proceeds to overwrite/delete it.
  *
  * Call this with the in-memory state that is *about to be replaced*,
  * right before the destructive `saveProjects` call — not after.
+ *
+ * Deduplicated (issue #120): when the snapshot is identical to the newest
+ * backup, nothing is written — a second copy protects nothing and would
+ * push a genuinely different older snapshot out of the rotation. This is
+ * an exact comparison of the serialized blob, deliberately NOT a
+ * "structural changes only" heuristic: a ZIP import or a Drive merge
+ * overwrites same-named files' CONTENT without changing any names, and that
+ * content is precisely what the backup exists to preserve.
  *
  * Best-effort: a full backup rotation can push localStorage over its quota
  * (it's already the operation most likely to do so, since it writes extra
@@ -163,30 +286,60 @@ function writeEnvelope(envelope: StorageEnvelope, adapter: StorageAdapter): void
  */
 export function backupProjects(
   current: ProjectsState,
-  adapter: StorageAdapter = localStorageAdapter,
+  adapter: StorageAdapter = projectsAdapter,
 ): void {
   try {
+    const snapshot = JSON.stringify({ schemaVersion: CURRENT_SCHEMA_VERSION, projects: current })
+    if (adapter.get(`${BACKUP_KEY_PREFIX}1`) === snapshot) return
     rotateBackups(adapter)
-    adapter.set(
-      `${BACKUP_KEY_PREFIX}1`,
-      JSON.stringify({ schemaVersion: CURRENT_SCHEMA_VERSION, projects: current }),
-    )
+    adapter.set(`${BACKUP_KEY_PREFIX}1`, snapshot)
   } catch (error) {
     console.error('Failed to write projects backup; continuing without it.', error)
   }
 }
 
 function rotateBackups(adapter: StorageAdapter): void {
-  for (let index = MAX_BACKUPS; index >= 1; index--) {
+  for (let index = maxBackups; index >= 1; index--) {
     const key = `${BACKUP_KEY_PREFIX}${index}`
     const value = adapter.get(key)
     if (value === null) continue
-    if (index === MAX_BACKUPS) {
+    if (index === maxBackups) {
       adapter.remove(key)
     } else {
       adapter.set(`${BACKUP_KEY_PREFIX}${index + 1}`, value)
     }
   }
+}
+
+/**
+ * Deletes backup slots above the active cap, up to the highest index any
+ * build ever wrote (see LEGACY_MAX_BACKUPS). Run once at boot: after the
+ * cap dropped from 50, slots 4..50 would otherwise sit in localStorage
+ * forever, still consuming the quota the lower cap was meant to free.
+ * Best-effort — a failure here only leaves stale copies behind.
+ */
+export function pruneExcessBackups(adapter: StorageAdapter = projectsAdapter): void {
+  try {
+    for (let index = maxBackups + 1; index <= LEGACY_MAX_BACKUPS; index++) {
+      const key = `${BACKUP_KEY_PREFIX}${index}`
+      if (adapter.get(key) !== null) adapter.remove(key)
+    }
+  } catch (error) {
+    console.error('Failed to prune excess projects backups; continuing.', error)
+  }
+}
+
+/**
+ * Every key the projects feature owns in the blob store: the primary blob
+ * plus all backup slots any build could have written. storage-init.ts uses
+ * this to copy them into IndexedDB and then clear them from localStorage.
+ */
+export function projectsStorageKeys(): { primary: string; backups: string[] } {
+  const backups: string[] = []
+  for (let index = 1; index <= LEGACY_MAX_BACKUPS; index++) {
+    backups.push(`${BACKUP_KEY_PREFIX}${index}`)
+  }
+  return { primary: PROJECTS_STORAGE_KEY, backups }
 }
 
 /**

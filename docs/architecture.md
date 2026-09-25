@@ -52,7 +52,9 @@ folder below and know what belongs there without reading code first.
 - `src/components/` — shared, framework-level "dumb" UI components with no
   feature-specific business logic (buttons, modals, layout primitives).
 - `src/lib/` — framework-agnostic logic usable outside Preact: the
-  localStorage/storage adapter, the markdown render + sanitize pipeline, and
+  localStorage/storage adapter (plus the IndexedDB key/value store and
+  its synchronous write-behind mirror, ADR-0005), the markdown render +
+  sanitize pipeline, and
   zip (JSZip) utilities.
 - `src/styles/` — design tokens and global CSS.
 - `public/` — static assets served as-is (icons, manifest).
