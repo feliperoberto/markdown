@@ -685,6 +685,10 @@ body[data-dragging] {
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  /* Flex items default to `min-width: auto`, which would stop the trail
+     shrinking below its text width and push .toolbar-actions off-screen
+     instead of letting the ellipsis below kick in. */
+  min-width: 0;
   font-family: var(--mono);
   font-size: 10px;
   letter-spacing: 0.05em;
@@ -706,6 +710,63 @@ body[data-dragging] {
 .breadcrumb-current {
   color: var(--cream);
   font-weight: 700;
+}
+
+/* Right-hand toolbar actions: [PDF] | [download]. Download stays the
+   dominant action; the PDF button is compact and dimmed so the two never
+   read as equal-weight twins, and a 1px rule between them plus the gap
+   keeps a slightly-off tap from firing the wrong one. Opacity snaps rather
+   than transitions (see Button.module.css's transition note). */
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+/* Two classes so this beats the IconButton module's single-class rules
+   regardless of stylesheet order. `:not(:disabled)` leaves the module's own
+   disabled opacity (0.4) untouched instead of compounding with it. */
+.toolbar-actions .toolbar-pdf-btn {
+  position: relative;
+}
+
+.toolbar-actions .toolbar-pdf-btn:not(:disabled) {
+  opacity: 0.75;
+}
+
+.toolbar-actions .toolbar-pdf-btn:not(:disabled):hover,
+.toolbar-actions .toolbar-pdf-btn:not(:disabled):focus-visible {
+  opacity: 1;
+}
+
+/* The divider, centred in the gap (half of 0.75rem, minus half its own
+   width). currentColor keeps it on-theme; pointer-events off so it never
+   widens the PDF button's hit area. */
+.toolbar-actions .toolbar-pdf-btn::after {
+  content: '';
+  position: absolute;
+  top: 25%;
+  bottom: 25%;
+  right: calc(-0.375rem - 0.5px);
+  width: 1px;
+  background-color: currentColor;
+  opacity: 0.25;
+  pointer-events: none;
+}
+
+/* Touch: 44x44 minimum hit area (WCAG 2.5.5) for both actions — the compact
+   PDF button is 30px and the default IconButton 42px on fine pointers. */
+@media (pointer: coarse) {
+  .toolbar-actions > button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* Print-only container, filled by the PDF export (see PRINT below). */
+.print-root {
+  display: none;
 }
 
 /* Main editor/preview area */
@@ -1364,23 +1425,110 @@ footer,
 /* ============================================================
    PRINT
    ============================================================ */
+/* Print / "Exportar PDF". The app shell is a 100%-height, overflow-hidden
+   flex layout, so printing it in place truncates to one page (and prints
+   nothing from the edit view, where the preview is hidden). Instead the
+   print feature renders the document into `.print-root` — a direct child
+   of <body> — and print hides every other body child, so the document
+   flows through normal block layout and paginates.
+
+   Fidelity: same --paper/--ink/fonts as the on-screen preview, following
+   the active [data-theme] (tokens resolve at print time too), with
+   print-color-adjust: exact so the browser keeps backgrounds even when the
+   dialog's "Background graphics" box is unchecked.
+
+   Page margin is 0 and the spacing lives on .print-document instead:
+   Chromium paints @page margin boxes white regardless of the root
+   background, which left a white frame around dark-theme pages.
+   box-decoration-break: clone repeats the padding at every page break so
+   each page keeps its inner spacing, not just the first/last. */
+@page {
+  size: auto;
+  margin: 0;
+}
+
 @media print {
-  body * {
-    visibility: hidden;
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+    background: var(--paper) !important;
   }
 
-  .preview-content,
-  .preview-content * {
-    visibility: visible;
+  html,
+  .print-root,
+  .print-document {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 
-  .preview-content {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
+  body > :not(.print-root) {
+    display: none !important;
+  }
+
+  .print-root {
+    display: block;
+  }
+
+  /* Undo the on-screen "sheet on a desk" framing (flex child, scroll box,
+     shadow, tabbed corner). --font-scale is pinned to 1: the "Aa" toggle is
+     a viewing preference, not part of the document. Setting it here also
+     applies to this element's own calc() font-size, since var() resolves
+     against the element's own custom property value. */
+  .print-document {
+    --font-scale: 1;
+    flex: none;
+    height: auto;
+    overflow: visible;
+    padding: 16mm 14mm;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
     box-shadow: none;
     border-radius: 0;
+    background: var(--paper);
+    color: var(--ink);
+  }
+
+  /* Pagination: keep headings with the content that follows them and avoid
+     splitting atomic blocks across pages. */
+  .print-document h1,
+  .print-document h2,
+  .print-document h3,
+  .print-document h4,
+  .print-document h5,
+  .print-document h6 {
+    break-after: avoid;
+    break-inside: avoid;
+  }
+
+  .print-document pre,
+  .print-document blockquote,
+  .print-document table,
+  .print-document img,
+  .print-document figure {
+    break-inside: avoid;
+  }
+
+  .print-document p,
+  .print-document li {
+    orphans: 3;
+    widows: 3;
+  }
+
+  /* Repeat a long table's header row on each page. */
+  .print-document thead {
+    display: table-header-group;
+  }
+
+  /* No scrollbars on paper: wrap long code lines instead of clipping. */
+  .print-document pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    overflow: visible;
+  }
+
+  .print-document img {
+    max-width: 100%;
   }
 }
 
