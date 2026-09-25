@@ -1,6 +1,7 @@
 export * from './types'
 export * from './model'
 export * from './storage'
+export * from './storage-init'
 export * from './dialogs'
 export { useProjects } from './useProjects'
 export type { UseProjectsResult } from './useProjects'

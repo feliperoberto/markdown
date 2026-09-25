@@ -16,6 +16,21 @@ export interface StorageAdapter {
   remove(key: string): void
 }
 
+/**
+ * Non-persistent adapter. Used for the projects blob only when its durable
+ * home (IndexedDB) is known to hold the user's data but can't be opened this
+ * session — writing a freshly seeded state anywhere durable would risk
+ * shadowing or overwriting the real one (see storage-init.ts).
+ */
+export function createMemoryStorageAdapter(): StorageAdapter {
+  const values = new Map<string, string>()
+  return {
+    get: (key) => values.get(key) ?? null,
+    set: (key, value) => void values.set(key, value),
+    remove: (key) => void values.delete(key),
+  }
+}
+
 export const localStorageAdapter: StorageAdapter = {
   get(key) {
     return localStorage.getItem(key)

@@ -1,6 +1,9 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   backupProjects,
+  configureProjectsStorage,
+  LEGACY_MAX_BACKUPS,
+  LOCAL_STORAGE_MAX_BACKUPS,
   loadArchivedFiles,
   loadArchivedProjects,
   loadCollapsedProjects,
@@ -11,6 +14,8 @@ import {
   saveCollapsedProjects,
   saveLastEditedFile,
   saveProjects,
+  pruneExcessBackups,
+  resetProjectsStorage,
 } from './storage'
 import { localStorageAdapter } from '@/lib/storage-adapter'
 import type { StorageAdapter } from '@/lib/storage-adapter'
@@ -244,5 +249,129 @@ describe('future-schema handling (ADR-0003: an old tab reading/writing after a n
 
     const backup = JSON.parse(localStorage.getItem('projects_backup_1') ?? '')
     expect(backup.schemaVersion).toBe(CURRENT_SCHEMA_VERSION)
+  })
+})
+
+describe('backups — issue #120 (quota exhaustion)', () => {
+  const snapshot = (projects: object) =>
+    JSON.stringify({ schemaVersion: CURRENT_SCHEMA_VERSION, projects })
+
+  beforeEach(() => {
+    localStorage.clear()
+    resetProjectsStorage()
+  })
+  afterEach(() => resetProjectsStorage())
+
+  it(`caps localStorage backups at ${LOCAL_STORAGE_MAX_BACKUPS}, newest first`, () => {
+    for (let index = 1; index <= 5; index++) backupProjects({ [`P${index}`]: {} })
+
+    expect(localStorage.getItem('projects_backup_1')).toBe(snapshot({ P5: {} }))
+    expect(localStorage.getItem('projects_backup_3')).toBe(snapshot({ P3: {} }))
+    expect(localStorage.getItem('projects_backup_4')).toBeNull()
+  })
+
+  it('skips a backup identical to the newest one', () => {
+    backupProjects({ A: {} })
+    backupProjects({ B: {} })
+    backupProjects({ B: {} })
+
+    expect(localStorage.getItem('projects_backup_1')).toBe(snapshot({ B: {} }))
+    expect(localStorage.getItem('projects_backup_2')).toBe(snapshot({ A: {} }))
+    expect(localStorage.getItem('projects_backup_3')).toBeNull()
+  })
+
+  it('still backs up a content-only change (same names, different content)', () => {
+    const file = (content: string) => ({ name: 'f', content, size: 1, timestamp: 't' })
+    backupProjects({ P: { f: file('before import') } })
+    backupProjects({ P: { f: file('after import') } })
+
+    expect(localStorage.getItem('projects_backup_2')).not.toBeNull()
+  })
+
+  it(`pruneExcessBackups removes orphaned slots up to ${LEGACY_MAX_BACKUPS}`, () => {
+    for (let index = 1; index <= LEGACY_MAX_BACKUPS; index++) {
+      localStorage.setItem(`projects_backup_${index}`, `v${index}`)
+    }
+
+    pruneExcessBackups()
+
+    expect(localStorage.getItem('projects_backup_3')).toBe('v3')
+    expect(localStorage.getItem('projects_backup_4')).toBeNull()
+    expect(localStorage.getItem(`projects_backup_${LEGACY_MAX_BACKUPS}`)).toBeNull()
+  })
+
+  it('uses the configured adapter and cap', () => {
+    const values = new Map<string, string>()
+    const adapter: StorageAdapter = {
+      get: (key) => values.get(key) ?? null,
+      set: (key, value) => void values.set(key, value),
+      remove: (key) => void values.delete(key),
+    }
+    configureProjectsStorage(adapter, { maxBackups: 5 })
+
+    for (let index = 1; index <= 6; index++) backupProjects({ [`P${index}`]: {} })
+    saveProjects({ X: {} })
+
+    expect(values.get('projects_backup_5')).toBe(snapshot({ P2: {} }))
+    expect(values.has('projects_backup_6')).toBe(false)
+    expect(loadProjects()).toEqual({ X: {} })
+    expect(localStorage.length).toBe(0)
+  })
+})
+
+describe('saveProjects — quota recovery by evicting backups (issue #120)', () => {
+  // Adapter with a character budget, modelling localStorage's quota.
+  function budgetAdapter(budget: number) {
+    const values = new Map<string, string>()
+    const used = () => Array.from(values.values()).reduce((sum, value) => sum + value.length, 0)
+    const adapter: StorageAdapter = {
+      get: (key) => values.get(key) ?? null,
+      set: (key, value) => {
+        const previous = values.get(key)?.length ?? 0
+        if (used() - previous + value.length > budget) {
+          throw new DOMException('The quota has been exceeded.', 'QuotaExceededError')
+        }
+        values.set(key, value)
+      },
+      remove: (key) => void values.delete(key),
+    }
+    return { adapter, values }
+  }
+
+  it('evicts the oldest backups until the primary blob fits', () => {
+    const { adapter, values } = budgetAdapter(1000)
+    values.set('projects_backup_1', 'x'.repeat(300))
+    values.set('projects_backup_2', 'x'.repeat(300))
+    values.set('projects_backup_3', 'x'.repeat(300))
+    const big = { P: { f: { name: 'f', content: 'y'.repeat(250), size: 250, timestamp: 't' } } }
+
+    saveProjects(big, adapter)
+
+    expect(values.has('projects_backup_3')).toBe(false)
+    expect(values.has('projects_backup_1')).toBe(true)
+    expect(JSON.parse(values.get('projects') ?? '').projects).toEqual(big)
+  })
+
+  it('rethrows the quota error when no amount of eviction makes it fit', () => {
+    const { adapter, values } = budgetAdapter(50)
+    values.set('projects_backup_1', 'x'.repeat(10))
+    const big = { P: { f: { name: 'f', content: 'y'.repeat(100), size: 100, timestamp: 't' } } }
+
+    expect(() => saveProjects(big, adapter)).toThrow('quota')
+    expect(values.has('projects')).toBe(false)
+  })
+
+  it('never evicts on a non-quota error', () => {
+    const values = new Map([['projects_backup_1', 'keep']])
+    const adapter: StorageAdapter = {
+      get: (key) => values.get(key) ?? null,
+      set: () => {
+        throw new Error('boom')
+      },
+      remove: (key) => void values.delete(key),
+    }
+
+    expect(() => saveProjects({}, adapter)).toThrow('boom')
+    expect(values.get('projects_backup_1')).toBe('keep')
   })
 })

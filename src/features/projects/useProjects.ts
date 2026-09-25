@@ -13,6 +13,7 @@ import {
   saveProjects,
   saveTombstones,
 } from './storage'
+import { getProjectsStorageBackend, onProjectsWriteError } from './storage-init'
 import {
   clearFileTombstone,
   clearProjectTombstone,
@@ -32,6 +33,12 @@ import { useToast } from '@/components'
 // forever. Generous on purpose: a device that's been offline for weeks
 // should still have its deletions propagate correctly on reconnect.
 const TOMBSTONE_TTL_MS = 90 * 24 * 60 * 60 * 1000
+
+// Issue #120: on the IndexedDB backend a durable write can fail after the
+// in-memory update already happened (see mirrored-storage-adapter.ts), and
+// every later keystroke retries — and fails — again. One toast per window
+// is enough to tell the user; a toast per keystroke is noise.
+const WRITE_ERROR_TOAST_INTERVAL_MS = 10_000
 
 // Resolves which file to open on mount (issue #92): the last-edited file if
 // it's still present, otherwise the first available file. `null` only when
@@ -182,6 +189,25 @@ export function useProjects(): UseProjectsResult {
   // this is actually read.
   const [tombstones, setTombstones] = useState<Tombstones>(initialRef.current.tombstones)
   const showToast = useToast()
+
+  // Asynchronous persistence failures (IndexedDB backend only — the
+  // localStorage backend throws synchronously and `persist` handles it),
+  // plus a one-time warning when this session can't persist at all.
+  useEffect(() => {
+    if (getProjectsStorageBackend() === 'memory') {
+      showToast('Armazenamento indisponível: as alterações desta sessão não serão salvas', 'error')
+    }
+    let lastToastAt = -Infinity
+    return onProjectsWriteError((error) => {
+      const now = Date.now()
+      if (now - lastToastAt < WRITE_ERROR_TOAST_INTERVAL_MS) return
+      lastToastAt = now
+      showToast(
+        `Erro ao salvar: ${(error as Error)?.message ?? 'armazenamento indisponível'}`,
+        'error',
+      )
+    })
+  }, [showToast])
 
   // Write-through persistence for the archived set, mirroring
   // ProjectsSidebar's collapsedProjects effect. Best-effort (see
@@ -363,8 +389,9 @@ export function useProjects(): UseProjectsResult {
 
   const deleteProject = useCallback(
     (name: string) => {
-      backupProjects(projects)
       const next = model.deleteProject(projects, name)
+      // Only a delete that actually removes something needs a safety net.
+      if (next !== projects) backupProjects(projects)
       const saved = persist(next)
       // Both updaters read the same functional-update mechanism so they
       // can't disagree about whether `name` was the active project —
@@ -609,8 +636,8 @@ export function useProjects(): UseProjectsResult {
 
   const deleteFile = useCallback(
     (projectName: string, fileName: string) => {
-      backupProjects(projects)
       const next = model.deleteFile(projects, projectName, fileName)
+      if (next !== projects) backupProjects(projects)
       const saved = persist(next)
       if (currentProject === projectName && currentFile === fileName) {
         setCurrentFile(null)
@@ -702,7 +729,6 @@ export function useProjects(): UseProjectsResult {
   // straight back without a second pull/merge round-trip.
   const reconcileWithRemote = useCallback(
     (remote: unknown, remoteTombstones?: unknown) => {
-      backupProjects(projects)
       const combinedTombstones = pruneTombstones(
         mergeTombstones(tombstones, normalizeTombstones(remoteTombstones)),
         new Date().toISOString(),
@@ -713,7 +739,13 @@ export function useProjects(): UseProjectsResult {
         normalizeProjectsState(remote),
         combinedTombstones,
       )
-      if (localChanged) persist(merged)
+      // Back up only when the merge is about to overwrite local state —
+      // previously every sync wrote a full backup even when nothing local
+      // changed, rotating genuinely different snapshots out of the cap.
+      if (localChanged) {
+        backupProjects(projects)
+        persist(merged)
+      }
       if (combinedTombstones !== tombstones) setTombstones(combinedTombstones)
       return { projects: merged, tombstones: combinedTombstones }
     },
