@@ -6,8 +6,9 @@
  * emitted by the Preact components under `src/`. Component-local styling
  * (Button, Modal, Toast, Checkbox, DriveSyncPanel) stays in their own
  * CSS Modules — this file only covers app-shell layout, the sidebar,
- * editor/preview panes, footer, dropdown menu, and the rendered-markdown
- * typography in `.preview-content`, none of which had a home before.
+ * editor/preview panes, footer and dropdown menu, none of which had a home
+ * before. The rendered markdown inside the preview's sheet (and on paper)
+ * is the document theme, in `document.css`.
  *
  * Design tokens (colors, fonts, --transition) come from `tokens.css`,
  * imported before this file in `main.tsx`.
@@ -853,11 +854,21 @@ main,
   overflow: hidden;
 }
 
+/* The sheet is sized like a page: the document's 44em measure
+   (document.css) plus the sheet's side margins, so a line holds what it
+   will hold on A4 — screen and print break lines alike — and on wide
+   screens the desk shows around it. The wrapper takes on the document's
+   body size so its own `em` is the document's, at every "Aa" scale; the
+   tab label and the sheet set their own sizes. */
 .preview-wrapper {
   flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  width: 100%;
+  max-width: calc(44em + 2 * (1rem + 1.6em));
+  margin-inline: auto;
+  font-size: calc(0.95rem * var(--font-scale));
 }
 
 .preview-label {
@@ -875,164 +886,21 @@ main,
   flex-shrink: 0;
 }
 
+/* The sheet itself. Everything inside it — the rendered markdown's type,
+   color and layout, including its --font-scale-derived size (issue #92) —
+   is the document theme, in document.css, shared with print. The side
+   margins grow with the text, leaving room for the marks that theme hangs
+   outside the column (the h2 chip). */
 .preview-content {
   flex: 1;
   overflow-y: auto;
-  padding: 1.5rem 1.5rem 2rem;
+  padding: 1.5rem calc(1rem + 1.6em) 2rem;
   background-color: var(--paper);
   color: var(--ink);
   border-radius: 0 10px 10px 10px;
   box-shadow:
     0 6px 0 -2px rgba(0, 0, 0, 0.2),
     0 4px 20px rgba(0, 0, 0, 0.25);
-  /* Base font-size for the rendered preview, derived from the shared
-     --font-scale multiplier (issue #92): the "Aa" toggle now scales the
-     preview too, not only the editor. Every child below keeps its original
-     `rem` size but multiplies it by --font-scale, so the whole document
-     grows proportionally without `em` compounding. */
-  font-size: calc(1rem * var(--font-scale));
-}
-
-/* Rendered markdown typography (paper). Each size is its original `rem`
-   value multiplied by --font-scale, so the whole document scales
-   proportionally with the font-size toggle. */
-.preview-content h1 {
-  font-family: var(--hand);
-  font-weight: 700;
-  font-size: calc(2.2rem * var(--font-scale));
-  line-height: 0.95;
-  color: var(--ink);
-  margin: 0 0 0.5rem;
-}
-
-.preview-content h2 {
-  font-family: var(--serif-display);
-  font-weight: 600;
-  font-size: calc(1.4rem * var(--font-scale));
-  color: var(--ink);
-  margin: 1.2rem 0 0.5rem;
-}
-
-.preview-content h3 {
-  font-family: var(--serif-display);
-  font-weight: 600;
-  font-size: calc(1.1rem * var(--font-scale));
-  color: var(--ink);
-  margin: 1rem 0 0.4rem;
-}
-
-.preview-content h4,
-.preview-content h5,
-.preview-content h6 {
-  font-family: var(--serif-display);
-  font-weight: 600;
-  color: var(--ink);
-  margin: 0.8rem 0 0.3rem;
-}
-
-.preview-content p {
-  font-family: var(--body);
-  font-size: calc(0.95rem * var(--font-scale));
-  line-height: 1.7;
-  color: var(--ink);
-  margin: 0 0 0.75rem;
-}
-
-.preview-content a {
-  color: var(--link);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.preview-content strong {
-  font-weight: 700;
-}
-
-.preview-content em {
-  font-style: italic;
-}
-
-.preview-content code {
-  font-family: var(--mono);
-  font-size: 0.85em;
-  background: var(--code-bg);
-  padding: 1px 5px;
-  border-radius: 3px;
-  color: var(--ink);
-}
-
-.preview-content pre {
-  background: var(--ground-deep);
-  border-radius: 8px;
-  padding: 1rem;
-  overflow-x: auto;
-  margin: 0 0 0.75rem;
-}
-
-.preview-content pre code {
-  background: none;
-  color: var(--cream);
-  padding: 0;
-  font-size: calc(0.8rem * var(--font-scale));
-  line-height: 1.5;
-}
-
-.preview-content blockquote {
-  font-family: var(--serif-display);
-  font-style: italic;
-  font-size: calc(1rem * var(--font-scale));
-  line-height: 1.5;
-  color: var(--ink);
-  padding: 0.5rem 0 0.5rem 1rem;
-  border-left: 3px solid var(--accent);
-  margin: 0 0 0.75rem;
-}
-
-.preview-content ul,
-.preview-content ol {
-  margin: 0 0 0.75rem;
-  padding-left: 1.5rem;
-}
-
-.preview-content li {
-  font-family: var(--body);
-  font-size: calc(0.92rem * var(--font-scale));
-  line-height: 1.55;
-  color: var(--ink);
-  margin: 0.25rem 0;
-}
-
-.preview-content hr {
-  border: none;
-  border-top: 2px dashed var(--paper-edge);
-  margin: 1.2rem 0;
-}
-
-.preview-content img {
-  max-width: 100%;
-  border-radius: 8px;
-  margin: 0.5rem 0;
-}
-
-.preview-content table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 0 0 0.75rem;
-  font-size: calc(0.88rem * var(--font-scale));
-}
-
-.preview-content th,
-.preview-content td {
-  border: 1px solid var(--paper-edge);
-  padding: 0.4rem 0.6rem;
-  text-align: left;
-  color: var(--ink);
-}
-
-.preview-content th {
-  background: var(--code-bg);
-  font-family: var(--serif-display);
-  font-weight: 600;
 }
 
 /* ============================================================
@@ -1432,21 +1300,12 @@ footer,
    of <body> — and print hides every other body child, so the document
    flows through normal block layout and paginates.
 
-   Fidelity: same --paper/--ink/fonts as the on-screen preview, following
-   the active [data-theme] (tokens resolve at print time too), with
-   print-color-adjust: exact so the browser keeps backgrounds even when the
-   dialog's "Background graphics" box is unchecked.
-
-   Page margin is 0 and the spacing lives on .print-document instead:
-   Chromium paints @page margin boxes white regardless of the root
-   background, which left a white frame around dark-theme pages.
-   box-decoration-break: clone repeats the padding at every page break so
-   each page keeps its inner spacing, not just the first/last. */
-@page {
-  size: auto;
-  margin: 0;
-}
-
+   This section is only that plumbing. How the document itself prints —
+   page geometry, running head and page numbers, pagination, what paper
+   can't do — is part of the document theme, in document.css, next to the
+   screen rules it keeps in parity with. print-color-adjust: exact keeps
+   the paper background and theme colors even when the dialog's
+   "Background graphics" box is unchecked. */
 @media print {
   html,
   body {
@@ -1468,67 +1327,6 @@ footer,
 
   .print-root {
     display: block;
-  }
-
-  /* Undo the on-screen "sheet on a desk" framing (flex child, scroll box,
-     shadow, tabbed corner). --font-scale is pinned to 1: the "Aa" toggle is
-     a viewing preference, not part of the document. Setting it here also
-     applies to this element's own calc() font-size, since var() resolves
-     against the element's own custom property value. */
-  .print-document {
-    --font-scale: 1;
-    flex: none;
-    height: auto;
-    overflow: visible;
-    padding: 16mm 14mm;
-    box-decoration-break: clone;
-    -webkit-box-decoration-break: clone;
-    box-shadow: none;
-    border-radius: 0;
-    background: var(--paper);
-    color: var(--ink);
-  }
-
-  /* Pagination: keep headings with the content that follows them and avoid
-     splitting atomic blocks across pages. */
-  .print-document h1,
-  .print-document h2,
-  .print-document h3,
-  .print-document h4,
-  .print-document h5,
-  .print-document h6 {
-    break-after: avoid;
-    break-inside: avoid;
-  }
-
-  .print-document pre,
-  .print-document blockquote,
-  .print-document table,
-  .print-document img,
-  .print-document figure {
-    break-inside: avoid;
-  }
-
-  .print-document p,
-  .print-document li {
-    orphans: 3;
-    widows: 3;
-  }
-
-  /* Repeat a long table's header row on each page. */
-  .print-document thead {
-    display: table-header-group;
-  }
-
-  /* No scrollbars on paper: wrap long code lines instead of clipping. */
-  .print-document pre {
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    overflow: visible;
-  }
-
-  .print-document img {
-    max-width: 100%;
   }
 }
 

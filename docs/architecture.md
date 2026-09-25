@@ -59,7 +59,9 @@ folder below and know what belongs there without reading code first.
   its synchronous write-behind mirror, ADR-0005), the markdown render +
   sanitize pipeline, and
   zip (JSZip) utilities.
-- `src/styles/` — design tokens and global CSS.
+- `src/styles/` — design tokens, global CSS (app shell and chrome), and
+  the document theme (`document.css`): how rendered markdown looks, shared
+  by the preview and the PDF export (ADR-0007).
 - `public/` — static assets served as-is (icons, manifest).
 
 ### Import rule
