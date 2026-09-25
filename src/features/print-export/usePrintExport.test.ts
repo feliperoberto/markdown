@@ -139,6 +139,27 @@ describe('usePrintExport', () => {
     expect(printDoc()?.innerHTML).toBe('')
   })
 
+  it('printDocument keeps its already-decoded nodes through the beforeprint print() fires', async () => {
+    const { result } = renderHook(() =>
+      usePrintExport({ content: '![x](https://example.com/x.png)', fileName: 'a.md' }),
+    )
+
+    let imgBeforePrint: Element | null | undefined
+    printSpy.mockImplementation(() => {
+      imgBeforePrint = printDoc()?.querySelector('img')
+      window.dispatchEvent(new Event('beforeprint'))
+      expect(printDoc()?.querySelector('img')).toBe(imgBeforePrint)
+      window.dispatchEvent(new Event('afterprint'))
+    })
+
+    await act(async () => {
+      await result.current.printDocument()
+    })
+
+    expect(imgBeforePrint).toBeTruthy()
+    expect(printSpy).toHaveBeenCalledOnce()
+  })
+
   it('printDocument does not wait forever on an image that never decodes', async () => {
     vi.useFakeTimers()
     try {

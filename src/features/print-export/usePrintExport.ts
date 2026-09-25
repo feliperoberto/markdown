@@ -70,6 +70,11 @@ export function usePrintExport({ content, fileName }: UsePrintExportOptions): Us
   // the button path followed by the browser's own beforeprint doesn't swap
   // twice (and then "restore" to the file name).
   const savedTitleRef = useRef<string | null>(null)
+  // Set while printDocument hands off to window.print(): it already filled
+  // the print root and waited for its images, so the beforeprint that
+  // print() fires must not re-render — that would replace the decoded
+  // <img> nodes with fresh, unloaded ones and defeat the wait.
+  const skipBeforePrintFillRef = useRef(false)
 
   useEffect(() => {
     const root = document.createElement('div')
@@ -113,7 +118,7 @@ export function usePrintExport({ content, fileName }: UsePrintExportOptions): Us
 
   useEffect(() => {
     const handleBeforePrint = () => {
-      fill()
+      if (!skipBeforePrintFillRef.current) fill()
       swapTitle()
     }
     window.addEventListener('beforeprint', handleBeforePrint)
@@ -132,7 +137,12 @@ export function usePrintExport({ content, fileName }: UsePrintExportOptions): Us
     // Cleanup (clearing the print root, restoring the title) happens in
     // the afterprint listener, which fires both where print() blocks and
     // where it returns immediately.
-    window.print()
+    skipBeforePrintFillRef.current = true
+    try {
+      window.print()
+    } finally {
+      skipBeforePrintFillRef.current = false
+    }
   }, [fill, swapTitle])
 
   return { printDocument }
