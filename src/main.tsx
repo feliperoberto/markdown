@@ -5,6 +5,7 @@ import { initProjectsStorage } from '@/features/projects'
 import '@/styles/fonts.css'
 import '@/styles/tokens.css'
 import '@/styles/global.css'
+import '@/styles/document.css'
 
 const root = document.getElementById('app')
 

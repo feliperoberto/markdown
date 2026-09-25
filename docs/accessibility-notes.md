@@ -181,7 +181,43 @@ glyph itself is decorative; the accessible name comes from the label.
   is unreliable: it is removed from the DOM entirely rather than left as a
   dead Tab stop.
 
-## 8. Manual verification performed
+## 8. Rendered document (preview and PDF)
+
+The document theme (`src/styles/document.css`, ADR-0007) and the renderer
+components behind it (`src/lib/markdown.ts`):
+
+- **Task lists keep their state for assistive tech.** Each item's box is a
+  `<span role="checkbox" aria-checked="true|false" aria-disabled="true">`,
+  which has the same semantics as the disabled `<input type="checkbox">`
+  that marked emits and the sanitizer strips. The list carries
+  `role="list"`, since WebKit drops list semantics when items hide their
+  markers. The tally under a checklist reads "Concluídas 2 de 3", not
+  "2/3", which screen readers announce as a fraction.
+- **Callouts are `role="note"`**, and their type never rests on color
+  alone (WCAG 1.4.1). It is written out in the label ("Aviso"), and each
+  type also has its own icon shape. A custom title is shown next to the
+  label, not in place of it.
+- **Quotes and figures use their HTML semantics.** A quote's attribution
+  is a `<figcaption>` of a `<figure>` around the `<blockquote>`, outside
+  the quoted words. An image's title becomes its `<figcaption>` and is
+  removed from the `<img>`, so it isn't announced twice.
+- **Contrast (WCAG 1.4.3, AA).** Colors derived for the document
+  (callout labels, links, the highlighter, markers) are computed from the
+  theme tokens with `color-mix()` and calibrated for both themes. An
+  automated pass over every text run of a document using all elements
+  (87 runs) found none below 4.5:1. The lowest were 4.9:1 in the light
+  theme (the amber "Aviso" label) and 5.4:1 in the dark theme
+  (highlighted text). Links are slightly deepened from `--link`, which is
+  4.6:1 on bare paper but fell to 4.3:1 on tinted callouts.
+- **Nothing depends on hover or clicking on paper.** In the PDF, link
+  destinations are printed after the link text (unless the text already is
+  the URL), abbreviations are spelled out, and `<details>` print open,
+  with the summary as a plain heading.
+- **Motion.** The only animation, the `<summary>` triangle's rotation,
+  uses `--transition` and is covered by the global
+  `prefers-reduced-motion` rule.
+
+## 9. Manual verification performed
 
 - Keyboard-only pass: tabbed through header icon buttons, sidebar footer
   buttons, create/rename/delete file flow (via the project `⋮` menu and

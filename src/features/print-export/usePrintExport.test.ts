@@ -198,4 +198,85 @@ describe('usePrintExport', () => {
 
     expect(document.title).toBe('Markdown')
   })
+
+  describe('page furniture', () => {
+    const runningHead = () =>
+      document.documentElement.style.getPropertyValue('--print-running-head')
+
+    afterEach(() => {
+      document.documentElement.style.removeProperty('--print-running-head')
+    })
+
+    it('sets the running head from the document’s title and clears it after printing', () => {
+      renderHook(() =>
+        usePrintExport({ content: '# Relatório "anual"\n\nTexto.', fileName: 'r.md' }),
+      )
+
+      act(() => {
+        window.dispatchEvent(new Event('beforeprint'))
+      })
+      expect(runningHead()).toBe('"Relatório \\"anual\\""')
+
+      act(() => {
+        window.dispatchEvent(new Event('afterprint'))
+      })
+      expect(runningHead()).toBe('')
+    })
+
+    it('falls back to the file name, without .md, when the document has no h1', () => {
+      renderHook(() => usePrintExport({ content: '## Seção\n\nTexto.', fileName: 'notas.md' }))
+
+      act(() => {
+        window.dispatchEvent(new Event('beforeprint'))
+      })
+      expect(runningHead()).toBe('"notas"')
+    })
+
+    it('leaves no running head when there is nothing to show', () => {
+      renderHook(() => usePrintExport({ content: 'Texto.', fileName: '' }))
+
+      act(() => {
+        window.dispatchEvent(new Event('beforeprint'))
+      })
+      expect(runningHead()).toBe('')
+    })
+
+    it('clears the running head on unmount', () => {
+      const { unmount } = renderHook(() => usePrintExport({ content: '# T', fileName: 't.md' }))
+      act(() => {
+        window.dispatchEvent(new Event('beforeprint'))
+      })
+      unmount()
+
+      expect(runningHead()).toBe('')
+    })
+
+    it('flags the print root for margin boxes only where the engine lays them out', () => {
+      const { unmount } = renderHook(() => usePrintExport({ content: 'x', fileName: 'x.md' }))
+      expect(document.querySelector('.print-root')?.hasAttribute('data-margin-boxes')).toBe(false)
+      unmount()
+
+      vi.stubGlobal('CSSMarginRule', class {})
+      renderHook(() => usePrintExport({ content: 'x', fileName: 'x.md' }))
+      expect(document.querySelector('.print-root')?.hasAttribute('data-margin-boxes')).toBe(true)
+    })
+  })
+
+  it('adapts the print render to paper: <details> open, link destinations marked', () => {
+    renderHook(() =>
+      usePrintExport({
+        content:
+          '<details><summary>Mais</summary>\n\nEscondido.\n\n</details>\n\n[o site](https://a.example)',
+        fileName: 'a.md',
+      }),
+    )
+
+    act(() => {
+      window.dispatchEvent(new Event('beforeprint'))
+    })
+    expect(printDoc()?.querySelector('details')?.open).toBe(true)
+    expect(printDoc()?.querySelector('a')?.getAttribute('data-print-url')).toBe('https://a.example')
+    // The on-screen preview is a separate render; only the print root is adapted.
+    expect(document.querySelectorAll('[data-print-url]')).toHaveLength(1)
+  })
 })

@@ -127,6 +127,15 @@ test.describe('sidebar reorder ("Mover" menu items)', () => {
     // (the omitted-at-the-ends case), not whether it's currently visible.
     await expect(page.getByRole('menuitem', { name: /Mover para baixo/ })).toHaveCount(1)
     await page.keyboard.press('Escape')
+    // Escape's close is a state update, not an instant DOM change — under
+    // CI's parallel worker load (each running a full browser instance) the
+    // re-render can lag past when the next line's click fires. That leaves
+    // this file-fixed-position menu (opened right above 'last', the very
+    // next row) still mounted and "visible" to intercept a click meant for
+    // 'last' below it, timing the test out. Wait for it to actually be gone
+    // — same pattern as file-row-actions.spec.ts's own Escape assertion —
+    // instead of assuming the keypress alone is enough.
+    await expect(page.getByRole('menu', { name: 'Ações do arquivo first' })).toHaveCount(0)
 
     // Selecting 'first' above moved activity off 'last', so re-select it
     // to reveal its own trigger before opening its menu.

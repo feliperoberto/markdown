@@ -1,0 +1,1070 @@
+/**
+ * Document theme — the rendered markdown, on screen and on paper.
+ *
+ * One stylesheet for the document wherever it appears: the on-screen
+ * preview (`.preview-content`, the sheet on the desk) and the print/PDF
+ * render (`.preview-content.print-document`, see src/features/print-export).
+ * Both show the same renderMarkdown() output through the same rules, which
+ * is what keeps screen and paper in parity; the PRINT layer at the end only
+ * adapts what paper needs differently — page geometry and furniture, and
+ * the things paper can't do (click, hover, scroll).
+ *
+ * Semiotics. The app's premise, "você marca com a mão, a máquina lê a
+ * estrutura", gives every mark on the page one of three registers, each
+ * with its own typeface and color, so a reader can tell who "speaks" in it:
+ *
+ * - Hand — Caveat, the coral accent, marks a few degrees off-square: what a
+ *   person does to paper. The title's stroke, the highlighter, the tick in
+ *   a box, the brand chip marking sections and breaks.
+ * - Machine — Courier Prime, uppercase letterspaced labels, the editor's
+ *   dark surface: structure and metadata. Code, keys, table headings,
+ *   callout types, figure numbers, tallies, page numbers — in the same
+ *   label style as the app chrome (.sidebar-title, .footer-stat).
+ * - Paper — Lora to read, Fraunces to display: the text itself.
+ *
+ * Color roles are derived from the theme tokens with color-mix() in OKLab,
+ * not new literals, so each one resolves under both [data-theme] palettes:
+ * mixing a hue with --ink darkens it on light paper and lightens it on dark
+ * paper, which keeps the tone-colored labels ≥ 4.5:1 (WCAG AA) in both.
+ *
+ * Sizes are `em` of the body text, set once on the root below — so the "Aa"
+ * scale and the print size each change a single value — and vertical
+ * margins are `em` of each element's own size.
+ */
+
+/* ============================================================
+   ROOT — tokens, body text, rhythm
+   ============================================================ */
+.preview-content {
+  --doc-gap: 0.85em;
+  /* Whatever the text currently sits on — the paper, or a tinted panel
+     (callouts, <details>) that redefines it — for marks that need to cut
+     cleanly through a line or fill a box with the ground around them. */
+  --doc-surface: var(--paper);
+  --doc-rule: var(--paper-edge);
+  --doc-rule-strong: color-mix(in oklab, var(--ink) 55%, var(--paper));
+  --doc-perforation: color-mix(in oklab, var(--ink) 30%, var(--paper));
+  --doc-chip: var(--code-bg);
+  /* --link sits at 4.6:1 on bare paper and drops under 4.5:1 on the tinted
+     panels (callouts, <details>); 15% of --ink restores ≥ 4.9:1 on every
+     surface in both themes without visibly changing the hue. */
+  --doc-link: color-mix(in oklab, var(--link) 85%, var(--ink));
+  --doc-marker: color-mix(in oklab, var(--accent) 70%, var(--ink));
+  --doc-tick: color-mix(in oklab, var(--success) 55%, var(--ink));
+  --doc-mark-strength: 55%;
+  --doc-mark: color-mix(in oklab, var(--c-amber) var(--doc-mark-strength), var(--paper));
+
+  counter-reset: md-figure;
+  font-family: var(--body);
+  /* Body text size; every other size in the document derives from it. The
+     preview's sheet width (global.css, .preview-wrapper) is sized off the
+     same value, so a line holds the same ~88 characters at every "Aa"
+     scale — and on A4, whose text block is the same 44em wide. */
+  font-size: calc(0.95rem * var(--font-scale));
+  line-height: 1.7;
+  color: var(--ink);
+  overflow-wrap: break-word;
+}
+
+/* The highlighter needs less strength on dark paper to keep light ink
+   legible over it (5.4:1 at 35%, vs 3.3:1 at the light theme's 55%). */
+[data-theme='dark'] .preview-content {
+  --doc-mark-strength: 35%;
+}
+
+.preview-content > :first-child {
+  margin-top: 0;
+}
+
+.preview-content > :last-child {
+  margin-bottom: 0;
+}
+
+.preview-content p {
+  margin: 0 0 var(--doc-gap);
+  text-wrap: pretty;
+}
+
+.preview-content ::selection {
+  background: color-mix(in oklab, var(--accent) 30%, var(--paper));
+  color: var(--ink);
+}
+
+/* ============================================================
+   HEADINGS — hierarchy by register, not by size alone
+   ============================================================
+   h1 is written by hand; h2–h4 are set in display type (h4 in italic);
+   h5–h6 become machine labels. Each level differs in more than size, so
+   the hierarchy survives the small end of the scale, where browser
+   defaults shrank h5/h6 below the body text. */
+.preview-content :is(h1, h2, h3, h4, h5, h6) {
+  color: var(--ink);
+  text-wrap: balance;
+}
+
+/* Room above for documents that open more than one top-level part; the
+   first heading of all loses it with the rest of the first child. */
+.preview-content h1 {
+  font-family: var(--hand);
+  font-weight: 700;
+  font-size: 2.3em;
+  line-height: 1;
+  margin: 1em 0 0.5em;
+}
+
+/* The hand's stroke under the title: a marker line, slightly off level. */
+.preview-content h1::after {
+  content: '';
+  display: block;
+  width: 2.4em;
+  height: 0.13em;
+  margin-top: 0.12em;
+  background: var(--accent);
+  clip-path: polygon(0 45%, 100% 0, 98% 100%, 1% 88%);
+  transform: rotate(-1.2deg);
+  transform-origin: left center;
+}
+
+.preview-content h2 {
+  position: relative;
+  font-family: var(--serif-display);
+  font-weight: 600;
+  font-size: 1.5em;
+  line-height: 1.25;
+  margin: 1.6em 0 0.55em;
+}
+
+/* Section mark: the brand chip (.brand-chip), hanging in the margin so the
+   heading text keeps the column's left edge. Top-level sections only: an
+   h2 nested in a quote, callout or list has no margin of its own to hang
+   the mark in. */
+.preview-content > h2::before {
+  content: '';
+  position: absolute;
+  left: -0.95em;
+  top: 0.44em;
+  width: 0.42em;
+  height: 0.42em;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18) inset;
+  transform: rotate(-6deg);
+}
+
+.preview-content h3 {
+  font-family: var(--serif-display);
+  font-weight: 600;
+  font-size: 1.2em;
+  line-height: 1.3;
+  margin: 1.4em 0 0.45em;
+}
+
+.preview-content h4 {
+  font-family: var(--serif-display);
+  font-weight: 600;
+  font-style: italic;
+  font-size: 1.05em;
+  line-height: 1.35;
+  margin: 1.3em 0 0.4em;
+}
+
+.preview-content :is(h5, h6) {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 0.78em;
+  line-height: 1.4;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin: 1.8em 0 0.6em;
+}
+
+.preview-content h6 {
+  font-size: 0.72em;
+  color: var(--ink-soft);
+}
+
+/* A heading straight under another belongs to it: close the gap. */
+.preview-content :is(h1, h2, h3, h4, h5, h6) + :is(h2, h3, h4, h5, h6) {
+  margin-top: 0.5em;
+}
+
+/* ============================================================
+   INLINE — emphasis, links, marks
+   ============================================================ */
+.preview-content strong,
+.preview-content b {
+  font-weight: 700;
+}
+
+.preview-content :is(em, i, cite, dfn) {
+  font-style: italic;
+}
+
+.preview-content var {
+  font-family: var(--serif-display);
+  font-style: italic;
+}
+
+.preview-content small {
+  font-size: 0.85em;
+}
+
+.preview-content a {
+  color: var(--doc-link);
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in oklab, var(--doc-link) 55%, transparent);
+  text-underline-offset: 0.2em;
+}
+
+.preview-content a:hover {
+  text-decoration-color: currentColor;
+}
+
+.preview-content a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Highlighter: a hand-drawn stroke of the amber accent behind the words —
+   the irregular radii are the uneven ends of a marker pass. */
+.preview-content mark {
+  color: inherit;
+  background: var(--doc-mark);
+  padding: 0.05em 0.2em;
+  margin: 0 -0.05em;
+  border-radius: 0.3em 0.15em 0.35em 0.1em / 0.2em 0.35em 0.15em 0.3em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* Struck through by hand: the stroke in the accent, the words receding. */
+.preview-content :is(del, s) {
+  color: var(--ink-soft);
+  text-decoration-line: line-through;
+  text-decoration-color: var(--doc-marker);
+  text-decoration-thickness: 0.1em;
+}
+
+.preview-content ins {
+  text-decoration-line: underline;
+  text-decoration-color: var(--doc-tick);
+  text-decoration-thickness: 0.1em;
+  text-underline-offset: 0.2em;
+}
+
+.preview-content u {
+  text-decoration-color: var(--doc-marker);
+  text-underline-offset: 0.2em;
+}
+
+.preview-content abbr[title] {
+  text-decoration: underline dotted;
+  text-underline-offset: 0.2em;
+  cursor: help;
+}
+
+/* Keep sub/superscripts from pushing their line apart. */
+.preview-content :is(sub, sup) {
+  position: relative;
+  font-size: 0.75em;
+  line-height: 0;
+  vertical-align: baseline;
+}
+
+.preview-content sup {
+  top: -0.5em;
+}
+
+.preview-content sub {
+  bottom: -0.25em;
+}
+
+/* ============================================================
+   MACHINE — code, keys, output
+   ============================================================ */
+.preview-content :is(code, kbd, samp) {
+  font-family: var(--mono);
+  font-size: 0.86em;
+}
+
+.preview-content code {
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+  background: var(--doc-chip);
+  color: var(--ink);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.preview-content a code {
+  color: inherit;
+}
+
+/* A key is an object: a cap with depth, not a chip of text. */
+.preview-content kbd {
+  display: inline-block;
+  min-width: 1.7em;
+  padding: 0 0.45em;
+  font-weight: 700;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--doc-rule-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+}
+
+/* Code blocks are the editor's own surface, set into the page: the
+   machine, visible inside the paper. */
+.preview-content pre {
+  margin: 1em 0;
+  padding: 0.95em 1.15em;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 0.84em;
+  /* Set on <pre> itself, not only on the <code> inside: the block's own
+     line height is the floor for every line (its strut), so a larger
+     inherited body line-height used to double-space the code. */
+  line-height: 1.6;
+  tab-size: 2;
+  color: var(--cream);
+  background: var(--ground-deep);
+  border-radius: 8px;
+}
+
+.preview-content pre code {
+  padding: 0;
+  font-size: 1em;
+  color: inherit;
+  background: none;
+  border-radius: 0;
+}
+
+.preview-content pre ::selection {
+  background: color-mix(in oklab, var(--accent) 45%, var(--ground-deep));
+  color: var(--cream);
+}
+
+/* Fenced code's language, as a tab on top of the block — the same tab the
+   sheet itself wears (.preview-label), in the machine's colors. In the
+   flow rather than positioned above the block, so on paper it can be kept
+   on the same page as the block's first line. */
+.preview-content .md-code {
+  margin: 1em 0;
+}
+
+.preview-content .md-code > pre {
+  margin: 0;
+}
+
+.preview-content .md-code::before {
+  content: attr(data-lang);
+  display: block;
+  width: fit-content;
+  margin-left: 0.9em;
+  padding: 0.3em 0.9em 0.15em;
+  font-family: var(--mono);
+  font-size: 0.64em;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cream-soft);
+  background: var(--ground-deep);
+  border-radius: 3px 3px 0 0;
+}
+
+/* ============================================================
+   LISTS
+   ============================================================
+   Bullets are the brand chip in miniature; nested levels step down to a
+   dash and a dot. Ordered lists count in the machine's type, and change
+   numbering system per level (1. → a. → i.) so the depth reads even where
+   indentation alone is subtle. */
+.preview-content :is(ul, ol) {
+  margin: 0 0 var(--doc-gap);
+  padding-left: 1.6em;
+}
+
+.preview-content li {
+  margin: 0.3em 0;
+  padding-left: 0.2em;
+}
+
+.preview-content li > :is(ul, ol) {
+  margin: 0.3em 0 0;
+}
+
+.preview-content li > p {
+  margin-bottom: 0.4em;
+}
+
+.preview-content ul {
+  list-style-type: square;
+}
+
+.preview-content ul ul {
+  list-style-type: '–  ';
+}
+
+.preview-content ul ul ul {
+  list-style-type: disc;
+}
+
+.preview-content ol {
+  list-style-type: decimal;
+}
+
+.preview-content ol ol {
+  list-style-type: lower-alpha;
+}
+
+.preview-content ol ol ol {
+  list-style-type: lower-roman;
+}
+
+.preview-content li::marker {
+  color: var(--doc-marker);
+}
+
+.preview-content ol > li::marker {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  font-weight: 700;
+}
+
+/* Task lists: the box takes the marker's place, drawn by hand (a little
+   crooked), and a done item gets a hand tick that overshoots its box. The
+   state is the span's own aria-checked, which is also what assistive tech
+   reads (see renderMarkdown). */
+.preview-content li.md-task {
+  position: relative;
+  list-style-type: none;
+  counter-increment: md-task-total;
+}
+
+.preview-content li.md-task[data-task='done'] {
+  counter-increment: md-task-total md-task-done;
+  color: var(--ink-soft);
+}
+
+.preview-content li.md-task[data-task='done'] > :is(ul, ol) {
+  color: var(--ink);
+}
+
+.preview-content .md-task-check {
+  position: absolute;
+  left: -1.45em;
+  top: 0.38em;
+  width: 0.95em;
+  height: 0.95em;
+  border: 1.5px solid var(--ink-soft);
+  border-radius: 3px;
+  background: var(--doc-surface);
+  transform: rotate(-3deg);
+}
+
+.preview-content .md-task-check[aria-checked='true'] {
+  border-color: var(--doc-tick);
+}
+
+.preview-content .md-task-check[aria-checked='true']::after {
+  content: '';
+  position: absolute;
+  left: 0.05em;
+  bottom: 0.1em;
+  width: 1.2em;
+  height: 1.2em;
+  background: var(--doc-tick);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2.2 8.9c1.3.8 2.4 2 3.3 3.6 1.9-4.3 4.4-7.6 8.3-10.2' fill='none' stroke='black' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2.2 8.9c1.3.8 2.4 2 3.3 3.6 1.9-4.3 4.4-7.6 8.3-10.2' fill='none' stroke='black' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+/* The machine reads the hand's marks back: a tally under each checklist,
+   in the footer's own stat style ("CARACTERES 1234"). "1 de 3", not
+   "1/3", which screen readers announce as a fraction. The left margin is
+   the checkbox column's -1.45em, restated in this label's smaller em. */
+.preview-content .md-task-list {
+  counter-reset: md-task-done md-task-total;
+}
+
+/* A checklist nested in a task keeps counting into its parent's tally,
+   which then covers the whole tree, instead of adding a tally of its own. */
+.preview-content li.md-task .md-task-list {
+  counter-reset: none;
+}
+
+.preview-content li.md-task .md-task-list::after {
+  content: none;
+}
+
+.preview-content .md-task-list::after {
+  content: 'Concluídas ' counter(md-task-done) ' de ' counter(md-task-total);
+  display: block;
+  margin: 0.55em 0 0 calc(-1.45em / 0.7);
+  font-family: var(--mono);
+  font-size: 0.7em;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+/* Definition lists: term in display type, definition hung from a rule. */
+.preview-content dl {
+  margin: 0 0 var(--doc-gap);
+}
+
+.preview-content dt {
+  margin-top: 0.7em;
+  font-family: var(--serif-display);
+  font-weight: 600;
+}
+
+.preview-content dt:first-child {
+  margin-top: 0;
+}
+
+.preview-content dd {
+  margin: 0.15em 0 0 0.35em;
+  padding-left: 0.95em;
+  border-left: 2px solid var(--doc-rule);
+}
+
+/* ============================================================
+   QUOTATION — someone else's voice
+   ============================================================ */
+.preview-content blockquote {
+  margin: 1.2em 0;
+  padding: 0.1em 0 0.1em 1.1em;
+  border-left: 3px solid var(--accent);
+  font-family: var(--serif-display);
+  font-style: italic;
+  font-size: 1.05em;
+  line-height: 1.6;
+}
+
+.preview-content blockquote p {
+  margin-bottom: 0.6em;
+}
+
+.preview-content blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.preview-content blockquote blockquote {
+  font-size: 1em;
+  border-left: 2px dashed var(--doc-rule-strong);
+}
+
+/* A quote with its source (renderMarkdown's figure.md-quote): an epigraph.
+   The opening mark hangs where the bar was; the source sits below, in the
+   reading face, outside the quoted words. */
+.preview-content figure.md-quote {
+  position: relative;
+  margin: 1.8em 0;
+  padding-left: 2.1em;
+}
+
+.preview-content figure.md-quote::before {
+  content: '“';
+  position: absolute;
+  left: 0;
+  top: -0.1em;
+  font-family: var(--serif-display);
+  font-size: 3.4em;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.preview-content .md-quote > blockquote {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 1.15em;
+  line-height: 1.5;
+}
+
+.preview-content .md-quote > figcaption {
+  margin-top: 0.6em;
+  font-size: 0.9em;
+  color: var(--ink-soft);
+}
+
+/* ============================================================
+   CALLOUTS — GitHub alerts (renderMarkdown's .md-callout)
+   ============================================================
+   An annotation, not a quotation: a tinted panel whose type is carried
+   three ways at once — the label text (for everyone), the icon's shape
+   (without relying on color) and the tone (GitHub's own convention: blue
+   note, green tip, purple important, amber warning, red caution). */
+.preview-content .md-callout {
+  --tone: var(--c-sky);
+  --tone-ink: color-mix(in oklab, var(--tone) 40%, var(--ink));
+  --tone-line: color-mix(in oklab, var(--tone) 80%, var(--ink));
+  --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1Zm0 1.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM7.25 7h1.5v4.5h-1.5V7ZM8 4a1 1 0 1 1 0 2 1 1 0 0 1 0-2Z'/%3E%3C/svg%3E");
+
+  --doc-surface: color-mix(in oklab, var(--tone) 10%, var(--paper));
+
+  margin: 1.2em 0;
+  padding: 0.75em 1.1em 0.85em;
+  background: var(--doc-surface);
+  border-left: 3px solid var(--tone-line);
+  border-radius: 3px 8px 8px 3px;
+}
+
+.preview-content .md-callout[data-callout='tip'] {
+  --tone: var(--c-green);
+  --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1a5 5 0 0 0-3.1 8.92c.42.33.6.73.6 1.15v.43h5v-.43c0-.42.18-.82.6-1.15A5 5 0 0 0 8 1ZM5.75 12.75h4.5V14h-4.5ZM6.75 14.75h2.5v.75h-2.5Z'/%3E%3C/svg%3E");
+}
+
+.preview-content .md-callout[data-callout='important'] {
+  --tone: var(--c-violet);
+  --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M2.75 1.5h10.5c.97 0 1.75.78 1.75 1.75v7.5c0 .97-.78 1.75-1.75 1.75H8.6L5 15v-2.5H2.75C1.78 12.5 1 11.72 1 10.75v-7.5C1 2.28 1.78 1.5 2.75 1.5ZM7.25 3.75v4.5h1.5v-4.5h-1.5ZM8 9.25a.95.95 0 1 0 0 1.9.95.95 0 0 0 0-1.9Z'/%3E%3C/svg%3E");
+}
+
+.preview-content .md-callout[data-callout='warning'] {
+  --tone: var(--c-amber);
+  --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M7.13 1.5a1 1 0 0 1 1.74 0l6.86 12a1 1 0 0 1-.87 1.5H1.14a1 1 0 0 1-.87-1.5l6.86-12ZM7.25 5.5v4.25h1.5V5.5h-1.5ZM8 11a.95.95 0 1 0 0 1.9.95.95 0 0 0 0-1.9Z'/%3E%3C/svg%3E");
+}
+
+.preview-content .md-callout[data-callout='caution'] {
+  --tone: var(--c-coral);
+  --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M5.1 1h5.8L15 5.1v5.8L10.9 15H5.1L1 10.9V5.1L5.1 1ZM7.25 4v5h1.5V4h-1.5ZM8 10.5a.95.95 0 1 0 0 1.9.95.95 0 0 0 0-1.9Z'/%3E%3C/svg%3E");
+}
+
+.preview-content .md-callout > :last-child {
+  margin-bottom: 0;
+}
+
+.preview-content .md-callout-title {
+  margin: 0 0 0.35em;
+  font-family: var(--serif-display);
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.preview-content .md-callout-label {
+  margin-right: 0.35em;
+  font-family: var(--mono);
+  font-size: 0.74em;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--tone-ink);
+}
+
+.preview-content .md-callout-label::before {
+  content: '';
+  display: inline-block;
+  width: 1.55em;
+  height: 1.55em;
+  margin-right: 0.6em;
+  vertical-align: -0.42em;
+  background: var(--tone-line);
+  -webkit-mask: var(--callout-icon) center / contain no-repeat;
+  mask: var(--callout-icon) center / contain no-repeat;
+}
+
+/* ============================================================
+   TABLES — booktabs
+   ============================================================
+   Three strong rules (top, under the header, bottom) and hairlines between
+   rows, no vertical rules: the academic convention for tables meant to be
+   read, not filled in. Headings are machine labels; figures are tabular so
+   columns of numbers line up, and GFM's column alignment is honored (the
+   old blanket `text-align: left` silently overrode it). */
+.preview-content table {
+  width: 100%;
+  margin: 1.2em 0;
+  border-collapse: collapse;
+  font-size: 0.92em;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  border-top: 2px solid var(--doc-rule-strong);
+  border-bottom: 2px solid var(--doc-rule-strong);
+}
+
+.preview-content :is(th, td) {
+  padding: 0.5em 0.8em;
+  text-align: left;
+  vertical-align: top;
+  color: var(--ink);
+}
+
+.preview-content th {
+  padding-top: 0.75em;
+  font-family: var(--mono);
+  font-size: 0.8em;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  vertical-align: bottom;
+  color: var(--ink-soft);
+  border-bottom: 1px solid var(--doc-rule-strong);
+}
+
+.preview-content td {
+  border-bottom: 1px solid var(--doc-rule);
+}
+
+.preview-content tbody tr:last-child > td {
+  border-bottom: 0;
+}
+
+.preview-content :is(th, td):first-child {
+  padding-left: 0.2em;
+}
+
+.preview-content :is(th, td):last-child {
+  padding-right: 0.2em;
+}
+
+.preview-content :is(th, td)[align='center'] {
+  text-align: center;
+}
+
+.preview-content :is(th, td)[align='right'] {
+  text-align: right;
+}
+
+/* ============================================================
+   BREAKS & FIGURES
+   ============================================================ */
+
+/* Thematic break: the app header's perforation, with the brand chip at the
+   tear — the hand's mark on the machine's line. */
+.preview-content hr {
+  position: relative;
+  height: 2px;
+  margin: 2.2em 0;
+  overflow: visible;
+  border: 0;
+  background: repeating-linear-gradient(90deg, var(--doc-perforation) 0 7px, transparent 7px 12px);
+}
+
+.preview-content hr::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0.7em;
+  height: 0.7em;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow:
+    0 0 0 0.55em var(--doc-surface),
+    0 0 0 1px rgba(0, 0, 0, 0.18) inset;
+  transform: translate(-50%, -50%) rotate(-6deg);
+}
+
+.preview-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+
+.preview-content figure {
+  margin: 1.5em 0;
+}
+
+.preview-content figcaption {
+  font-size: 0.86em;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.preview-content figure.md-image {
+  text-align: center;
+}
+
+.preview-content .md-image img {
+  display: block;
+  margin: 0 auto;
+  border-radius: 8px;
+}
+
+/* Numbered by the machine, described by the hand: "FIG. 2" in the label
+   face, then the author's own caption in italic. Only captioned figures
+   count, so the numbers match what a reader can cite. */
+.preview-content .md-image figcaption {
+  counter-increment: md-figure;
+  margin-top: 0.75em;
+  font-style: italic;
+  text-wrap: balance;
+}
+
+.preview-content .md-image figcaption::before {
+  content: 'Fig. ' counter(md-figure);
+  margin-right: 0.75em;
+  font-family: var(--mono);
+  font-size: 0.86em;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+/* ============================================================
+   DISCLOSURE — <details>
+   ============================================================
+   Its triangle is the sidebar's own expand sign (.project-toggle's ▸,
+   rotating open), drawn in CSS rather than typed, since the bundled fonts
+   don't carry the glyph. */
+.preview-content details {
+  --doc-surface: color-mix(in oklab, var(--code-bg) 55%, var(--paper));
+
+  margin: 1em 0;
+  padding: 0 1em;
+  border: 1px solid color-mix(in oklab, var(--ink) 18%, var(--paper));
+  border-radius: 8px;
+  background: var(--doc-surface);
+}
+
+.preview-content summary {
+  position: relative;
+  display: block;
+  padding: 0.6em 0 0.6em 1.2em;
+  font-family: var(--serif-display);
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.preview-content summary::-webkit-details-marker {
+  display: none;
+}
+
+.preview-content summary::before {
+  content: '';
+  position: absolute;
+  left: 0.1em;
+  top: 1.2em;
+  border-left: 0.45em solid var(--doc-marker);
+  border-block: 0.3em solid transparent;
+  transform: translateY(-50%);
+  transition: transform var(--transition);
+}
+
+.preview-content details[open] > summary {
+  margin-bottom: 0.7em;
+  border-bottom: 1px dashed var(--doc-rule-strong);
+}
+
+.preview-content details[open] > summary::before {
+  transform: translateY(-50%) rotate(90deg);
+}
+
+.preview-content summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.preview-content details > :last-child {
+  margin-bottom: 0.9em;
+}
+
+/* ============================================================
+   NARROW SCREENS
+   ============================================================
+   The sheet's margin is too thin to hang the section chip in (global.css
+   drops it to 1rem here), so it steps inside the heading. */
+@media (max-width: 480px) {
+  .preview-content h2 {
+    padding-left: 0.75em;
+  }
+
+  .preview-content h2::before {
+    left: 0;
+  }
+}
+
+/* ============================================================
+   PRINT — the same document, on paper
+   ============================================================
+   Page geometry: by default the page has no margin and the spacing lives
+   in the document's own padding, cloned onto every page (Chromium paints
+   @page margins white regardless of the root background, which framed
+   dark-theme pages in white). Where the engine lays out page margin boxes
+   (flagged on the print root by usePrintExport), a named page takes over
+   instead: real margins, painted with the paper color, carrying the page
+   furniture — a running head with the document's title (from the second
+   page on) and the folio, in the machine's label style. */
+@page {
+  size: auto;
+  margin: 0;
+}
+
+@page md-sheet {
+  margin: 17mm 14mm 19mm;
+  background: var(--paper);
+
+  @top-left {
+    content: var(--print-running-head, none);
+    vertical-align: bottom;
+    padding: 0 0 5mm 6mm;
+    font-family: var(--mono);
+    font-size: 7pt;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  @bottom-right {
+    content: counter(page) ' / ' counter(pages);
+    vertical-align: top;
+    padding: 5mm 6mm 0 0;
+    font-family: var(--mono);
+    font-size: 7pt;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    color: var(--ink-soft);
+  }
+}
+
+/* The title page carries the title itself; no running head above it. */
+@page md-sheet:first {
+  @top-left {
+    content: none;
+  }
+}
+
+@media print {
+  /* Undo the on-screen "sheet on a desk" framing (flex child, scroll box,
+     shadow, tabbed corner). --font-scale is pinned to 1: the "Aa" toggle is
+     a viewing preference, not part of the document. 11pt on A4's 170mm
+     text block is the same 44em measure the preview's sheet is sized to. */
+  .print-document {
+    --font-scale: 1;
+    flex: none;
+    height: auto;
+    overflow: visible;
+    padding: 17mm 20mm 19mm;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    font-size: 11pt;
+    line-height: 1.6;
+    box-shadow: none;
+    border-radius: 0;
+    background: var(--paper);
+    color: var(--ink);
+  }
+
+  /* 6mm of padding keeps hanging marks (the h2 chip, the code tab) inside
+     the document box rather than out in the page margin. */
+  .print-root[data-margin-boxes] .print-document {
+    page: md-sheet;
+    padding: 0 6mm;
+  }
+
+  /* End mark: the brand chip closes the text the title's stroke opened, so
+     a last page with room to spare reads as finished, not cut short. */
+  .print-document:not(:empty)::after {
+    content: '';
+    display: block;
+    width: 0.6em;
+    height: 0.6em;
+    margin: 2.4em auto 0;
+    border-radius: 2px;
+    background: var(--accent);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18) inset;
+    transform: rotate(-6deg);
+    break-before: avoid;
+  }
+
+  /* Pagination: keep headings with what follows them, and keep short,
+     self-contained blocks whole. Tables, code and quotes can run longer
+     than a page, and asking those not to break pushes them — heading and
+     all — to the next page, stranding a near-empty one behind; they break
+     between rows or lines instead, with orphans/widows keeping at least
+     three lines on each side (so a short block still moves as one). */
+  .print-document :is(h1, h2, h3, h4, h5, h6) {
+    break-after: avoid;
+    break-inside: avoid;
+  }
+
+  .print-document :is(figure, .md-callout, tr) {
+    break-inside: avoid;
+  }
+
+  .print-document .md-code > pre {
+    break-before: avoid;
+  }
+
+  /* Longer, free-form blocks may break, but never between a label and
+     what it labels. */
+  .print-document :is(dt, summary) {
+    break-after: avoid;
+  }
+
+  .print-document :is(p, li, dd, pre) {
+    orphans: 3;
+    widows: 3;
+  }
+
+  /* Repeat a long table's header row on each page. */
+  .print-document thead {
+    display: table-header-group;
+  }
+
+  /* No scrollbars on paper: wrap long code lines instead of clipping. A
+     block that does span pages gets its padding and corners on each page. */
+  .print-document pre {
+    overflow: visible;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+
+  .print-document img {
+    max-height: 200mm;
+    object-fit: contain;
+  }
+
+  /* Paper can't be followed: disclose where a link goes (the PDF keeps it
+     clickable too). Inline-block so the link's underline doesn't run on
+     under the URL. */
+  .print-document a[data-print-url]::after {
+    content: '(' attr(data-print-url) ')';
+    display: inline-block;
+    max-width: 100%;
+    margin-left: 0.3em;
+    font-family: var(--mono);
+    font-size: 0.78em;
+    color: var(--ink-soft);
+    text-decoration: none;
+    overflow-wrap: anywhere;
+  }
+
+  /* ...nor hovered: spell abbreviations out, and drop the dotted underline
+     that only ever meant "hover me". */
+  .print-document abbr[title] {
+    text-decoration: none;
+  }
+
+  .print-document abbr[title]::after {
+    content: ' (' attr(title) ')';
+  }
+
+  /* ...nor clicked: <details> print open (preparePrintDocument), so the
+     summary is a heading for its content, not a control. */
+  .print-document summary {
+    padding-left: 0;
+    cursor: auto;
+  }
+
+  .print-document summary::before {
+    display: none;
+  }
+}

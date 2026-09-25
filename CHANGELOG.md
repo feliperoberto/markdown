@@ -37,9 +37,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   which stays the primary action, and is hidden in the installed iOS app,
   where printing is unreliable
   ([ADR-0006](./docs/adr/0006-browser-native-pdf-export.md)).
+- A richer document look, the same on screen and in the PDF
+  ([ADR-0007](./docs/adr/0007-document-theme.md)). Every markdown element
+  now has its own treatment: a handwritten title with a marker stroke,
+  headings that stay distinct down to h6, a real highlighter, keycaps,
+  booktabs-style tables that honor column alignment, a perforated break
+  line, and code blocks with a tab naming their language. A few patterns
+  get their own component:
+  - GitHub alerts (`> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`,
+    `[!CAUTION]`) become labelled callouts ("Nota", "Dica", "Importante",
+    "Aviso", "Cuidado"), with an optional custom title on the marker line.
+  - A quote ending in "— Autor" becomes an epigraph with its source.
+  - An image alone in its paragraph becomes a figure, with its title
+    (`![alt](src "Título")`) as a numbered caption ("FIG. 1").
+  - A checklist shows how many items are done ("Concluídas 2 de 3").
+- In the PDF, each page after the first carries the document's title at
+  the top and every page is numbered ("3 / 7"). This needs a Chromium-based
+  browser; others print the same document without them.
+- Paper can't be clicked, so the PDF spells out where each link goes and
+  what each abbreviation stands for, and collapsed `<details>` print open.
 
 ### Changed
 
+- The preview is now a page-sized sheet centered on the desk, no longer
+  the full width of the window. A line holds about as much as it does on
+  A4, so the preview and the PDF break lines at the same places, and long
+  lines stay readable on wide screens. The "Aa" size toggle grows the sheet
+  with the text.
+- The PDF now uses real page margins and 11pt text, and a long table or
+  code block continues on the next page instead of jumping to it whole
+  and leaving a nearly empty page behind.
 - Sidebar drag & drop is rewritten on Pointer Events instead of HTML5
   Drag-and-Drop, so reordering files and projects now works on touch
   devices, not just with a mouse. A small `⠿` grip on each row/header is
@@ -109,6 +136,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Checklists (`- [x]` / `- [ ]`) no longer lose their state: every item
+  used to render as a plain bullet, done or not.
+- Table columns aligned with `:--:` or `--:` now actually align, and h5/h6
+  headings are no longer smaller than the body text.
+- Code blocks are no longer double-spaced.
 - Printing (Ctrl+P / Cmd+P) no longer cuts the document off after the
   first page, and no longer prints a blank page when you're in the edit
   view. The old print stylesheet hid the app with `visibility: hidden`,

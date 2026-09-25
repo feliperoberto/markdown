@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef } from 'preact/hooks'
 import { renderMarkdown } from '@/lib/markdown'
+import {
+  RUNNING_HEAD_PROPERTY,
+  loadPageFurnitureFont,
+  preparePrintDocument,
+  runningHead,
+  supportsPageMarginBoxes,
+  toCssString,
+} from './preparePrintDocument'
 
 /** Class of the print-only container appended directly under `<body>` (styled by global print CSS). */
 export const PRINT_ROOT_CLASS = 'print-root'
@@ -34,7 +42,11 @@ function waitForAssets(root: HTMLElement): Promise<void> {
   const images = Array.from(root.querySelectorAll('img')).map((img) =>
     typeof img.decode === 'function' ? img.decode().catch(() => undefined) : undefined,
   )
-  const assets = Promise.all([fontsReady.catch(() => undefined), ...images]).then(() => undefined)
+  const assets = Promise.all([
+    fontsReady.catch(() => undefined),
+    loadPageFurnitureFont(),
+    ...images,
+  ]).then(() => undefined)
   let timer: ReturnType<typeof setTimeout> | undefined
   const timeout = new Promise<void>((resolve) => {
     timer = setTimeout(resolve, PRINT_ASSET_TIMEOUT_MS)
@@ -57,7 +69,11 @@ function waitForAssets(root: HTMLElement): Promise<void> {
  * cleared again on `afterprint`.
  *
  * While printing, `document.title` is swapped to the file name, since
- * browsers use the title as the default "Save as PDF" file name.
+ * browsers use the title as the default "Save as PDF" file name, and the
+ * page furniture is set up: the running head (see `runningHead`) goes into
+ * a custom property on `<html>`, the only place `@page` can read it from,
+ * and the root is flagged `data-margin-boxes` where the engine can lay out
+ * page margin boxes at all (see `supportsPageMarginBoxes`).
  */
 export function usePrintExport({ content, fileName }: UsePrintExportOptions): UsePrintExportResult {
   const contentRef = useRef(content)
@@ -79,6 +95,12 @@ export function usePrintExport({ content, fileName }: UsePrintExportOptions): Us
   useEffect(() => {
     const root = document.createElement('div')
     root.className = PRINT_ROOT_CLASS
+    if (supportsPageMarginBoxes()) {
+      root.dataset.marginBoxes = ''
+      // Ahead of time too, so a native Ctrl/Cmd+P — which can't be made to
+      // wait — finds it loaded.
+      void loadPageFurnitureFont()
+    }
     const doc = document.createElement('div')
     doc.className = `preview-content ${PRINT_DOCUMENT_CLASS}`
     root.appendChild(doc)
@@ -88,6 +110,7 @@ export function usePrintExport({ content, fileName }: UsePrintExportOptions): Us
     return () => {
       root.remove()
       documentRef.current = null
+      document.documentElement.style.removeProperty(RUNNING_HEAD_PROPERTY)
       if (savedTitleRef.current !== null) {
         document.title = savedTitleRef.current
         savedTitleRef.current = null
@@ -97,7 +120,13 @@ export function usePrintExport({ content, fileName }: UsePrintExportOptions): Us
 
   const fill = useCallback(() => {
     const doc = documentRef.current
-    if (doc) doc.innerHTML = renderMarkdown(contentRef.current)
+    if (!doc) return
+    doc.innerHTML = renderMarkdown(contentRef.current)
+    preparePrintDocument(doc)
+    const head = runningHead(doc, stripMarkdownExtension(fileNameRef.current.trim()))
+    const rootStyle = document.documentElement.style
+    if (head) rootStyle.setProperty(RUNNING_HEAD_PROPERTY, toCssString(head))
+    else rootStyle.removeProperty(RUNNING_HEAD_PROPERTY)
   }, [])
 
   const swapTitle = useCallback(() => {
@@ -110,6 +139,7 @@ export function usePrintExport({ content, fileName }: UsePrintExportOptions): Us
 
   const restore = useCallback(() => {
     if (documentRef.current) documentRef.current.innerHTML = ''
+    document.documentElement.style.removeProperty(RUNNING_HEAD_PROPERTY)
     if (savedTitleRef.current !== null) {
       document.title = savedTitleRef.current
       savedTitleRef.current = null

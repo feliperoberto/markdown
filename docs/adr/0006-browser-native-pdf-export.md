@@ -2,7 +2,10 @@
 
 ## Status
 
-Accepted.
+Accepted. Page geometry and the print styling amended by
+[ADR-0007](./0007-document-theme.md): the `margin: 0` layout below remains
+the fallback, and engines with page margin boxes get real margins, a running
+head and page numbers.
 
 ## Context
 

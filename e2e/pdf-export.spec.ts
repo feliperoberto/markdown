@@ -100,6 +100,98 @@ test.describe('PDF export', () => {
     expect(layout.bodyOverflow).toBe('visible')
   })
 
+  test('print keeps what only the screen could reach', async ({ page }) => {
+    await createFile(page)
+    await page
+      .locator('#editor')
+      .fill(
+        [
+          '# Documento',
+          '',
+          '- [x] feita',
+          '- [ ] pendente',
+          '',
+          '<details><summary>Mais</summary>',
+          '',
+          'Conteúdo recolhido.',
+          '',
+          '</details>',
+          '',
+          '[o site](https://example.com/pagina) e https://example.com/auto',
+        ].join('\n'),
+      )
+
+    await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')))
+    await page.emulateMedia({ media: 'print' })
+    const doc = page.locator('.print-document')
+
+    // Task state survives the sanitizer (which strips <input>)...
+    await expect(doc.locator('.md-task-check[aria-checked="true"]')).toHaveCount(1)
+    await expect(doc.locator('.md-task-check[aria-checked="false"]')).toHaveCount(1)
+    // ...a collapsed <details> prints open...
+    await expect(doc.getByText('Conteúdo recolhido.')).toBeVisible()
+    // ...and a link discloses where it goes, unless its text already does.
+    const disclosed = await doc
+      .locator('a')
+      .evaluateAll((links) => links.map((a) => getComputedStyle(a, '::after').content))
+    expect(disclosed[0]).toContain('https://example.com/pagina')
+    expect(disclosed[1]).toBe('none')
+  })
+
+  test('paged layout: the running head and page numbers are wired up', async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(browserName !== 'chromium', 'page margin boxes are Chromium-only (131+)')
+    await createFile(page)
+    await page.locator('#editor').fill('# Relatório anual\n\nTexto.')
+    await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')))
+
+    const layout = await page.evaluate(() => {
+      const pageRules = [...document.styleSheets]
+        .flatMap((sheet) => [...sheet.cssRules])
+        .filter((rule): rule is CSSPageRule => rule instanceof CSSPageRule)
+      return {
+        flagged: document.querySelector('.print-root')?.hasAttribute('data-margin-boxes'),
+        // The build must keep the margin rules nested in `@page md-sheet`.
+        marginRules: pageRules.find((rule) => rule.selectorText === 'md-sheet')?.cssRules.length,
+        runningHead: document.documentElement.style.getPropertyValue('--print-running-head'),
+      }
+    })
+    expect(layout.flagged).toBe(true)
+    expect(layout.marginRules).toBeGreaterThanOrEqual(2)
+    expect(layout.runningHead).toBe('"Relatório anual"')
+
+    await page.evaluate(() => window.dispatchEvent(new Event('afterprint')))
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          document.documentElement.style.getPropertyValue('--print-running-head'),
+        ),
+      )
+      .toBe('')
+  })
+
+  test('the preview sheet is page-sized and centered on a wide screen', async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(isMobile, 'on a phone the sheet simply fills the screen')
+    await createFile(page)
+    await page.locator('#editor').fill('# Folha\n\nTexto.')
+    await page.getByRole('button', { name: 'Resultado' }).click()
+
+    const pane = await page.locator('.preview-pane').boundingBox()
+    const sheet = await page.locator('#preview').boundingBox()
+    expect(pane && sheet).toBeTruthy()
+    // Narrower than the pane — the measure, not the window, sets its width…
+    expect(sheet!.width).toBeLessThan(pane!.width - 100)
+    // …and centered on the desk.
+    const left = sheet!.x - pane!.x
+    const right = pane!.x + pane!.width - (sheet!.x + sheet!.width)
+    expect(Math.abs(left - right)).toBeLessThanOrEqual(2)
+  })
+
   test('a long document paginates instead of truncating to one page', async ({
     page,
     browserName,
