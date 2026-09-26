@@ -907,12 +907,22 @@ main,
    BATCH DOWNLOAD (third pane, replaces editor/preview when ≥2
    files are checked for a multi-file ZIP export)
    ============================================================ */
+/* Same fixed-height/clip-at-every-ancestor chain as the sidebar (issue
+   #92): without min-height:0 this flex item's automatic minimum size is
+   its content height, so a long file list pushed the "Baixar ZIP" button
+   past .app-main's overflow:hidden with nothing left to scroll. Now the
+   list below is the scroll container; overflow-y:auto here is only a
+   fallback for viewports too short even for the header and button, and
+   `safe` keeps centering from pushing that overflow above the top edge,
+   where it couldn't be scrolled back into view. */
 .batch-download-area {
   flex: 1;
   display: none;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: safe center;
+  min-height: 0;
+  overflow-y: auto;
   padding: 2rem;
   text-align: center;
   gap: 0.5rem;
@@ -947,6 +957,15 @@ main,
   max-width: 320px;
   margin-bottom: 1rem;
   text-align: left;
+  /* Natural height while it fits, shrinks (and scrolls) once it doesn't. */
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.batch-files-list:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .batch-file-item {

@@ -27,7 +27,11 @@ export function BatchDownloadArea({ entries, onDownload }: BatchDownloadAreaProp
       </div>
       <div class="batch-title">Vários arquivos</div>
       <div class="batch-description">Prontos para baixar</div>
-      <div class="batch-files-list">
+      {/* Scrolls on its own once the selection outgrows the pane, so it
+          must be keyboard-reachable (tabIndex) and named for screen
+          readers — its entries hold nothing focusable themselves. */}
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- a scrollable region must be focusable for keyboard users to scroll it (axe: scrollable-region-focusable). */}
+      <div class="batch-files-list" role="region" aria-label="Arquivos selecionados" tabIndex={0}>
         {entries.map(({ projectName, fileName }) => (
           <div class="batch-file-item" key={`${projectName}/${fileName}`}>
             <div class="batch-file-project">{projectName}</div>
