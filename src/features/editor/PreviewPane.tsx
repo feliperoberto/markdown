@@ -1,5 +1,5 @@
 import type { JSX } from 'preact/jsx-runtime'
-import { HEADING_ID_PREFIX, slugify } from '@/lib/slugify'
+import { decodeFragment, isTopFragment, resolveFragment } from '@/lib/fragment'
 
 export interface PreviewPaneProps {
   html: string
@@ -8,31 +8,6 @@ export interface PreviewPaneProps {
 
 const NATIVELY_FOCUSABLE =
   'a[href],summary,button,input,select,textarea,[tabindex],[contenteditable]'
-
-/** First element in the preview with this id (ids may repeat while printing). */
-function findById(preview: HTMLElement, id: string): HTMLElement | null {
-  if (!id) return null
-  for (const el of preview.querySelectorAll<HTMLElement>('[id]')) {
-    if (el.id === id) return el
-  }
-  return null
-}
-
-/**
- * Resolves a decoded fragment inside the preview: an exact id, then the
- * generated heading id for GitHub-style links (`#Introdução`), then a legacy
- * `<a name>` anchor.
- */
-function resolveFragment(preview: HTMLElement, fragment: string): HTMLElement | null {
-  return (
-    findById(preview, fragment) ??
-    findById(preview, HEADING_ID_PREFIX + slugify(fragment)) ??
-    Array.from(preview.querySelectorAll<HTMLElement>('a[name]')).find(
-      (el) => el.getAttribute('name') === fragment,
-    ) ??
-    null
-  )
-}
 
 /**
  * Scrolls the preview (the sheet is its own scroll box inside an
@@ -49,15 +24,11 @@ function resolveFragment(preview: HTMLElement, fragment: string): HTMLElement | 
  * switches off.
  */
 export function scrollToFragment(preview: HTMLElement, href: string): void {
-  let fragment: string
-  try {
-    fragment = decodeURIComponent(href.slice(1))
-  } catch {
-    return
-  }
+  const fragment = decodeFragment(href)
+  if (fragment === null) return
 
-  if (fragment === '' || fragment.toLowerCase() === 'top') {
-    // `findById` first: an author-defined #top wins over the browser default.
+  if (isTopFragment(fragment)) {
+    // An author-defined #top element wins over the browser default.
     const own = fragment ? resolveFragment(preview, fragment) : null
     if (!own) {
       preview.scrollTo({ top: 0 })
