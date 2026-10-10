@@ -75,6 +75,9 @@ async function readGutter(
 test.use({ launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] } })
 
 test.describe('scrollbar visibility', () => {
+  // Touch devices use overlay scrollbars: no gutter, nothing to measure.
+  test.skip(({ hasTouch }) => hasTouch, 'overlay scrollbars on touch devices')
+
   for (const theme of ['light', 'dark']) {
     test(`thumb is visible in editor and preview (${theme} theme)`, async ({ page }) => {
       await page.addInitScript((t) => localStorage.setItem('theme', t), theme)
