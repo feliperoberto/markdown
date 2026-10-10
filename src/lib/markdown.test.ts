@@ -314,19 +314,49 @@ describe('renderMarkdown heading ids', () => {
   it('gives every heading a GitHub-style slug id', () => {
     const html = renderMarkdown('# Introdução\n\n## Passo 1: Começar')
 
-    expect(html).toContain('<h1 id="introdução">Introdução</h1>')
-    expect(html).toContain('<h2 id="passo-1-começar">Passo 1: Começar</h2>')
+    expect(html).toContain('<h1 id="user-content-introdução">Introdução</h1>')
+    expect(html).toContain('<h2 id="user-content-passo-1-começar">Passo 1: Começar</h2>')
   })
 
   it('slugs the visible text, ignoring inline markup and entities', () => {
     const html = renderMarkdown('## Uso de `code` & **negrito**')
 
-    expect(html).toContain('id="uso-de-code--negrito"')
+    expect(html).toContain('id="user-content-uso-de-code--negrito"')
   })
 
   it('numbers repeated headings, restarting for each document', () => {
     const twice = '# A\n\n# A'
-    expect(renderMarkdown(twice)).toContain('id="a-1"')
-    expect(renderMarkdown('# A')).not.toContain('id="a-1"')
+    expect(renderMarkdown(twice)).toContain('id="user-content-a-1"')
+    expect(renderMarkdown('# A')).not.toContain('id="user-content-a-1"')
+  })
+})
+
+describe('renderMarkdown fragment links', () => {
+  it('points a #fragment link at the prefixed heading id', () => {
+    const html = renderMarkdown('[ver](#introdução)\n\n# Introdução')
+    const doc = new DOMParser().parseFromString(html, 'text/html')
+    // marked percent-encodes the href; browsers decode a fragment natively.
+    const href = decodeURIComponent(doc.querySelector('a')?.getAttribute('href') ?? '')
+
+    expect(href).toBe('#user-content-introdução')
+    expect(doc.getElementById(href.slice(1))?.tagName).toBe('H1')
+  })
+
+  it('does not double-prefix an already prefixed fragment', () => {
+    expect(renderMarkdown('[x](#user-content-a)')).toContain('href="#user-content-a"')
+  })
+
+  it('leaves a bare "#" and external links alone', () => {
+    const html = renderMarkdown('[a](#) [b](https://example.com/#frag)')
+
+    expect(html).toContain('href="#"')
+    expect(html).toContain('href="https://example.com/#frag"')
+  })
+
+  it('prefixes ids from raw HTML so they cannot clobber document properties', () => {
+    const html = renderMarkdown('<a id="cookie" name="images">x</a>')
+
+    expect(html).toContain('id="user-content-cookie"')
+    expect(html).toContain('name="user-content-images"')
   })
 })

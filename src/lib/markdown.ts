@@ -3,12 +3,28 @@ import DOMPurify from 'dompurify'
 import { escapeHtml } from './sanitize'
 import { createSlugger } from './slugify'
 
+// DOMPurify's SANITIZE_NAMED_PROPS prefixes every id/name it keeps, so a
+// document can't shadow `document.cookie` & co. (DOM clobbering) with
+// `<a id="cookie">`. Fragment links get the same prefix to keep pointing
+// at their targets.
+const NAMED_PROP_PREFIX = 'user-content-'
+
 // Adds rel="noopener noreferrer" to every link DOMPurify lets through, so
 // a same-tab markdown link can't leak a Referer header pointing back at
-// this app. Registered once at module scope (not per-render).
+// this app, and prefixes in-document `#fragment` links to match the ids
+// above. Registered once at module scope (not per-render).
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   if (node.tagName === 'A') {
     node.setAttribute('rel', 'noopener noreferrer')
+    const href = node.getAttribute('href')
+    if (
+      href &&
+      href.length > 1 &&
+      href.startsWith('#') &&
+      !href.startsWith(`#${NAMED_PROP_PREFIX}`)
+    ) {
+      node.setAttribute('href', `#${NAMED_PROP_PREFIX}${href.slice(1)}`)
+    }
   }
 })
 
@@ -18,6 +34,7 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
 // credential-harvesting form inside the preview pane. See app.html's
 // CSP comment (form-action 'self') for the second half of this defense.
 const SANITIZE_CONFIG = {
+  SANITIZE_NAMED_PROPS: true,
   FORBID_TAGS: ['form', 'input', 'button', 'textarea', 'select'],
 }
 
