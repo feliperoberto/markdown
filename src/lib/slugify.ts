@@ -1,4 +1,10 @@
 /**
+ * Prefix of every id generated for a heading. It keeps a heading called
+ * "Editor" or "Preview" from duplicating the app's own `#editor`/`#preview`.
+ */
+export const HEADING_ID_PREFIX = 'user-content-'
+
+/**
  * GitHub-style heading slug: lowercase, punctuation dropped, spaces turned
  * into hyphens. Unicode letters and digits are kept, so a PT-BR heading
  * ("Introdução") links as `#introdução`, the same as on GitHub.
