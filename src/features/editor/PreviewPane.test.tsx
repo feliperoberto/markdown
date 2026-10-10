@@ -103,6 +103,17 @@ describe('PreviewPane anchor links', () => {
     expect(scrollTo).toHaveBeenCalledWith({ top: 400 })
   })
 
+  it('follows the links a browser follows: leading whitespace and image-map areas', () => {
+    const preview = mount(
+      `<a id="l-ws" href=" #alvo">espaço</a><map name="m"><area id="l-area" href="#alvo" alt="a"></map><h2 id="alvo">Alvo</h2>`,
+    )
+
+    expect(click(preview, 'l-ws')).toBe(false)
+    expect(click(preview, 'l-area')).toBe(false)
+    expect(scrollTo).toHaveBeenCalledTimes(2)
+    expect(scrollTo).toHaveBeenCalledWith({ top: 400 })
+  })
+
   it('scrolls to the top for #top and a bare #', () => {
     const preview = mount()
 

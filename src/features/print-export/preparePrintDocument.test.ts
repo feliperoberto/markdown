@@ -138,13 +138,50 @@ describe('preparePrintDocument — in-document links', () => {
     expect(a?.getAttribute('href')).toBe(b?.getAttribute('href'))
   })
 
-  it('points "#" and "#top" at the print document itself', () => {
+  it('points "#" and "#top" at the first element, never giving the root an id', () => {
     const { print } = mount(`<a href="#">a</a><a href="#top">b</a>${PREVIEW}`)
 
     for (const link of print.querySelectorAll('a[href^="#"]')) {
-      const id = link.getAttribute('href')!.slice(1)
-      expect(document.getElementById(id)).toBe(print)
+      const id = decodeURIComponent(link.getAttribute('href')!.slice(1))
+      expect(document.getElementById(id)).toBe(print.firstElementChild)
     }
+    expect(print.id).toBe('')
+  })
+
+  it('does not leave state on the print root across fills', () => {
+    const print = doc('')
+    document.body.append(print)
+    for (const html of [`<a href="#top">t</a><p>x</p>`, `<p>sem links</p>`]) {
+      print.innerHTML = html
+      preparePrintDocument(print)
+      expect(print.id).toBe('')
+    }
+    print.innerHTML = `<a href="#top">t</a><p>x</p>`
+    preparePrintDocument(print)
+    expect(print.firstElementChild?.id).toBe('print-anchor-1')
+  })
+
+  it('follows links the browser follows: leading whitespace and image-map areas', () => {
+    const { print } = mount(
+      `<a href=" #x">1</a><map name="m"><area href="#x" alt="a"></map>${PREVIEW}`,
+    )
+
+    for (const el of print.querySelectorAll('a[href], area[href]')) {
+      const id = decodeURIComponent(el.getAttribute('href')!.slice(1))
+      if (el.tagName === 'A' && el.textContent === '1') {
+        expect(print.contains(document.getElementById(id))).toBe(true)
+      }
+      if (el.tagName === 'AREA') expect(print.contains(document.getElementById(id))).toBe(true)
+    }
+  })
+
+  it('does not throw on an id it cannot encode (lone surrogate)', () => {
+    const el = doc('<a href="#\ud800">x</a><p>y</p>')
+    el.querySelector('p')!.id = '\ud800'
+    document.body.append(el)
+
+    expect(() => preparePrintDocument(el)).not.toThrow()
+    expect(el.querySelector('a')?.getAttribute('href')).toBe('#\ud800')
   })
 
   it('leaves unresolved and malformed links alone', () => {
@@ -154,7 +191,7 @@ describe('preparePrintDocument — in-document links', () => {
     expect(hrefs).toEqual(['#nope', '#%E0%A4%A'])
   })
 
-  it('renames only link targets, so other id references keep working', () => {
+  it('leaves the ids no link targets untouched', () => {
     const { print } = mount(
       `<a href="#x">go</a><p id="x">x</p><p id="lbl">l</p><div aria-labelledby="lbl"></div>` +
         `<svg><defs><linearGradient id="g"></linearGradient></defs><rect fill="url(#g)"/></svg>`,

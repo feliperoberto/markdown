@@ -1,5 +1,11 @@
 import type { JSX } from 'preact/jsx-runtime'
-import { decodeFragment, isTopFragment, resolveFragment } from '@/lib/fragment'
+import {
+  LINK_SELECTOR,
+  createFragmentResolver,
+  decodeFragment,
+  fragmentHref,
+  resolveLinkTarget,
+} from '@/lib/fragment'
 
 export interface PreviewPaneProps {
   html: string
@@ -27,17 +33,12 @@ export function scrollToFragment(preview: HTMLElement, href: string): void {
   const fragment = decodeFragment(href)
   if (fragment === null) return
 
-  if (isTopFragment(fragment)) {
-    // An author-defined #top element wins over the browser default.
-    const own = fragment ? resolveFragment(preview, fragment) : null
-    if (!own) {
-      preview.scrollTo({ top: 0 })
-      return
-    }
-  }
-
-  const target = resolveFragment(preview, fragment)
+  const target = resolveLinkTarget(createFragmentResolver(preview), fragment)
   if (!target) return
+  if (target === 'top') {
+    preview.scrollTo({ top: 0 })
+    return
+  }
 
   for (let el = target.parentElement; el && el !== preview; el = el.parentElement) {
     if (el instanceof HTMLDetailsElement) el.open = true
@@ -58,9 +59,9 @@ export function scrollToFragment(preview: HTMLElement, href: string): void {
 function onPreviewClick(event: JSX.TargetedMouseEvent<HTMLDivElement>): void {
   if (event.defaultPrevented || event.button !== 0) return
   if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-  const link = (event.target as Element).closest?.('a[href^="#"]')
-  const href = link?.getAttribute('href')
-  if (href == null || !event.currentTarget.contains(link)) return
+  const link = (event.target as Element).closest?.(LINK_SELECTOR)
+  const href = link && fragmentHref(link)
+  if (!link || href == null || !event.currentTarget.contains(link)) return
   // Always cancel: an unresolved fragment must not change the app's URL or
   // scroll the clipped ancestors.
   event.preventDefault()

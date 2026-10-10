@@ -1,4 +1,10 @@
-import { decodeFragment, isTopFragment, resolveFragment } from '@/lib/fragment'
+import {
+  LINK_SELECTOR,
+  createFragmentResolver,
+  decodeFragment,
+  fragmentHref,
+  resolveLinkTarget,
+} from '@/lib/fragment'
 
 /**
  * Print-time adaptations of the rendered document: what "the same document,
@@ -38,6 +44,15 @@ export function printableUrl(link: HTMLAnchorElement): string | null {
   return shown
 }
 
+/** `encodeURIComponent`, or null for an id it can't encode (a lone surrogate). */
+function encodeId(id: string): string | null {
+  try {
+    return encodeURIComponent(id)
+  } catch {
+    return null
+  }
+}
+
 /**
  * Re-points the document's own `#fragment` links at ids that exist only in
  * this copy. While printing, the on-screen preview (same markdown, same ids)
@@ -45,16 +60,25 @@ export function printableUrl(link: HTMLAnchorElement): string | null {
  * land on that copy, which has no layout, so the saved PDF would get no
  * usable destination for it.
  *
- * Only the ids a link actually targets are renamed (`print-` + the id).
- * Every other id keeps its value, so references authors wrote between
- * elements (`aria-labelledby`, `<label for>`, SVG `url(#id)`) still work.
- * Trade-off: a link target that is also referenced that way loses that
- * reference in this copy only — paper has no use for it. `#` and `#top`
- * point at the document's own root; a link that resolves to nothing is left
- * alone.
+ * Only the ids a link actually targets are renamed (`print-` + the id); the
+ * ids nothing links to keep their value, so references between elements
+ * keep resolving as they did. That includes `aria-labelledby`, `<label
+ * for>` and SVG `url(#id)`: while the hidden preview is mounted, a
+ * document-wide lookup of those still finds the preview's duplicate, which
+ * this does not change. A link target that is also referenced that way
+ * loses that reference in this copy only (paper has no use for it).
+ *
+ * `#` and `#top` point at the document's first element (the print root
+ * itself is long-lived, so it never gets an id). A link that resolves to
+ * nothing is left alone. Meant to run once on a freshly rendered copy:
+ * running it again would rename the already-renamed ids.
  */
 function scopeFragmentLinks(doc: HTMLElement): void {
-  const links = doc.querySelectorAll<HTMLAnchorElement>('a[href^="#"]')
+  const links: { link: Element; fragment: string }[] = []
+  for (const link of doc.querySelectorAll(LINK_SELECTOR)) {
+    const fragment = decodeFragment(fragmentHref(link) ?? '')
+    if (fragment !== null) links.push({ link, fragment })
+  }
   if (links.length === 0) return
 
   const used = new Set<string>()
@@ -70,25 +94,25 @@ function scopeFragmentLinks(doc: HTMLElement): void {
 
   // Resolve every link before renaming anything: a rename would make the
   // next link to the same target miss it.
-  const resolved = new Map<HTMLAnchorElement, HTMLElement>()
-  for (const link of links) {
-    const fragment = decodeFragment(link.getAttribute('href') ?? '')
-    if (fragment === null) continue
-    const target = fragment === '' ? null : resolveFragment(doc, fragment)
-    if (target) resolved.set(link, target)
-    else if (isTopFragment(fragment)) resolved.set(link, doc)
+  const resolve = createFragmentResolver(doc)
+  const resolved: { link: Element; target: HTMLElement }[] = []
+  for (const { link, fragment } of links) {
+    const found = resolveLinkTarget(resolve, fragment)
+    const target = found === 'top' ? doc.firstElementChild : found
+    if (target instanceof HTMLElement) resolved.push({ link, target })
   }
 
   const ids = new Map<HTMLElement, string>()
   let anchors = 0
-  for (const [link, target] of resolved) {
+  for (const { link, target } of resolved) {
     let id = ids.get(target)
     if (!id) {
-      id = unique(target === doc ? 'top' : target.id || `anchor-${++anchors}`)
+      id = unique(target.id || `anchor-${++anchors}`)
       ids.set(target, id)
       target.id = id
     }
-    link.setAttribute('href', `#${encodeURIComponent(id)}`)
+    const encoded = encodeId(id)
+    if (encoded !== null) link.setAttribute('href', `#${encoded}`)
   }
 }
 
