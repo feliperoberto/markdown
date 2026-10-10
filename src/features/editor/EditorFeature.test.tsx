@@ -37,7 +37,7 @@ describe('EditorFeature', () => {
 
     const preview = document.getElementById('preview')
     expect(preview).not.toBeNull()
-    expect(preview?.innerHTML).toContain('<h1>Hello world</h1>')
+    expect(preview?.innerHTML).toContain('<h1 id="hello-world">Hello world</h1>')
   })
 
   it('does not parse/sanitize the content while the preview pane is hidden (edit view)', () => {

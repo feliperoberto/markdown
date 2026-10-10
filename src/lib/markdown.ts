@@ -1,6 +1,7 @@
 import { Marked, Renderer, type RendererObject, type Token, type Tokens } from 'marked'
 import DOMPurify from 'dompurify'
 import { escapeHtml } from './sanitize'
+import { createSlugger } from './slugify'
 
 // Adds rel="noopener noreferrer" to every link DOMPurify lets through, so
 // a same-tab markdown link can't leak a Referer header pointing back at
@@ -175,6 +176,21 @@ function renderFigure(renderer: Renderer, token: Tokens.Paragraph): string | nul
   return `<figure class="md-image">\n${img}\n${caption}</figure>\n`
 }
 
+let nextSlug = createSlugger()
+
+const HTML_ENTITIES: Record<string, string> = {
+  '&amp;': '&',
+  '&lt;': '<',
+  '&gt;': '>',
+  '&quot;': '"',
+  '&#39;': "'",
+}
+
+/** The text a reader sees in rendered inline HTML — what a heading's slug is made of. */
+function htmlToText(html: string): string {
+  return html.replace(/<[^>]*>/g, '').replace(/&(?:amp|lt|gt|quot|#39);/g, (e) => HTML_ENTITIES[e]!)
+}
+
 /**
  * Renderer overrides behind the document theme (src/styles/document.css):
  * each one either emits a richer, still-semantic structure for a pattern
@@ -182,6 +198,14 @@ function renderFigure(renderer: Renderer, token: Tokens.Paragraph): string | nul
  * marked's default output.
  */
 const renderer: RendererObject = {
+  // marked (>= 8) no longer gives headings an id, so `[ver](#secao)` had
+  // nothing to land on. The id is the heading's text slug, unique per
+  // document (nextSlug is reset by renderMarkdown).
+  heading({ tokens, depth }) {
+    const inline = this.parser.parseInline(tokens)
+    return `<h${depth} id="${nextSlug(htmlToText(inline))}">${inline}</h${depth}>\n`
+  },
+
   blockquote(token) {
     return renderCallout(this, token) ?? renderAttributedQuote(this, token) ?? false
   },
@@ -239,6 +263,7 @@ export function renderMarkdown(input: string): string {
   // Promise despite this option, DOMPurify.sanitize(promise) would silently
   // stringify it to "[object Promise]" and render that, rather than
   // throwing where the real cause is obvious.
+  nextSlug = createSlugger()
   const html: unknown = markdown.parse(input, { async: false })
   if (typeof html !== 'string') {
     throw new Error('marked.parse() returned a non-string result despite { async: false }')

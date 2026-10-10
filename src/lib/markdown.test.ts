@@ -309,3 +309,24 @@ describe('renderMarkdown — code blocks', () => {
     expect(render('```\nx\n```').querySelector('pre > code')).not.toBeNull()
   })
 })
+
+describe('renderMarkdown heading ids', () => {
+  it('gives every heading a GitHub-style slug id', () => {
+    const html = renderMarkdown('# Introdução\n\n## Passo 1: Começar')
+
+    expect(html).toContain('<h1 id="introdução">Introdução</h1>')
+    expect(html).toContain('<h2 id="passo-1-começar">Passo 1: Começar</h2>')
+  })
+
+  it('slugs the visible text, ignoring inline markup and entities', () => {
+    const html = renderMarkdown('## Uso de `code` & **negrito**')
+
+    expect(html).toContain('id="uso-de-code--negrito"')
+  })
+
+  it('numbers repeated headings, restarting for each document', () => {
+    const twice = '# A\n\n# A'
+    expect(renderMarkdown(twice)).toContain('id="a-1"')
+    expect(renderMarkdown('# A')).not.toContain('id="a-1"')
+  })
+})
