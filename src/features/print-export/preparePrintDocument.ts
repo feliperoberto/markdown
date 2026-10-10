@@ -1,3 +1,5 @@
+import { decodeFragment, isTopFragment, resolveFragment } from '@/lib/fragment'
+
 /**
  * Print-time adaptations of the rendered document: what "the same document,
  * on paper" needs that CSS alone can't express. Applied only to the print
@@ -6,6 +8,9 @@
 
 /** Custom property on `<html>` holding the running head, read by `@page` in document.css. */
 export const RUNNING_HEAD_PROPERTY = '--print-running-head'
+
+/** Prefix of the ids the print copy gives to the targets of its in-document links. */
+export const PRINT_ID_PREFIX = 'print-'
 
 /** Longest running head, in characters, before it is shortened with "…". */
 export const RUNNING_HEAD_MAX_LENGTH = 72
@@ -34,11 +39,67 @@ export function printableUrl(link: HTMLAnchorElement): string | null {
 }
 
 /**
+ * Re-points the document's own `#fragment` links at ids that exist only in
+ * this copy. While printing, the on-screen preview (same markdown, same ids)
+ * is still in the DOM, hidden, and comes first: a link resolved by id would
+ * land on that copy, which has no layout, so the saved PDF would get no
+ * usable destination for it.
+ *
+ * Only the ids a link actually targets are renamed (`print-` + the id).
+ * Every other id keeps its value, so references authors wrote between
+ * elements (`aria-labelledby`, `<label for>`, SVG `url(#id)`) still work.
+ * Trade-off: a link target that is also referenced that way loses that
+ * reference in this copy only — paper has no use for it. `#` and `#top`
+ * point at the document's own root; a link that resolves to nothing is left
+ * alone.
+ */
+function scopeFragmentLinks(doc: HTMLElement): void {
+  const links = doc.querySelectorAll<HTMLAnchorElement>('a[href^="#"]')
+  if (links.length === 0) return
+
+  const used = new Set<string>()
+  for (const scope of [doc.ownerDocument, doc]) {
+    for (const el of scope.querySelectorAll('[id]')) used.add(el.id)
+  }
+  const unique = (base: string): string => {
+    let id = PRINT_ID_PREFIX + base
+    for (let n = 2; used.has(id); n++) id = `${PRINT_ID_PREFIX}${base}-${n}`
+    used.add(id)
+    return id
+  }
+
+  // Resolve every link before renaming anything: a rename would make the
+  // next link to the same target miss it.
+  const resolved = new Map<HTMLAnchorElement, HTMLElement>()
+  for (const link of links) {
+    const fragment = decodeFragment(link.getAttribute('href') ?? '')
+    if (fragment === null) continue
+    const target = fragment === '' ? null : resolveFragment(doc, fragment)
+    if (target) resolved.set(link, target)
+    else if (isTopFragment(fragment)) resolved.set(link, doc)
+  }
+
+  const ids = new Map<HTMLElement, string>()
+  let anchors = 0
+  for (const [link, target] of resolved) {
+    let id = ids.get(target)
+    if (!id) {
+      id = unique(target === doc ? 'top' : target.id || `anchor-${++anchors}`)
+      ids.set(target, id)
+      target.id = id
+    }
+    link.setAttribute('href', `#${encodeURIComponent(id)}`)
+  }
+}
+
+/**
  * - Opens every `<details>`: paper can't be clicked, so a collapsed one
  *   would print its summary and silently drop the rest.
  * - Marks links with `data-print-url`, which the print theme appends after
  *   the link text: a link's meaning is where it goes, and paper can't
  *   follow it (the PDF itself keeps the links clickable).
+ * - Gives in-document links targets of their own (see `scopeFragmentLinks`),
+ *   so they stay clickable in the PDF.
  */
 export function preparePrintDocument(doc: HTMLElement): void {
   for (const details of doc.querySelectorAll('details')) {
@@ -54,6 +115,7 @@ export function preparePrintDocument(doc: HTMLElement): void {
     const url = printableUrl(link)
     if (url) link.dataset.printUrl = url
   }
+  scopeFragmentLinks(doc)
 }
 
 /**
