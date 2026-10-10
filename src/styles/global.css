@@ -1287,26 +1287,21 @@ footer,
   }
 }
 
-/* Scrollbars */
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+/* Scrollbars
+   The thumb doubles as the reader's progress indicator (how much has been
+   written / read), so it must stay visible on both surfaces. It is tinted
+   from the surface's own foreground token: `--cream` on the machine
+   (editor, sidebar) and `--ink` on the paper (preview), both of which swap
+   with the theme. Mix strengths are chosen so the resting thumb clears
+   3:1 against its surface (WCAG 1.4.11) in light and dark. */
+:root {
+  --scrollbar-thumb: color-mix(in oklab, var(--cream) 45%, transparent);
+  --scrollbar-thumb-hover: color-mix(in oklab, var(--cream) 70%, transparent);
 }
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 5px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
-  background-clip: padding-box;
+.preview-content {
+  --scrollbar-thumb: color-mix(in oklab, var(--ink) 58%, transparent);
+  --scrollbar-thumb-hover: color-mix(in oklab, var(--ink) 80%, transparent);
 }
 
 /* ============================================================
