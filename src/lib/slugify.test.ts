@@ -10,6 +10,10 @@ describe('slugify', () => {
     expect(slugify('Introdução: o começo!')).toBe('introdução-o-começo')
   })
 
+  it('treats a non-breaking space as a word separator and trims it', () => {
+    expect(slugify(' a b ')).toBe('a-b')
+  })
+
   it('keeps digits, hyphens and underscores', () => {
     expect(slugify('Passo 1 - a_b')).toBe('passo-1---a_b')
   })
