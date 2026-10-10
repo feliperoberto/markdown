@@ -1304,6 +1304,34 @@ footer,
   --scrollbar-thumb-hover: color-mix(in oklab, var(--ink) 80%, transparent);
 }
 
+/* Slim at rest (6px visible), full width (10px) on hover/drag. The visible
+   width is the 12px track minus the transparent border, so the layout never
+   shifts. WebKit cannot transition scrollbar pseudo-elements, so the change
+   is immediate. */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
+  min-height: 2rem;
+}
+
+::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:active {
+  background: var(--scrollbar-thumb-hover);
+  border-width: 1px;
+  background-clip: padding-box;
+}
+
 /* ============================================================
    PRINT
    ============================================================ */
