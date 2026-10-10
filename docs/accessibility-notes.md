@@ -217,6 +217,15 @@ components behind it (`src/lib/markdown.ts`):
   uses `--transition` and is covered by the global
   `prefers-reduced-motion` rule.
 
+### Scrollbars
+
+The scrollbar thumb is the only progress indicator for the editor and the
+preview, so it is held to WCAG 1.4.11 (non-text contrast, 3:1). It is tinted
+from the surface's own foreground token (`--cream` on the machine, `--ink` on
+the paper, see `global.css`), is 6px at rest and 10px on hover/drag, and has
+a Firefox `scrollbar-color` fallback. `e2e/scrollbar-visibility.spec.ts`
+measures the contrast and the hover widening on real pixels.
+
 ## 9. Manual verification performed
 
 - Keyboard-only pass: tabbed through header icon buttons, sidebar footer

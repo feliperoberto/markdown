@@ -136,6 +136,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The editor and preview scrollbars are now clearly visible. Their thumbs
+  take the color of the surface they sit on (light on the editor, dark ink on
+  the paper, in both themes), meeting a 3:1 contrast, and grow from slim to
+  full width on hover and while dragging — so how much has been written or
+  read is readable at a glance.
 - Checklists (`- [x]` / `- [ ]`) no longer lose their state: every item
   used to render as a plain bullet, done or not.
 - Table columns aligned with `:--:` or `--:` now actually align, and h5/h6
