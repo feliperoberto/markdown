@@ -211,3 +211,72 @@ test.describe('PDF export', () => {
     expect(pages.length).toBeGreaterThan(1)
   })
 })
+
+// The on-screen preview stays mounted (hidden) while printing, with the same
+// heading ids ahead of the print copy. Without the print copy's own ids, an
+// in-document link resolved to the hidden one and the PDF got no link at all.
+test.describe('PDF export — in-document links', () => {
+  const TOC = [
+    '[Ir para a conclusão](#conclusão), [início](#Início) e [topo](#top)',
+    '',
+    '# Início',
+    '',
+    'Texto.',
+    '',
+    '## Conclusão',
+    '',
+    'Fim.',
+  ].join('\n')
+
+  // Preview view, so the hidden preview holds the same ids as the print copy.
+  async function printToc(page: Page): Promise<void> {
+    await createFile(page)
+    await page.locator('#editor').fill(TOC)
+    await page.getByRole('button', { name: 'Resultado' }).click()
+    await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')))
+  }
+
+  test('links resolve to the printed copy, not the hidden preview', async ({ page }) => {
+    await printToc(page)
+
+    // The duplicate really is there: the preview holds the original ids.
+    await expect(page.locator('#preview h2')).toHaveAttribute('id', 'user-content-conclusão')
+
+    const resolved = await page.evaluate(() => {
+      const print = document.querySelector('.print-document')!
+      return [...print.querySelectorAll('a[href^="#"]')].map((a) => {
+        const id = decodeURIComponent(a.getAttribute('href')!.slice(1))
+        const target = document.getElementById(id)
+        return { insidePrint: !!target && print.contains(target), tag: target?.tagName }
+      })
+    })
+    expect(resolved).toEqual([
+      { insidePrint: true, tag: 'H2' },
+      { insidePrint: true, tag: 'H1' },
+      { insidePrint: true, tag: 'P' }, // #top: the document's first element
+    ])
+  })
+
+  test('the saved PDF carries a working internal link per fragment link', async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(browserName !== 'chromium', 'page.pdf() is Chromium-only')
+    await printToc(page)
+
+    const pdf = (await page.pdf()).toString('latin1')
+    // Each link annotation (a PDF object with /Subtype /Link, whatever the
+    // order of its keys) names a destination, `/Dest /name`...
+    const names = pdf
+      .split(/\bendobj\b/)
+      .filter((object) => /\/Subtype\s*\/Link\b/.test(object))
+      .map((object) => /\/Dest\s*\/([^\s>/[\]]+)/.exec(object)?.[1])
+    expect(names).toHaveLength(3)
+    // ...and the catalog's /Dests defines it (`/name [page /XYZ x y 0]`). With
+    // the hidden preview's ids, Chromium wrote neither.
+    for (const name of names) {
+      expect(name).toBeDefined()
+      expect(pdf).toContain(`/${name} [`)
+    }
+  })
+})

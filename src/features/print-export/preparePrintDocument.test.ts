@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  PRINT_ID_PREFIX,
   RUNNING_HEAD_MAX_LENGTH,
   loadPageFurnitureFont,
   preparePrintDocument,
@@ -80,6 +81,133 @@ describe('preparePrintDocument', () => {
     expect(links[0]?.dataset.printUrl).toBe('https://real.example')
     expect(links[1]?.hasAttribute('data-print-url')).toBe(false)
     expect(links[2]?.hasAttribute('data-print-url')).toBe(false)
+  })
+})
+
+describe('preparePrintDocument — in-document links', () => {
+  // The on-screen preview, hidden but mounted, holds the same ids.
+  const PREVIEW = '<h2 id="user-content-conclusão">Conclusão</h2><a name="old"></a><p id="x">x</p>'
+  const BODY = `<a href="#conclus%C3%A3o">ir</a>${PREVIEW}`
+
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  function mount(html: string) {
+    const preview = doc(html)
+    const print = doc(html)
+    document.body.append(preview, print)
+    preparePrintDocument(print)
+    return { preview, print }
+  }
+
+  function hrefTarget(print: HTMLElement, selector = 'a[href^="#"]'): HTMLElement | null {
+    const href = print.querySelector(selector)!.getAttribute('href')!
+    return document.getElementById(decodeURIComponent(href.slice(1)))
+  }
+
+  it('re-points a link at a target that only the print copy owns', () => {
+    const { print } = mount(BODY)
+
+    const target = hrefTarget(print)
+    expect(target?.tagName).toBe('H2')
+    expect(print.contains(target)).toBe(true)
+    expect(target?.id.startsWith(PRINT_ID_PREFIX)).toBe(true)
+  })
+
+  it('leaves the preview copy untouched', () => {
+    const { preview } = mount(BODY)
+
+    expect(preview.querySelector('h2')?.id).toBe('user-content-conclusão')
+    expect(preview.querySelector('a')?.getAttribute('href')).toBe('#conclus%C3%A3o')
+  })
+
+  it('reads links like the preview does: case-insensitive and legacy <a name>', () => {
+    const { print } = mount(`<a href="#Conclus%C3%A3o">a</a><a href="#old">b</a>${PREVIEW}`)
+
+    expect(hrefTarget(print, 'a[href]')?.tagName).toBe('H2')
+    const second = print.querySelectorAll('a')[1]!
+    const id = decodeURIComponent(second.getAttribute('href')!.slice(1))
+    expect(document.getElementById(id)).toBe(print.querySelector('a[name="old"]'))
+  })
+
+  it('gives two links to one target the same id', () => {
+    const { print } = mount(`<a href="#x">1</a><a href="#x">2</a>${PREVIEW}`)
+
+    const [a, b] = print.querySelectorAll('a[href^="#"]')
+    expect(a?.getAttribute('href')).toBe(b?.getAttribute('href'))
+  })
+
+  it('points "#" and "#top" at the first element, never giving the root an id', () => {
+    const { print } = mount(`<a href="#">a</a><a href="#top">b</a>${PREVIEW}`)
+
+    for (const link of print.querySelectorAll('a[href^="#"]')) {
+      const id = decodeURIComponent(link.getAttribute('href')!.slice(1))
+      expect(document.getElementById(id)).toBe(print.firstElementChild)
+    }
+    expect(print.id).toBe('')
+  })
+
+  it('does not leave state on the print root across fills', () => {
+    const print = doc('')
+    document.body.append(print)
+    for (const html of [`<a href="#top">t</a><p>x</p>`, `<p>sem links</p>`]) {
+      print.innerHTML = html
+      preparePrintDocument(print)
+      expect(print.id).toBe('')
+    }
+    print.innerHTML = `<a href="#top">t</a><p>x</p>`
+    preparePrintDocument(print)
+    expect(print.firstElementChild?.id).toBe('print-anchor-1')
+  })
+
+  it('follows links the browser follows: leading whitespace and image-map areas', () => {
+    const { print } = mount(
+      `<a href=" #x">1</a><map name="m"><area href="#x" alt="a"></map>${PREVIEW}`,
+    )
+
+    for (const el of print.querySelectorAll('a[href], area[href]')) {
+      const id = decodeURIComponent(el.getAttribute('href')!.slice(1))
+      if (el.tagName === 'A' && el.textContent === '1') {
+        expect(print.contains(document.getElementById(id))).toBe(true)
+      }
+      if (el.tagName === 'AREA') expect(print.contains(document.getElementById(id))).toBe(true)
+    }
+  })
+
+  it('does not throw on an id it cannot encode (lone surrogate)', () => {
+    const el = doc('<a href="#\ud800">x</a><p>y</p>')
+    el.querySelector('p')!.id = '\ud800'
+    document.body.append(el)
+
+    expect(() => preparePrintDocument(el)).not.toThrow()
+    expect(el.querySelector('a')?.getAttribute('href')).toBe('#\ud800')
+  })
+
+  it('leaves unresolved and malformed links alone', () => {
+    const { print } = mount(`<a href="#nope">a</a><a href="#%E0%A4%A">b</a>${PREVIEW}`)
+
+    const hrefs = [...print.querySelectorAll('a[href^="#"]')].map((a) => a.getAttribute('href'))
+    expect(hrefs).toEqual(['#nope', '#%E0%A4%A'])
+  })
+
+  it('leaves the ids no link targets untouched', () => {
+    const { print } = mount(
+      `<a href="#x">go</a><p id="x">x</p><p id="lbl">l</p><div aria-labelledby="lbl"></div>` +
+        `<svg><defs><linearGradient id="g"></linearGradient></defs><rect fill="url(#g)"/></svg>`,
+    )
+
+    expect(print.querySelector('[id="lbl"]')).not.toBeNull()
+    expect(print.querySelector('[id="g"]')).not.toBeNull()
+    expect(print.querySelector('p')?.id.startsWith(PRINT_ID_PREFIX)).toBe(true)
+  })
+
+  it('avoids colliding with an id the document already uses', () => {
+    const { print } = mount(`<a href="#x">go</a><p id="x">x</p><p id="print-x">y</p>`)
+
+    const target = hrefTarget(print)
+    expect(target?.textContent).toBe('x')
+    expect(target?.id).not.toBe('print-x')
   })
 })
 

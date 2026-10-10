@@ -1,5 +1,11 @@
 import type { JSX } from 'preact/jsx-runtime'
-import { HEADING_ID_PREFIX, slugify } from '@/lib/slugify'
+import {
+  LINK_SELECTOR,
+  createFragmentResolver,
+  decodeFragment,
+  fragmentHref,
+  resolveLinkTarget,
+} from '@/lib/fragment'
 
 export interface PreviewPaneProps {
   html: string
@@ -8,31 +14,6 @@ export interface PreviewPaneProps {
 
 const NATIVELY_FOCUSABLE =
   'a[href],summary,button,input,select,textarea,[tabindex],[contenteditable]'
-
-/** First element in the preview with this id (ids may repeat while printing). */
-function findById(preview: HTMLElement, id: string): HTMLElement | null {
-  if (!id) return null
-  for (const el of preview.querySelectorAll<HTMLElement>('[id]')) {
-    if (el.id === id) return el
-  }
-  return null
-}
-
-/**
- * Resolves a decoded fragment inside the preview: an exact id, then the
- * generated heading id for GitHub-style links (`#Introdução`), then a legacy
- * `<a name>` anchor.
- */
-function resolveFragment(preview: HTMLElement, fragment: string): HTMLElement | null {
-  return (
-    findById(preview, fragment) ??
-    findById(preview, HEADING_ID_PREFIX + slugify(fragment)) ??
-    Array.from(preview.querySelectorAll<HTMLElement>('a[name]')).find(
-      (el) => el.getAttribute('name') === fragment,
-    ) ??
-    null
-  )
-}
 
 /**
  * Scrolls the preview (the sheet is its own scroll box inside an
@@ -49,24 +30,15 @@ function resolveFragment(preview: HTMLElement, fragment: string): HTMLElement | 
  * switches off.
  */
 export function scrollToFragment(preview: HTMLElement, href: string): void {
-  let fragment: string
-  try {
-    fragment = decodeURIComponent(href.slice(1))
-  } catch {
+  const fragment = decodeFragment(href)
+  if (fragment === null) return
+
+  const target = resolveLinkTarget(createFragmentResolver(preview), fragment)
+  if (!target) return
+  if (target === 'top') {
+    preview.scrollTo({ top: 0 })
     return
   }
-
-  if (fragment === '' || fragment.toLowerCase() === 'top') {
-    // `findById` first: an author-defined #top wins over the browser default.
-    const own = fragment ? resolveFragment(preview, fragment) : null
-    if (!own) {
-      preview.scrollTo({ top: 0 })
-      return
-    }
-  }
-
-  const target = resolveFragment(preview, fragment)
-  if (!target) return
 
   for (let el = target.parentElement; el && el !== preview; el = el.parentElement) {
     if (el instanceof HTMLDetailsElement) el.open = true
@@ -87,9 +59,9 @@ export function scrollToFragment(preview: HTMLElement, href: string): void {
 function onPreviewClick(event: JSX.TargetedMouseEvent<HTMLDivElement>): void {
   if (event.defaultPrevented || event.button !== 0) return
   if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-  const link = (event.target as Element).closest?.('a[href^="#"]')
-  const href = link?.getAttribute('href')
-  if (href == null || !event.currentTarget.contains(link)) return
+  const link = (event.target as Element).closest?.(LINK_SELECTOR)
+  const href = link && fragmentHref(link)
+  if (!link || href == null || !event.currentTarget.contains(link)) return
   // Always cancel: an unresolved fragment must not change the app's URL or
   // scroll the clipped ancestors.
   event.preventDefault()
