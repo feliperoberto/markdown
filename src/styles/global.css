@@ -1332,6 +1332,16 @@ footer,
   background-clip: padding-box;
 }
 
+/* Firefox has no ::-webkit-scrollbar. Gated with @supports because Chromium
+   >= 121 disables the pseudo-elements above whenever the standard
+   scrollbar-color / scrollbar-width are set. */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+  }
+}
+
 /* ============================================================
    PRINT
    ============================================================ */
