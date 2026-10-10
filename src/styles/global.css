@@ -898,6 +898,9 @@ main,
   background-color: var(--paper);
   color: var(--ink);
   border-radius: 0 10px 10px 10px;
+  /* In-document anchor links glide to their target; the reduced-motion
+     block below turns this off. */
+  scroll-behavior: smooth;
   box-shadow:
     0 6px 0 -2px rgba(0, 0, 0, 0.2),
     0 4px 20px rgba(0, 0, 0, 0.25);
