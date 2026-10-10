@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Links to a section of the same document (`[ver](#introdução)`) now work
+  in the preview: clicking one scrolls the page to that heading (smoothly,
+  unless reduced motion is on). Headings get GitHub-style anchors, so a
+  table of contents written for GitHub works here too.
 - Reordering files and projects in the sidebar: drag a file's or project's
   handle to a new position, or use the "⬆ Mover para cima"/"⬇ Mover para
   baixo" items in its "⋮" menu.

@@ -1,10 +1,15 @@
 import { Marked, Renderer, type RendererObject, type Token, type Tokens } from 'marked'
 import DOMPurify from 'dompurify'
 import { escapeHtml } from './sanitize'
+import { createSlugger, HEADING_ID_PREFIX } from './slugify'
 
 // Adds rel="noopener noreferrer" to every link DOMPurify lets through, so
 // a same-tab markdown link can't leak a Referer header pointing back at
-// this app. Registered once at module scope (not per-render).
+// this app. Registered once at module scope (not per-render). DOM
+// clobbering (`<a id="cookie">`) is covered by DOMPurify's default
+// SANITIZE_DOM, which drops ids/names that collide with document properties;
+// ids that don't collide are left as authored so `url(#g)`, aria-labelledby
+// and `label for` references keep working.
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   if (node.tagName === 'A') {
     node.setAttribute('rel', 'noopener noreferrer')
@@ -176,6 +181,15 @@ function renderFigure(renderer: Renderer, token: Tokens.Paragraph): string | nul
 }
 
 /**
+ * The text a reader sees in rendered inline HTML — what a heading's slug is
+ * made of. An inert DOM parse (DOMParser never runs scripts or loads
+ * resources) decodes every entity and ignores tags and `>` inside attributes.
+ */
+function htmlToText(html: string): string {
+  return new DOMParser().parseFromString(html, 'text/html').body.textContent ?? ''
+}
+
+/**
  * Renderer overrides behind the document theme (src/styles/document.css):
  * each one either emits a richer, still-semantic structure for a pattern
  * made of several markdown elements, or returns `false` to fall back to
@@ -225,14 +239,35 @@ const renderer: RendererObject = {
   },
 }
 
-// A dedicated instance, so these overrides never leak into the global
-// `marked` singleton. { breaks: true } treats single newlines as visible
-// <br> tags, matching common note-taking WYSIWYG semantics ("press Enter →
-// see a break") rather than strict CommonMark (single \n = space, blank
-// line = new paragraph).
-const markdown = new Marked({ breaks: true, renderer })
+/**
+ * marked (>= 8) no longer gives headings an id, so `[ver](#secao)` had
+ * nothing to land on. The id is HEADING_ID_PREFIX + the heading's text slug;
+ * the prefix keeps it from duplicating the app's own `#editor`/`#preview`,
+ * and the slugger makes it unique within that prefixed namespace.
+ */
+function headingRenderer(slug: (text: string) => string): RendererObject {
+  return {
+    heading({ tokens, depth }) {
+      const inline = this.parser.parseInline(tokens)
+      return `<h${depth} id="${HEADING_ID_PREFIX}${slug(htmlToText(inline))}">${inline}</h${depth}>\n`
+    },
+  }
+}
 
 export function renderMarkdown(input: string): string {
+  // A Marked instance per call: the slugger is per-document state, and
+  // keeping it in the instance (rather than a module-level variable reset
+  // before each parse) makes renders independent and re-entrant. Construction
+  // is just option merging, cheap next to the parse itself. It is also a
+  // dedicated instance, so these overrides never leak into the global
+  // `marked` singleton. { breaks: true } treats single newlines as visible
+  // <br> tags, matching common note-taking WYSIWYG semantics ("press Enter →
+  // see a break") rather than strict CommonMark (single \n = space, blank
+  // line = new paragraph).
+  const markdown = new Marked(
+    { breaks: true, renderer },
+    { renderer: headingRenderer(createSlugger()) },
+  )
   // { async: false } guarantees parse() returns a string synchronously
   // (never a Promise), so the typed overload below is sound today — but
   // guard it anyway: if a future marked extension/plugin ever returned a

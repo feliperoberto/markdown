@@ -221,10 +221,22 @@ components behind it (`src/lib/markdown.ts`):
 
 The scrollbar thumb is the only progress indicator for the editor and the
 preview, so it is held to WCAG 1.4.11 (non-text contrast, 3:1). It is tinted
-from the surface's own foreground token (`--cream` on the machine, `--ink` on
-the paper, see `global.css`), is 6px at rest and 10px on hover/drag, and has
-a Firefox `scrollbar-color` fallback. `e2e/scrollbar-visibility.spec.ts`
-measures the contrast and the hover widening on real pixels.
+from the foreground token of the surface it sits on (see `global.css`):
+
+- **Machine surfaces** (editor, sidebar) use `--cream` at 45% (hover 70%).
+- **The paper sheet** (`.preview-content`) uses `--ink` at 58% (hover 80%).
+- **Fenced code blocks inside the sheet** (`pre`, `.md-code`) sit on the
+  always-dark `--ground-deep`, so they use the machine tokens again, not the
+  paper tint. Inheriting the `--ink` tint gave about 1.1:1 on a horizontal
+  scrollbar. Verified ratios of the thumb against `--ground-deep`: resting
+  3.9:1 in the light theme and 3.8:1 in the dark theme; hover 7.7:1 and
+  8.1:1.
+
+The thumb is 6px at rest and 10px on hover/drag, and there is a Firefox
+`scrollbar-color` fallback. Print has no scrollbars (code wraps).
+`e2e/scrollbar-visibility.spec.ts` measures the vertical contrast and the
+hover widening on real pixels, and checks the code-block token contrast in
+both themes.
 
 ## 9. Manual verification performed
 

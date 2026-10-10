@@ -898,6 +898,9 @@ main,
   background-color: var(--paper);
   color: var(--ink);
   border-radius: 0 10px 10px 10px;
+  /* In-document anchor links glide to their target; the reduced-motion
+     block below turns this off. */
+  scroll-behavior: smooth;
   box-shadow:
     0 6px 0 -2px rgba(0, 0, 0, 0.2),
     0 4px 20px rgba(0, 0, 0, 0.25);
@@ -1293,7 +1296,15 @@ footer,
    from the surface's own foreground token: `--cream` on the machine
    (editor, sidebar) and `--ink` on the paper (preview), both of which swap
    with the theme. Mix strengths are chosen so the resting thumb clears
-   3:1 against its surface (WCAG 1.4.11) in light and dark. */
+   3:1 against its surface (WCAG 1.4.11) in light and dark.
+
+   Fenced code blocks inside the sheet are the exception: they sit on the
+   always-dark `--ground-deep` (document.css), so they take the machine
+   tokens again rather than inheriting the paper tint (an `--ink` thumb on
+   `--ground-deep` is ~1.1:1). Resting thumb on `--ground-deep` is 3.9:1
+   (light) / 3.8:1 (dark); hover is 7.7:1 / 8.1:1. These live here, not in
+   document.css, which stays free of app-chrome tokens. Print is unaffected:
+   paper has no scrollbars (document.css sets `pre { overflow: visible }`). */
 :root {
   --scrollbar-thumb: color-mix(in oklab, var(--cream) 45%, transparent);
   --scrollbar-thumb-hover: color-mix(in oklab, var(--cream) 70%, transparent);
@@ -1302,6 +1313,14 @@ footer,
 .preview-content {
   --scrollbar-thumb: color-mix(in oklab, var(--ink) 58%, transparent);
   --scrollbar-thumb-hover: color-mix(in oklab, var(--ink) 80%, transparent);
+}
+
+/* Code blocks re-declare the machine tokens: a descendant's own declaration
+   beats the value inherited from `.preview-content`. */
+.preview-content pre,
+.preview-content .md-code {
+  --scrollbar-thumb: color-mix(in oklab, var(--cream) 45%, transparent);
+  --scrollbar-thumb-hover: color-mix(in oklab, var(--cream) 70%, transparent);
 }
 
 /* Slim at rest (6px visible), full width (10px) on hover/drag. The visible
