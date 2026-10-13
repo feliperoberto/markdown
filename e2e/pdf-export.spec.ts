@@ -212,6 +212,101 @@ test.describe('PDF export', () => {
   })
 })
 
+// ADR-0008: under the dark theme, print is grayscale on white, in the
+// system sans-serif, without the hand's ornaments — in the same boxes as
+// the light theme's print, which itself stays as it was.
+test.describe('PDF export — ink-saving dark theme', () => {
+  const SAMPLE = [
+    '# Título',
+    '',
+    '## Seção',
+    '',
+    'Texto com <mark>marca</mark> e `código`.',
+    '',
+    '```js',
+    'const a = 1',
+    '```',
+    '',
+    '> [!NOTE]',
+    '> Nota.',
+    '',
+    '---',
+    '',
+    '| A | B |',
+    '| - | - |',
+    '| 1 | 2 |',
+  ].join('\n')
+
+  // The print CSS keys on `data-theme`, so both themes are read off one
+  // print render by switching the attribute between measurements.
+  function printStyles(page: Page, theme: 'light' | 'dark') {
+    return page.evaluate((t) => {
+      document.documentElement.setAttribute('data-theme', t)
+      const doc = document.querySelector<HTMLElement>('.print-document')!
+      // Derived colors serialize as oklab(); read every one back as sRGB.
+      const ctx = document.createElement('canvas').getContext('2d')!
+      const rgb = (color: string) => {
+        ctx.clearRect(0, 0, 1, 1)
+        ctx.fillStyle = color
+        ctx.fillRect(0, 0, 1, 1)
+        return [...ctx.getImageData(0, 0, 1, 1).data.slice(0, 3)]
+      }
+      const style = (selector: string, pseudo?: string) =>
+        getComputedStyle(doc.querySelector(selector)!, pseudo)
+      const box = (selector: string) => {
+        const s = style(selector)
+        return [s.paddingTop, s.paddingLeft, s.borderLeftWidth, s.borderTopWidth, s.marginTop]
+      }
+      return {
+        page: getComputedStyle(document.body).backgroundColor,
+        text: style('p').color,
+        h1Font: style('h1').fontFamily,
+        pre: rgb(style('pre').backgroundColor),
+        callout: rgb(style('.md-callout').backgroundColor),
+        strokeVisibility: style('h1', '::after').visibility,
+        strokeHeight: style('h1', '::after').height,
+        chip: style('h2', '::before').display,
+        hrChip: style('hr', '::after').display,
+        endMark: getComputedStyle(doc, '::after').display,
+        boxes: ['h1', 'h2', 'pre', '.md-callout', 'hr', 'table', 'th', 'td', 'code', 'mark'].map(
+          box,
+        ),
+      }
+    }, theme)
+  }
+
+  test('dark theme prints grayscale on white, in the same boxes', async ({ page }) => {
+    await createFile(page)
+    await page.locator('#editor').fill(SAMPLE)
+    await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')))
+    await page.emulateMedia({ media: 'print' })
+    const l = await printStyles(page, 'light')
+    const d = await printStyles(page, 'dark')
+
+    // The light theme keeps its print.
+    expect(l.h1Font).toContain('Caveat')
+    expect(Math.max(...l.pre)).toBeLessThan(100)
+    expect(l.chip).not.toBe('none')
+
+    // Dark: white page, black text, light panels, gray only.
+    expect(d.page).toBe('rgb(255, 255, 255)')
+    expect(d.text).toBe('rgb(0, 0, 0)')
+    expect(d.h1Font).not.toMatch(/Caveat|Fraunces|Lora/)
+    for (const [r, g, b] of [d.pre, d.callout]) {
+      expect(Math.max(r, g, b) - Math.min(r, g, b)).toBeLessThanOrEqual(1)
+      expect(r).toBeGreaterThanOrEqual(230)
+    }
+
+    // Ornaments gone, the title's stroke still holding its space.
+    expect(d.strokeVisibility).toBe('hidden')
+    expect(d.strokeHeight).toBe(l.strokeHeight)
+    expect([d.chip, d.hrChip, d.endMark]).toEqual(['none', 'none', 'none'])
+
+    // Spacing and outlines unchanged.
+    expect(d.boxes).toEqual(l.boxes)
+  })
+})
+
 // The on-screen preview stays mounted (hidden) while printing, with the same
 // heading ids ahead of the print copy. Without the print copy's own ids, an
 // in-document link resolved to the hidden one and the PDF got no link at all.
