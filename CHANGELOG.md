@@ -63,6 +63,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Exporting a PDF with the dark theme on now saves ink: the document
+  prints in grayscale on white, in the system's sans-serif, without the
+  decorative marks (title stroke, section and break chips), keeping the
+  same spacing and outlines. The light theme prints as before.
 - The preview is now a page-sized sheet centered on the desk, no longer
   the full width of the window. A line holds about as much as it does on
   A4, so the preview and the PDF break lines at the same places, and long
