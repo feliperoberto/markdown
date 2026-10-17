@@ -221,7 +221,8 @@
   text-decoration-color: currentColor;
 }
 
-.preview-content a:focus-visible {
+.preview-content a:focus-visible,
+.preview-content [tabindex='-1']:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: 2px;
@@ -1066,5 +1067,86 @@
 
   .print-document summary::before {
     display: none;
+  }
+}
+
+/* ============================================================
+   PRINT — ink-saving variant of the dark theme (ADR-0008)
+   ============================================================
+   The night palette is for reading on screen; on paper it would print a
+   full-bleed dark page. Printing under it gives the same document in
+   grayscale on white instead, in the system's sans-serif, without the
+   hand's ornaments. Only the primitive tokens change: every role above is
+   derived from them, so rules, panels and secondary text fall into a gray
+   scale by themselves, and every box keeps its size. The light theme
+   prints as it always has. */
+@media print {
+  :root[data-theme='dark'] {
+    --paper: #fff;
+    --paper-edge: #d0d0d0;
+    --ink: #000;
+    --ink-soft: #555;
+    --ground-deep: #f2f2f2;
+    --code-bg: #f2f2f2;
+    --cream: #000;
+    --cream-soft: #555;
+    --link: #000;
+    --accent: #555;
+    --success: #000;
+    --c-coral: #555;
+    --c-orange: #555;
+    --c-amber: #555;
+    --c-green: #555;
+    --c-teal: #555;
+    --c-sky: #555;
+    --c-blue: #555;
+    --c-indigo: #555;
+    --c-violet: #555;
+    --c-pink: #555;
+
+    /* One reading face for text and headings; code stays monospaced. */
+    --hand: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    --serif-display: var(--hand);
+    --body: var(--hand);
+  }
+
+  /* The highlighter is the one role not derived from ink and paper. */
+  [data-theme='dark'] .print-document {
+    --doc-mark: #ddd;
+  }
+
+  /* Ornaments go; the space they took stays. The title's stroke is in the
+     flow, so it is hidden rather than removed. */
+  [data-theme='dark'] .print-document h1::after {
+    visibility: hidden;
+  }
+
+  [data-theme='dark'] .print-document > h2::before,
+  [data-theme='dark'] .print-document hr::after,
+  [data-theme='dark'] .print-document:not(:empty)::after {
+    display: none;
+  }
+
+  [data-theme='dark'] .print-document mark {
+    border-radius: 2px;
+  }
+
+  [data-theme='dark'] .print-document .md-task-check {
+    transform: none;
+  }
+
+  /* A thematic break is a plain rule, in the same 2px box. */
+  [data-theme='dark'] .print-document hr {
+    background: var(--doc-perforation);
+  }
+
+  /* The epigraph's hanging quote mark becomes the quotation bar, drawn in
+     the same place so the indent is unchanged. */
+  [data-theme='dark'] .print-document figure.md-quote::before {
+    content: '';
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--accent);
   }
 }

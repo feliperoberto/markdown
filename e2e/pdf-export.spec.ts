@@ -211,3 +211,167 @@ test.describe('PDF export', () => {
     expect(pages.length).toBeGreaterThan(1)
   })
 })
+
+// ADR-0008: under the dark theme, print is grayscale on white, in the
+// system sans-serif, without the hand's ornaments — in the same boxes as
+// the light theme's print, which itself stays as it was.
+test.describe('PDF export — ink-saving dark theme', () => {
+  const SAMPLE = [
+    '# Título',
+    '',
+    '## Seção',
+    '',
+    'Texto com <mark>marca</mark> e `código`.',
+    '',
+    '```js',
+    'const a = 1',
+    '```',
+    '',
+    '> [!NOTE]',
+    '> Nota.',
+    '',
+    '---',
+    '',
+    '| A | B |',
+    '| - | - |',
+    '| 1 | 2 |',
+  ].join('\n')
+
+  // The print CSS keys on `data-theme`, so both themes are read off one
+  // print render by switching the attribute between measurements.
+  function printStyles(page: Page, theme: 'light' | 'dark') {
+    return page.evaluate((t) => {
+      document.documentElement.setAttribute('data-theme', t)
+      const doc = document.querySelector<HTMLElement>('.print-document')!
+      // Derived colors serialize as oklab(); read every one back as sRGB.
+      const ctx = document.createElement('canvas').getContext('2d')!
+      const rgb = (color: string) => {
+        ctx.clearRect(0, 0, 1, 1)
+        ctx.fillStyle = color
+        ctx.fillRect(0, 0, 1, 1)
+        return [...ctx.getImageData(0, 0, 1, 1).data.slice(0, 3)]
+      }
+      const style = (selector: string, pseudo?: string) =>
+        getComputedStyle(doc.querySelector(selector)!, pseudo)
+      const box = (selector: string) => {
+        const s = style(selector)
+        return [s.paddingTop, s.paddingLeft, s.borderLeftWidth, s.borderTopWidth, s.marginTop]
+      }
+      return {
+        page: getComputedStyle(document.body).backgroundColor,
+        text: style('p').color,
+        h1Font: style('h1').fontFamily,
+        pre: rgb(style('pre').backgroundColor),
+        callout: rgb(style('.md-callout').backgroundColor),
+        strokeVisibility: style('h1', '::after').visibility,
+        strokeHeight: style('h1', '::after').height,
+        chip: style('h2', '::before').display,
+        hrChip: style('hr', '::after').display,
+        endMark: getComputedStyle(doc, '::after').display,
+        boxes: ['h1', 'h2', 'pre', '.md-callout', 'hr', 'table', 'th', 'td', 'code', 'mark'].map(
+          box,
+        ),
+      }
+    }, theme)
+  }
+
+  test('dark theme prints grayscale on white, in the same boxes', async ({ page }) => {
+    await createFile(page)
+    await page.locator('#editor').fill(SAMPLE)
+    await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')))
+    await page.emulateMedia({ media: 'print' })
+    const l = await printStyles(page, 'light')
+    const d = await printStyles(page, 'dark')
+
+    // The light theme keeps its print.
+    expect(l.h1Font).toContain('Caveat')
+    expect(Math.max(...l.pre)).toBeLessThan(100)
+    expect(l.chip).not.toBe('none')
+
+    // Dark: white page, black text, light panels, gray only.
+    expect(d.page).toBe('rgb(255, 255, 255)')
+    expect(d.text).toBe('rgb(0, 0, 0)')
+    expect(d.h1Font).not.toMatch(/Caveat|Fraunces|Lora/)
+    for (const [r, g, b] of [d.pre, d.callout]) {
+      expect(Math.max(r, g, b) - Math.min(r, g, b)).toBeLessThanOrEqual(1)
+      expect(r).toBeGreaterThanOrEqual(230)
+    }
+
+    // Ornaments gone, the title's stroke still holding its space.
+    expect(d.strokeVisibility).toBe('hidden')
+    expect(d.strokeHeight).toBe(l.strokeHeight)
+    expect([d.chip, d.hrChip, d.endMark]).toEqual(['none', 'none', 'none'])
+
+    // Spacing and outlines unchanged.
+    expect(d.boxes).toEqual(l.boxes)
+  })
+})
+
+// The on-screen preview stays mounted (hidden) while printing, with the same
+// heading ids ahead of the print copy. Without the print copy's own ids, an
+// in-document link resolved to the hidden one and the PDF got no link at all.
+test.describe('PDF export — in-document links', () => {
+  const TOC = [
+    '[Ir para a conclusão](#conclusão), [início](#Início) e [topo](#top)',
+    '',
+    '# Início',
+    '',
+    'Texto.',
+    '',
+    '## Conclusão',
+    '',
+    'Fim.',
+  ].join('\n')
+
+  // Preview view, so the hidden preview holds the same ids as the print copy.
+  async function printToc(page: Page): Promise<void> {
+    await createFile(page)
+    await page.locator('#editor').fill(TOC)
+    await page.getByRole('button', { name: 'Resultado' }).click()
+    await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')))
+  }
+
+  test('links resolve to the printed copy, not the hidden preview', async ({ page }) => {
+    await printToc(page)
+
+    // The duplicate really is there: the preview holds the original ids.
+    await expect(page.locator('#preview h2')).toHaveAttribute('id', 'user-content-conclusão')
+
+    const resolved = await page.evaluate(() => {
+      const print = document.querySelector('.print-document')!
+      return [...print.querySelectorAll('a[href^="#"]')].map((a) => {
+        const id = decodeURIComponent(a.getAttribute('href')!.slice(1))
+        const target = document.getElementById(id)
+        return { insidePrint: !!target && print.contains(target), tag: target?.tagName }
+      })
+    })
+    expect(resolved).toEqual([
+      { insidePrint: true, tag: 'H2' },
+      { insidePrint: true, tag: 'H1' },
+      { insidePrint: true, tag: 'P' }, // #top: the document's first element
+    ])
+  })
+
+  test('the saved PDF carries a working internal link per fragment link', async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(browserName !== 'chromium', 'page.pdf() is Chromium-only')
+    await printToc(page)
+
+    const pdf = (await page.pdf()).toString('latin1')
+    // Each link annotation (a PDF object with /Subtype /Link, whatever the
+    // order of its keys) names a destination, `/Dest /name`...
+    const names = pdf
+      .split(/\bendobj\b/)
+      .filter((object) => /\/Subtype\s*\/Link\b/.test(object))
+      .map((object) => /\/Dest\s*\/([^\s>/[\]]+)/.exec(object)?.[1])
+    expect(names).toHaveLength(3)
+    // ...and the catalog's /Dests defines it (`/name [page /XYZ x y 0]`). With
+    // the hidden preview's ids, Chromium wrote neither.
+    for (const name of names) {
+      expect(name).toBeDefined()
+      expect(pdf).toContain(`/${name} [`)
+    }
+  })
+})

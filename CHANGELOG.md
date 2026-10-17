@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Links to a section of the same document (`[ver](#introdução)`) now work
+  in the preview: clicking one scrolls the page to that heading (smoothly,
+  unless reduced motion is on). Headings get GitHub-style anchors, so a
+  table of contents written for GitHub works here too.
 - Reordering files and projects in the sidebar: drag a file's or project's
   handle to a new position, or use the "⬆ Mover para cima"/"⬇ Mover para
   baixo" items in its "⋮" menu.
@@ -59,6 +63,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Exporting a PDF with the dark theme on now saves ink: the document
+  prints in grayscale on white, in the system's sans-serif, without the
+  decorative marks (title stroke, section and break chips), keeping the
+  same spacing and outlines. The light theme prints as before.
 - The preview is now a page-sized sheet centered on the desk, no longer
   the full width of the window. A line holds about as much as it does on
   A4, so the preview and the PDF break lines at the same places, and long
@@ -136,6 +144,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- In the exported PDF, links to a section of the same document (such as a
+  table of contents) now jump to that section; before, they were dead links.
+- The editor and preview scrollbars are now clearly visible. Their thumbs
+  take the color of the surface they sit on (light on the editor, dark ink on
+  the paper, in both themes), meeting a 3:1 contrast, and grow from slim to
+  full width on hover and while dragging — so how much has been written or
+  read is readable at a glance.
 - Checklists (`- [x]` / `- [ ]`) no longer lose their state: every item
   used to render as a plain bullet, done or not.
 - Table columns aligned with `:--:` or `--:` now actually align, and h5/h6

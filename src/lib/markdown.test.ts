@@ -309,3 +309,81 @@ describe('renderMarkdown — code blocks', () => {
     expect(render('```\nx\n```').querySelector('pre > code')).not.toBeNull()
   })
 })
+
+describe('renderMarkdown heading ids', () => {
+  const ids = (md: string) =>
+    [
+      ...new DOMParser()
+        .parseFromString(renderMarkdown(md), 'text/html')
+        .querySelectorAll('h1,h2,h3'),
+    ].map((h) => h.id)
+
+  it('gives every heading a prefixed GitHub-style slug id', () => {
+    const html = renderMarkdown('# Introdução\n\n## Passo 1: Começar')
+
+    expect(html).toContain('<h1 id="user-content-introdução">Introdução</h1>')
+    expect(html).toContain('<h2 id="user-content-passo-1-começar">Passo 1: Começar</h2>')
+  })
+
+  it('slugs the visible text, ignoring inline markup', () => {
+    expect(ids('## Uso de `code` & **negrito**')).toEqual(['user-content-uso-de-code--negrito'])
+  })
+
+  it('decodes named, numeric and non-ASCII entities', () => {
+    expect(ids('# Caf&eacute; au lait')).toEqual(['user-content-café-au-lait'])
+    expect(ids('# A &mdash; B')).toEqual(['user-content-a--b'])
+    expect(ids('# a&nbsp;b')).toEqual(['user-content-a-b'])
+    expect(ids('# Pre&#36;o')).toEqual(['user-content-preo'])
+  })
+
+  it('ignores a ">" inside an attribute of inline HTML', () => {
+    expect(ids('# Foo <span title="a > b">bar</span>')).toEqual(['user-content-foo-bar'])
+  })
+
+  it('numbers repeated headings, restarting for each document', () => {
+    const twice = '# A\n\n# A'
+    expect(ids(twice)).toEqual(['user-content-a', 'user-content-a-1'])
+    expect(ids(twice)).toEqual(['user-content-a', 'user-content-a-1'])
+    expect(ids('# A')).toEqual(['user-content-a'])
+  })
+
+  it('keeps "Foo" and a literal "User-content-foo" distinct', () => {
+    expect(ids('# Foo\n\n# User-content-foo')).toEqual([
+      'user-content-foo',
+      'user-content-user-content-foo',
+    ])
+  })
+})
+
+describe('renderMarkdown fragment links and author ids', () => {
+  it('leaves #fragment hrefs as authored', () => {
+    const html = renderMarkdown('[ver](#introdução) [a](#) [b](https://example.com/#frag)')
+    const hrefs = [...new DOMParser().parseFromString(html, 'text/html').querySelectorAll('a')].map(
+      (a) => decodeURIComponent(a.getAttribute('href') ?? ''),
+    )
+
+    expect(hrefs).toEqual(['#introdução', '#', 'https://example.com/#frag'])
+  })
+
+  it('keeps SVG url(#id) references and their targets intact', () => {
+    const html = renderMarkdown(
+      '<svg><defs><linearGradient id="g"><stop offset="0"/></linearGradient></defs><rect width="10" height="10" fill="url(#g)"/></svg>',
+    )
+
+    expect(html).toContain('id="g"')
+    expect(html).toContain('fill="url(#g)"')
+  })
+
+  it('keeps aria-labelledby references and their targets intact', () => {
+    const html = renderMarkdown('<div aria-labelledby="lbl">x</div><span id="lbl">Rótulo</span>')
+
+    expect(html).toContain('aria-labelledby="lbl"')
+    expect(html).toContain('id="lbl"')
+  })
+
+  it('strips ids that would clobber document properties', () => {
+    const html = renderMarkdown('<a id="cookie">x</a>')
+
+    expect(html).not.toContain('id="cookie"')
+  })
+})

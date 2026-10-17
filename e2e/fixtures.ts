@@ -63,3 +63,17 @@ export async function focusMenuItemViaArrowDown(page: Page, target: Locator): Pr
   }
   await expect(target).toBeFocused()
 }
+
+/**
+ * Creates a project and a file in it through the UI; the new file becomes
+ * the active one, so the editor is ready to type into afterwards.
+ */
+export async function createFile(page: Page, project: string, file: string): Promise<void> {
+  await page.getByRole('button', { name: 'Criar novo projeto' }).click()
+  await page.getByLabel('Nome do novo projeto').fill(project)
+  await page.getByRole('button', { name: 'Criar', exact: true }).click()
+  await page.getByRole('button', { name: `Mais opções do projeto ${project}`, exact: true }).click()
+  await page.getByRole('menuitem', { name: /Novo arquivo/ }).click()
+  await page.getByLabel('Nome do arquivo').fill(file)
+  await page.getByRole('button', { name: 'Criar', exact: true }).click()
+}
