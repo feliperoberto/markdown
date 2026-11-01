@@ -1,0 +1,10 @@
+schema: spec-driven
+
+context: |
+  Stack: Vite + Preact + TypeScript PWA (no backend), IndexedDB/localStorage storage, Google Drive sync, browser-native PDF export. Hosted on GitHub Pages at feliperoberto.com.br.
+  Language: spec artifacts and code in English; UI copy is pt-BR only (no i18n layer, ADR-0002; voice in docs/copy-guide.md).
+  Validation: npm run lint; npm run typecheck; npm test (vitest, coverage thresholds in vitest.config.ts); npm run format:check; npm run test:e2e (Playwright).
+  Architecture: docs/architecture.md and docs/adr/ are authoritative for decisions; reference an ADR instead of restating it.
+  Domains (src/features/*, src/lib/*): editor, markdown-rendering, projects, storage, import-export, drive-sync, print-export, pwa, ui-shell.
+  The .claude directory is a read-only submodule of feliperoberto/claude-setup: never edit it here.
+  Never put secrets, OAuth client IDs or tokens in specs or change artifacts.
