@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { renderHook, act, waitFor, cleanup } from '@testing-library/preact'
+import { renderHook, act, waitFor, cleanup, screen } from '@testing-library/preact'
 import { ToastProvider } from '@/components'
 import { useDriveSync } from './useDriveSync'
+import { DriveSyncNotConnectedError, GoogleDriveSyncProvider } from './google-drive-provider'
 import type { ProjectsSnapshot } from './types'
 
 // Passes the pulled remote snapshot straight through unchanged (or an
@@ -150,6 +151,71 @@ describe('useDriveSync', () => {
     reconcile.mockClear()
     await act(() => result.current.sync())
     await waitFor(() => expect(reconcile).toHaveBeenCalledWith(null))
+  })
+
+  // Regression: the connect-time sync used to reconcile with the `reconcile`
+  // callback of the render in which Connect was clicked. `app.tsx` builds
+  // that callback from `projects`/`tombstones`, so edits made while the
+  // Google popup was open were missing from the merged snapshot pushed to
+  // Drive. The sync must use the latest callback.
+  it('connect-time sync reconciles with the latest reconcile, not the one from the click', async () => {
+    const stale = identityReconcile()
+    const latest = identityReconcile()
+    const { result, rerender } = renderHook(({ reconcile }) => useDriveSync({ reconcile }), {
+      wrapper,
+      initialProps: { reconcile: stale },
+    })
+
+    // Start connecting with the closure from this render, then re-render
+    // with a new callback before the connect settles (the popup is open).
+    let connecting!: Promise<void>
+    act(() => {
+      connecting = result.current.connect()
+    })
+    rerender({ reconcile: latest })
+    await act(() => connecting)
+
+    await waitFor(() => expect(latest).toHaveBeenCalledWith(null))
+    expect(stale).not.toHaveBeenCalled()
+  })
+
+  it('connecting pushes a snapshot before the connect action finishes', async () => {
+    const pushSpy = vi.spyOn(GoogleDriveSyncProvider.prototype, 'push')
+    try {
+      const { result } = renderHook(() => useDriveSync({ reconcile: identityReconcile() }), {
+        wrapper,
+      })
+
+      await act(() => result.current.connect())
+
+      expect(pushSpy).toHaveBeenCalledTimes(1)
+    } finally {
+      pushSpy.mockRestore()
+    }
+  })
+
+  // A push that has no token to upload with used to return silently, so
+  // the sync reported success (or, on connect, stayed quiet) with nothing
+  // uploaded. It now throws, and the sync must surface that as an error.
+  it('reports an error and leaves lastSyncedAt unset when push has no token', async () => {
+    const pushSpy = vi
+      .spyOn(GoogleDriveSyncProvider.prototype, 'push')
+      .mockRejectedValue(new DriveSyncNotConnectedError())
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const { result } = renderHook(() => useDriveSync({ reconcile: identityReconcile() }), {
+        wrapper,
+      })
+
+      await act(() => result.current.connect())
+
+      expect(await screen.findByText(/Erro ao sincronizar: Drive desconectado/)).toBeTruthy()
+      expect(screen.queryByText('☁️ Sincronizado')).toBeNull()
+      expect(result.current.lastSyncedAt).toBeNull()
+    } finally {
+      pushSpy.mockRestore()
+      errorSpy.mockRestore()
+    }
   })
 
   // Re-entrancy guard: two overlapping sync() calls before the first

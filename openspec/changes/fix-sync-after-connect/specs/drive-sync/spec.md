@@ -33,9 +33,13 @@ Covered by: none (untested)
 - **WHEN** local projects change while the interactive connect is still in progress
 - **THEN** the sync that runs right after connecting reconciles and pushes the latest local projects, not the ones that existed when Connect was clicked
 
+Covered by: src/features/drive-sync/useDriveSync.test.ts
+
 #### Scenario: Connect-time sync uploads data
 - **WHEN** an interactive connect succeeds while online
 - **THEN** a snapshot is uploaded to Drive before the connect action finishes
+
+Covered by: src/features/drive-sync/useDriveSync.test.ts
 
 ## REMOVED Requirements
 
@@ -52,6 +56,10 @@ The system SHALL make push fail with a "not connected" error when no access toke
 - **WHEN** the silent refresh inside push clears the token after pull succeeded
 - **THEN** an error toast "Erro ao sincronizar: <message>" is shown, no success toast appears, and `lastSyncedAt` is unchanged
 
+Covered by: src/features/drive-sync/useDriveSync.test.ts, src/features/drive-sync/google-drive-provider.test.ts
+
 #### Scenario: Push without a token
 - **WHEN** push is called while disconnected
 - **THEN** it rejects without uploading
+
+Covered by: src/features/drive-sync/google-drive-provider.test.ts

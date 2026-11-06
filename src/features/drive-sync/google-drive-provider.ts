@@ -47,6 +47,19 @@ import { localStorageAdapter } from '@/lib/storage-adapter'
 import { isNavigatorOnline } from '@/lib/useOnlineStatus'
 
 /**
+ * Thrown by `push` when there is no access token to upload with: the user
+ * never connected, or the silent refresh inside `push` cleared a dead token.
+ * Without it `push` returned silently and the sync flow reported
+ * "Sincronizado" for a run that uploaded nothing.
+ */
+export class DriveSyncNotConnectedError extends Error {
+  constructor() {
+    super(driveSyncCopy.notConnectedSyncError)
+    this.name = 'DriveSyncNotConnectedError'
+  }
+}
+
+/**
  * Thrown (instead of letting a raw fetch/TypeError bubble up) when a sync
  * attempt is skipped because the browser is offline (issue #24). Kept as a
  * distinct class so callers can special-case it without string-matching on
@@ -496,7 +509,7 @@ export class GoogleDriveSyncProvider implements SyncProvider {
    * pull→reconcile→push sequence as one outcome.
    */
   async push(snapshot: ProjectsSnapshot): Promise<void> {
-    if (!this.accessToken) return
+    if (!this.accessToken) throw new DriveSyncNotConnectedError()
 
     // Offline: skip the network attempt entirely and surface a graceful
     // "will retry" state instead of a raw fetch/TypeError (issue #24). Local
@@ -517,8 +530,8 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     // instead of always leaving the soon-to-expire token in place. Without
     // this re-check, uploadSnapshot would still fire with a null token,
     // producing a raw "Invalid Credentials" API error instead of the
-    // silent no-op this method already uses for "not connected" above.
-    if (!this.accessToken) return
+    // "not connected" error this method already throws above.
+    if (!this.accessToken) throw new DriveSyncNotConnectedError()
     await this.uploadSnapshot(snapshot)
   }
 

@@ -116,6 +116,14 @@ export function useDriveSync({ reconcile }: UseDriveSyncOptions): UseDriveSyncRe
   // no future caller can bypass it by forgetting to check it.
   const syncInFlightRef = useRef(false)
 
+  // `connect()` awaits the Google popup before it syncs, and a sync awaits
+  // the network between pull and reconcile; either way the `reconcile` this
+  // render closed over can be stale by the time it runs (`app.tsx` rebuilds
+  // it from `projects`/`tombstones` on every render). Always read the
+  // latest through a ref, same pattern as `showToastRef` above.
+  const reconcileRef = useRef(reconcile)
+  reconcileRef.current = reconcile
+
   // Revokes the token if this hook ever unmounts while connected. It never
   // unmounts in the current app shell (always alive at the top of
   // `src/app/app.tsx`), so this is a latent-only safety net.
@@ -181,7 +189,7 @@ export function useDriveSync({ reconcile }: UseDriveSyncOptions): UseDriveSyncRe
     syncInFlightRef.current = true
     try {
       const remote = await providerRef.current.pull()
-      const merged = reconcile(remote)
+      const merged = reconcileRef.current(remote)
       await providerRef.current.push(merged)
       setLastSyncedAt(providerRef.current.getStatus().lastSyncedAt)
       if (!silentSuccess) showToast(driveSyncCopy.syncCompleteToast, 'success')

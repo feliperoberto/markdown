@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { GoogleDriveSyncProvider } from './google-drive-provider'
+import { DriveSyncNotConnectedError, GoogleDriveSyncProvider } from './google-drive-provider'
 
 /**
  * Shared mutable state the `./google-identity` mock below reads/writes.
@@ -134,6 +134,19 @@ describe('GoogleDriveSyncProvider', () => {
       })
 
       await expect(provider.push({ projects: {} })).rejects.toThrow(/quota exceeded/)
+    })
+  })
+
+  describe('push while not connected', () => {
+    it('rejects with DriveSyncNotConnectedError and uploads nothing', async () => {
+      const fetchSpy = vi.fn()
+      vi.stubGlobal('fetch', fetchSpy)
+      const provider = new GoogleDriveSyncProvider()
+
+      await expect(provider.push({ projects: {} })).rejects.toBeInstanceOf(
+        DriveSyncNotConnectedError,
+      )
+      expect(fetchSpy).not.toHaveBeenCalled()
     })
   })
 
@@ -452,9 +465,11 @@ describe('GoogleDriveSyncProvider', () => {
       vi.useFakeTimers()
       try {
         await vi.advanceTimersByTimeAsync(56 * 60 * 1000)
-        // push() is a silent no-op once the token is gone (matching its
-        // existing "not connected" convention) — not a throw.
-        await provider.push({ projects: {} })
+        // push() must fail loudly once the token is gone, so the caller
+        // never reports a sync that uploaded nothing as a success.
+        await expect(provider.push({ projects: {} })).rejects.toBeInstanceOf(
+          DriveSyncNotConnectedError,
+        )
       } finally {
         vi.useRealTimers()
       }
