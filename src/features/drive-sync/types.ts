@@ -23,6 +23,15 @@ export interface ProjectsSnapshot {
    * as empty.
    */
   tombstones?: Record<string, unknown>
+  /**
+   * Stable-id sidecar (per project/file id: current name and last-rename
+   * time; see `src/features/projects/identities.ts`), synced alongside
+   * `projects` so a rename on one device merges as a rename instead of a
+   * duplicate. Opaque here, like `tombstones`. Optional: a version 1
+   * backup has none, and a provider that doesn't receive one treats it as
+   * empty.
+   */
+  identities?: Record<string, unknown>
 }
 
 export interface SyncStatus {

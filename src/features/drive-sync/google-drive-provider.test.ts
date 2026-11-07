@@ -502,4 +502,72 @@ describe('GoogleDriveSyncProvider', () => {
       expect(onStatusChange).not.toHaveBeenCalledWith('offline')
     })
   })
+
+  // Payload v2 (openspec change add-sync-item-identity): the backup also
+  // carries the identity sidecar, and v1 backups (no `identities`) stay
+  // readable.
+  describe('payload v2 — identities', () => {
+    const IDENTITIES = {
+      projects: { p1: { name: 'A', nameUpdatedAt: '2026-01-01T00:00:00.000Z' } },
+      files: {},
+    }
+
+    async function upload(snapshot: Parameters<GoogleDriveSyncProvider['push']>[0]) {
+      const provider = await connectedProvider()
+      let uploadedBody: string | null = null
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string, init?: RequestInit) => {
+          if (url.startsWith(FILES_LIST_URL)) {
+            return jsonResponse({ files: [{ id: 'existing-id', name: 'x', modifiedTime: 't' }] })
+          }
+          if (url.includes('/upload/drive/v3/files/existing-id?uploadType=media')) {
+            uploadedBody = await (init?.body as Blob).text()
+            return jsonResponse({ id: 'existing-id' })
+          }
+          throw new Error(`Unmocked fetch: ${url}`)
+        }),
+      )
+      await provider.push(snapshot)
+      return JSON.parse(uploadedBody as unknown as string)
+    }
+
+    it('uploads version 2 with the identities next to projects', async () => {
+      const uploaded = await upload({ projects: { A: {} }, identities: IDENTITIES })
+      expect(uploaded.version).toBe(2)
+      expect(uploaded.identities).toEqual(IDENTITIES)
+    })
+
+    it('uploads an empty identities object when the snapshot has none', async () => {
+      const uploaded = await upload({ projects: { A: {} } })
+      expect(uploaded.version).toBe(2)
+      expect(uploaded.identities).toEqual({})
+    })
+
+    function stubBackup(body: unknown) {
+      stubFetch({
+        [FILES_LIST_URL]: () =>
+          jsonResponse({ files: [{ id: 'file-id', name: 'x', modifiedTime: 't' }] }),
+        'https://www.googleapis.com/drive/v3/files/file-id?alt=media': () => jsonResponse(body),
+      })
+    }
+
+    it('pull returns the identities of a version 2 backup', async () => {
+      const provider = await connectedProvider()
+      stubBackup({ version: 2, projects: { A: {} }, tombstones: {}, identities: IDENTITIES })
+      await expect(provider.pull()).resolves.toEqual({
+        projects: { A: {} },
+        tombstones: {},
+        identities: IDENTITIES,
+      })
+    })
+
+    it('pull returns undefined identities for a version 1 backup', async () => {
+      const provider = await connectedProvider()
+      stubBackup({ version: 1, projects: { A: {} }, tombstones: {} })
+      const pulled = await provider.pull()
+      expect(pulled?.projects).toEqual({ A: {} })
+      expect(pulled?.identities).toBeUndefined()
+    })
+  })
 })

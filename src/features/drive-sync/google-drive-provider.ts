@@ -451,12 +451,15 @@ export class GoogleDriveSyncProvider implements SyncProvider {
   private async uploadSnapshot(snapshot: ProjectsSnapshot): Promise<void> {
     const payload = JSON.stringify(
       {
-        version: 1,
+        version: 2,
         exportedAt: new Date().toISOString(),
         projects: snapshot.projects,
         // Optional field on an older backup this build reads back — see
         // ProjectsSnapshot's doc comment on why it's safe to omit/ignore.
         tombstones: snapshot.tombstones ?? {},
+        // Version 2 (add-sync-item-identity). An older build reading this
+        // backup ignores the field; see ProjectsSnapshot.identities.
+        identities: snapshot.identities ?? {},
       },
       null,
       2,
@@ -570,7 +573,7 @@ export class GoogleDriveSyncProvider implements SyncProvider {
     // ("Unexpected token…") instead of the same clear
     // "Formato de backup inválido" message a missing `projects` field
     // already produces below.
-    let data: { projects?: unknown; tombstones?: unknown }
+    let data: { projects?: unknown; tombstones?: unknown; identities?: unknown }
     try {
       data = await res.json()
     } catch {
@@ -584,6 +587,8 @@ export class GoogleDriveSyncProvider implements SyncProvider {
       // (reconcileWithRemote) treats `undefined` the same as "nothing to
       // merge in", not an error.
       tombstones: data.tombstones as Record<string, unknown> | undefined,
+      // Absent on a version 1 backup — the caller adopts ids by name then.
+      identities: data.identities as Record<string, unknown> | undefined,
     }
   }
 }

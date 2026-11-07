@@ -19,8 +19,8 @@
 
 ## 4. Payload v2
 
-- [ ] 4.1 Add failing tests in `google-drive-provider.test.ts`: upload writes `version: 2` with `identities` (and an empty object when absent); pull returns `identities` for a v2 backup and `undefined` for a v1 backup. Verify they fail.
-- [ ] 4.2 Add optional `identities` to `ProjectsSnapshot` (`types.ts`), write it in `uploadSnapshot`, return it from `pull`, and pass it through the reconcile callback in `src/app/app.tsx`. Verify the tests from 4.1 pass and `npm run typecheck` is clean.
+- [x] 4.1 Add failing tests in `google-drive-provider.test.ts`: upload writes `version: 2` with `identities` (and an empty object when absent); pull returns `identities` for a v2 backup and `undefined` for a v1 backup. Verify they fail.
+- [x] 4.2 Add optional `identities` to `ProjectsSnapshot` (`types.ts`), write it in `uploadSnapshot`, return it from `pull`, and pass it through the reconcile callback in `src/app/app.tsx`. Verify the tests from 4.1 pass and `npm run typecheck` is clean.
 
 ## 5. Docs and integration
 

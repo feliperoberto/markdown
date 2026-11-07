@@ -74,8 +74,18 @@ export function App(): JSX.Element {
   // configured.
   const driveSync = useDriveSync({
     reconcile: (remote) => {
-      const result = reconcileWithRemote(remote?.projects ?? null, remote?.tombstones)
-      return { projects: result.projects, tombstones: result.tombstones }
+      const result = reconcileWithRemote(
+        remote?.projects ?? null,
+        remote?.tombstones,
+        remote?.identities,
+      )
+      return {
+        projects: result.projects,
+        tombstones: result.tombstones,
+        // Typed as a plain record at the drive-sync boundary (see
+        // ProjectsSnapshot.identities); the shape is owned by projects.
+        identities: result.identities as unknown as Record<string, unknown>,
+      }
     },
   })
 
