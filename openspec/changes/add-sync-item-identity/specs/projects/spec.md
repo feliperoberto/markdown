@@ -3,7 +3,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Rename and delete cascade
-Renaming or deleting a project or file SHALL carry or drop its archived flags and record tombstones in the same step for a delete (a rename keeps the item's identity and records none), and renaming the active file or project SHALL keep the selection on the renamed item; deleting the active project or file SHALL clear the selection.
+Renaming or deleting a project or file SHALL carry or drop its archived flags and record tombstones in the same step, and a rename SHALL keep the item's stable id and update its recorded name and rename time, and renaming the active file or project SHALL keep the selection on the renamed item; deleting the active project or file SHALL clear the selection.
 
 #### Scenario: Rename carries archived flags
 - **WHEN** an archived project or file is renamed
@@ -11,9 +11,9 @@ Renaming or deleting a project or file SHALL carry or drop its archived flags an
 
 Covered by: src/features/projects/useProjects.test.tsx
 
-#### Scenario: Rename keeps identity and records no tombstone
+#### Scenario: Rename keeps identity
 - **WHEN** a project or file is renamed
-- **THEN** its stable id is unchanged, its recorded name and rename time are updated, and no tombstone is written for the old name
+- **THEN** its stable id is unchanged, its recorded name and rename time are updated, and the tombstone for the old name is still recorded
 
 Covered by: src/features/projects/useProjects.test.tsx
 
@@ -34,33 +34,6 @@ Covered by: src/features/projects/useProjects.test.tsx
 - **THEN** the project stays archived
 
 Covered by: src/features/projects/useProjects.test.tsx
-
-### Requirement: Tombstones prevent resurrection
-Deletes SHALL record file and project tombstones (deleting a project also tombstones each of its files), tombstones SHALL be merged per key taking the later time, pruned after 90 days, and applied only to remote-only entries older than the tombstone; local entries, entries edited after the deletion and empty remote projects SHALL survive.
-
-#### Scenario: Remote-only file older than tombstone
-- **WHEN** a remote-only file is older than its tombstone
-- **THEN** it is dropped and remote is flagged for update
-
-Covered by: src/features/projects/model.test.ts
-
-#### Scenario: Recreated or local content
-- **WHEN** the remote file is newer than the tombstone, the entry is local, or the remote project is empty
-- **THEN** it is kept
-
-Covered by: src/features/projects/model.test.ts
-
-#### Scenario: Tombstone store operations
-- **WHEN** tombstones are recorded, cleared, merged, pruned or normalized
-- **THEN** keys use the composite encoding, later times win, expired or malformed entries are dropped, and no-ops return the same reference
-
-Covered by: src/features/projects/tombstones.test.ts
-
-#### Scenario: Round trip across syncs
-- **WHEN** a file is renamed twice, deleted, or a deleted project name is reused between syncs
-- **THEN** exactly one copy under the final name remains and old files are not resurrected
-
-Covered by: src/features/projects/sync-roundtrip.test.tsx
 
 ## ADDED Requirements
 

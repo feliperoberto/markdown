@@ -13,9 +13,9 @@
 
 ## 3. Wire into the projects hook
 
-- [ ] 3.1 Add failing tests in `useProjects.test.tsx`: renaming a project or file keeps its id, writes no tombstone, and still carries the archived flags; deleting drops the sidecar entry; created and imported items receive ids. Verify they fail.
-- [ ] 3.2 In `useProjects.ts`, keep identities in state and storage, call `ensureIdentities` on load and after create, import and merge, replace the rename tombstones with `renameIdentity`, and prune on delete. Verify the tests from 3.1 and the existing rename tests pass.
-- [ ] 3.3 Extend `reconcileWithRemote` to align the remote with `alignRemote` before the freshness merge, and return the merged identities with the projects and tombstones. Add a round trip test in `sync-roundtrip.test.tsx` for: rename on A then sync on B (one item); a rename on A with an edit under the old name on B (one item, new name, newer content); a v1 remote; independent ids. Verify with `npx vitest run src/features/projects`.
+- [x] 3.1 Add failing tests in `useProjects.test.tsx`: renaming a project or file keeps its id, still records the old-name tombstone, and carries the archived flags; deleting drops the sidecar entry; created and imported items receive ids. Verify they fail.
+- [x] 3.2 In `useProjects.ts`, keep identities in state and storage, call `ensureIdentities` on load and after create, import and merge, call `renameIdentity` next to the existing rename tombstones, and prune on delete. Verify the tests from 3.1 and the existing rename tests pass.
+- [x] 3.3 Extend `reconcileWithRemote` to align the remote with `alignRemote` before the freshness merge, and return the merged identities with the projects and tombstones. Add a round trip test in `sync-roundtrip.test.tsx` for: rename on A then sync on B (one item); a rename on A with an edit under the old name on B (one item, new name, newer content); a v1 remote; independent ids. Verify with `npx vitest run src/features/projects`.
 
 ## 4. Payload v2
 
@@ -24,7 +24,7 @@
 
 ## 5. Docs and integration
 
-- [ ] 5.1 Add `docs/adr/0009-sync-item-identity.md` recording decisions 1, 3, 4 and 6, and a short note in ADR 0004 that renames no longer use tombstones. Verify the ADR links resolve (`docs/adr/` index, if any, lists it).
+- [ ] 5.1 Add `docs/adr/0009-sync-item-identity.md` recording decisions 1, 3, 4 and 6, and a short note in ADR 0004 that rename tombstones remain as a bridge for v1 backups. Verify the ADR links resolve (`docs/adr/` index, if any, lists it).
 - [ ] 5.2 Update the "Covered by" lines in the delta specs, then run `python3 .claude/scripts/openspec_drift_check.py --validate` and `openspec validate add-sync-item-identity --strict`. Verify both pass.
 - [ ] 5.3 Run `npm run lint && npm run typecheck && npm test && npm run format:check` and verify they pass; run the e2e suite with the pre-installed Chromium, and verify no new failures against the base branch.
 

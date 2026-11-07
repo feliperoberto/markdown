@@ -4,11 +4,13 @@ import {
   backupProjects,
   loadArchivedFiles,
   loadArchivedProjects,
+  loadIdentities,
   loadLastEditedFile,
   loadProjects,
   loadTombstones,
   saveArchivedFiles,
   saveArchivedProjects,
+  saveIdentities,
   saveLastEditedFile,
   saveProjects,
   saveTombstones,
@@ -24,6 +26,15 @@ import {
   recordProjectTombstone,
   type Tombstones,
 } from './tombstones'
+import {
+  alignRemote,
+  ensureIdentities,
+  normalizeIdentities,
+  pruneIdentities,
+  renameFileIdentity,
+  renameProjectIdentity,
+  type Identities,
+} from './identities'
 import { normalizeProjectsState } from './validate'
 import type { ProjectsState } from './types'
 import { useToast } from '@/components'
@@ -138,10 +149,15 @@ export interface UseProjectsResult {
   // combined set (local + remote, latest `deletedAt` wins), which the
   // caller must push alongside `projects` for a deletion to actually
   // propagate to a device that hasn't seen it yet.
+  // Stable ids (see identities.ts): per project/file id, its current name
+  // and last-rename time. Synced with the snapshot so a rename on another
+  // device merges as a rename instead of a duplicate.
+  identities: Identities
   reconcileWithRemote: (
     remote: unknown,
     remoteTombstones?: unknown,
-  ) => { projects: ProjectsState; tombstones: Tombstones }
+    remoteIdentities?: unknown,
+  ) => { projects: ProjectsState; tombstones: Tombstones; identities: Identities }
 }
 
 // Owns the projects/files state for the app and persists every mutation
@@ -160,6 +176,7 @@ export function useProjects(): UseProjectsResult {
     archived: Set<string>
     archivedFiles: Set<string>
     tombstones: Tombstones
+    identities: Identities
     selection: { project: string | null; file: string | null }
   } | null>(null)
   if (initialRef.current === null) {
@@ -167,8 +184,14 @@ export function useProjects(): UseProjectsResult {
     const archived = new Set(model.pruneArchived(loadArchivedProjects(), loaded))
     const archivedFiles = new Set(model.pruneArchivedFiles(loadArchivedFiles(), loaded))
     const tombstones = pruneTombstones(loadTombstones(), new Date().toISOString(), TOMBSTONE_TTL_MS)
+    const identities = ensureIdentities(
+      pruneIdentities(loadIdentities(), loaded),
+      loaded,
+      new Date().toISOString(),
+    )
     initialRef.current = {
       projects: loaded,
+      identities,
       archived,
       archivedFiles,
       tombstones,
@@ -188,6 +211,7 @@ export function useProjects(): UseProjectsResult {
   // model.mergeProjectsByFreshness's `tombstones` param, the only place
   // this is actually read.
   const [tombstones, setTombstones] = useState<Tombstones>(initialRef.current.tombstones)
+  const [identities, setIdentities] = useState<Identities>(initialRef.current.identities)
   const showToast = useToast()
 
   // Asynchronous persistence failures (IndexedDB backend only — the
@@ -247,6 +271,24 @@ export function useProjects(): UseProjectsResult {
   useEffect(() => {
     saveTombstones(tombstones)
   }, [tombstones])
+
+  // Write-through persistence for the identity sidecar — best-effort, like
+  // the other sidecars: a lost sidecar only means ids are re-assigned (and
+  // re-adopted by name on the next sync), never lost documents.
+  useEffect(() => {
+    saveIdentities(identities)
+  }, [identities])
+
+  // Keeps the sidecar in step with `projects` however it changed (create,
+  // batch create, ZIP import, delete, a sync merge): unknown items get an
+  // id, vanished ones lose theirs. Renames update their entry in the same
+  // batch as the rename itself (see renameProject/renameFile), so by the
+  // time this runs the renamed item is already known under its new name.
+  useEffect(() => {
+    setIdentities((prev) =>
+      ensureIdentities(pruneIdentities(prev, projects), projects, new Date().toISOString()),
+    )
+  }, [projects])
 
   // Remember the open file across visits (issue #92). Runs on every
   // selection change — including the setCurrentFile updates that rename/
@@ -342,6 +384,9 @@ export function useProjects(): UseProjectsResult {
       const saved = persist(next)
       if (saved) {
         setCurrentProject((current) => (current === oldName ? newName : current))
+        setIdentities((prev) =>
+          renameProjectIdentity(prev, oldName, newName, new Date().toISOString()),
+        )
         // Carry the archived flag across the key move — project identity is
         // the object key, so without this a renamed archived project would
         // silently reappear in the everyday list.
@@ -613,6 +658,9 @@ export function useProjects(): UseProjectsResult {
         setCurrentFile((file) =>
           currentProject === projectName && file === oldFileName ? newFileName : file,
         )
+        setIdentities((prev) =>
+          renameFileIdentity(prev, projectName, oldFileName, newFileName, new Date().toISOString()),
+        )
         // Carry the archived flag across the key move — same reasoning as
         // renameProject's renameInArchived call, one level down.
         setArchivedFiles((prev) => {
@@ -728,28 +776,70 @@ export function useProjects(): UseProjectsResult {
   // needed catching up — so the caller (the Drive sync panel) can push it
   // straight back without a second pull/merge round-trip.
   const reconcileWithRemote = useCallback(
-    (remote: unknown, remoteTombstones?: unknown) => {
+    (remote: unknown, remoteTombstones?: unknown, remoteIdentities?: unknown) => {
       const combinedTombstones = pruneTombstones(
         mergeTombstones(tombstones, normalizeTombstones(remoteTombstones)),
         new Date().toISOString(),
         TOMBSTONE_TTL_MS,
       )
-      const { merged, localChanged } = model.mergeProjectsByFreshness(
+      // Make both sides use the same names for every item they know by id
+      // (a rename made on another device) BEFORE the name-keyed freshness
+      // merge, so a renamed item merges as one item instead of two.
+      const aligned = alignRemote(
         projects,
+        identities,
         normalizeProjectsState(remote),
+        normalizeIdentities(remoteIdentities),
+        new Date().toISOString(),
+      )
+      const { merged, localChanged } = model.mergeProjectsByFreshness(
+        aligned.local,
+        aligned.remote,
         combinedTombstones,
+      )
+      const mergedIdentities = ensureIdentities(
+        pruneIdentities(aligned.identities, merged),
+        merged,
+        new Date().toISOString(),
       )
       // Back up only when the merge is about to overwrite local state —
       // previously every sync wrote a full backup even when nothing local
       // changed, rotating genuinely different snapshots out of the cap.
-      if (localChanged) {
+      // A rename applied to the local side counts as a change.
+      if (localChanged || aligned.local !== projects) {
         backupProjects(projects)
         persist(merged)
       }
       if (combinedTombstones !== tombstones) setTombstones(combinedTombstones)
-      return { projects: merged, tombstones: combinedTombstones }
+      setIdentities(mergedIdentities)
+
+      // Renames that won on the local side move the archived flags and the
+      // selection exactly like a rename made here (see renameProject).
+      let effectiveProject = currentProject
+      for (const { from, to } of aligned.localRenames.projects) {
+        if (effectiveProject === from) effectiveProject = to
+        setCurrentProject((current) => (current === from ? to : current))
+        setArchivedProjects((prev) => {
+          const next = model.renameInArchived(prev, from, to)
+          return next === prev ? prev : new Set(next)
+        })
+        setArchivedFiles((prev) => {
+          const next = model.renameProjectInArchivedFiles(prev, from, to)
+          return next === prev ? prev : new Set(next)
+        })
+      }
+      for (const { project, from, to } of aligned.localRenames.files) {
+        if (effectiveProject === project) {
+          setCurrentFile((file) => (file === from ? to : file))
+        }
+        setArchivedFiles((prev) => {
+          const next = model.renameFileInArchivedFiles(prev, project, from, to)
+          return next === prev ? prev : new Set(next)
+        })
+      }
+      return { projects: merged, tombstones: combinedTombstones, identities: mergedIdentities }
     },
-    [projects, persist, tombstones],
+    [projects, persist, tombstones, identities, currentProject],
   )
 
   return {
@@ -773,6 +863,7 @@ export function useProjects(): UseProjectsResult {
     archivedFiles,
     toggleFileArchived,
     importProjects,
+    identities,
     reconcileWithRemote,
   }
 }

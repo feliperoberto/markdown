@@ -44,8 +44,7 @@ Files cannot move between projects (see the `projects` spec), so a file's projec
 
 5. **Name collisions on alignment.** If the winning name is already used by a different id on a side, the renamed item gets the suffix ` (2)`, ` (3)`, and so on, instead of overwriting. Content is never lost; the user can rename again.
 
-6. **Renames record no tombstone.** `renameProject` and `renameFile` call `renameIdentity` instead. Deletes are unchanged. After upgrade, a rename on an old build still writes its old tombstones, which the existing merge still honors for the old-name key.
-
+6. **Renames keep their tombstones, as a v1 bridge.** `renameProject` and `renameFile` call `renameIdentity` and still record the old-name tombstone. A v1 backup has no ids, so a device that renames before its first v2 sync would otherwise get the old name back as a duplicate: the tombstone is the only thing that stops it. Dropping the tombstones is a follow-up once v1 backups can be assumed gone (PR 3 revisits tombstones).
 7. **Payload v2, v1 readable.** `uploadSnapshot` writes `version: 2` with `identities`. `pull` already ignores the version and reads fields defensively, so it just returns `identities` (undefined for v1). `ProjectsSnapshot` gains an optional `identities`, keeping the `drive-sync` feature free of `projects` types (the existing feature boundary).
 
 8. **Ids are assigned lazily.** `ensureIdentities` runs on load and after create, import and merge, so existing data needs no one-off migration and ZIP imports get ids automatically. Ids are `crypto.randomUUID()`.
