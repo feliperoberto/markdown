@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted.
+Accepted. [ADR-0009](./0009-sync-item-identity.md) later added stable item ids
+so a rename merges as a rename; the rename tombstones recorded here stay as a
+bridge for version 1 backups, which carry no ids.
 
 ## Context
 

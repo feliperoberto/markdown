@@ -24,9 +24,9 @@
 
 ## 5. Docs and integration
 
-- [ ] 5.1 Add `docs/adr/0009-sync-item-identity.md` recording decisions 1, 3, 4 and 6, and a short note in ADR 0004 that rename tombstones remain as a bridge for v1 backups. Verify the ADR links resolve (`docs/adr/` index, if any, lists it).
-- [ ] 5.2 Update the "Covered by" lines in the delta specs, then run `python3 .claude/scripts/openspec_drift_check.py --validate` and `openspec validate add-sync-item-identity --strict`. Verify both pass.
-- [ ] 5.3 Run `npm run lint && npm run typecheck && npm test && npm run format:check` and verify they pass; run the e2e suite with the pre-installed Chromium, and verify no new failures against the base branch.
+- [x] 5.1 Add `docs/adr/0009-sync-item-identity.md` recording decisions 1, 3, 4 and 6, and a short note in ADR 0004 that rename tombstones remain as a bridge for v1 backups. Verify the ADR links resolve (`docs/adr/` index, if any, lists it).
+- [x] 5.2 Update the "Covered by" lines in the delta specs, then run `python3 .claude/scripts/openspec_drift_check.py --validate` and `openspec validate add-sync-item-identity --strict`. Verify both pass.
+- [x] 5.3 Run `npm run lint && npm run typecheck && npm test && npm run format:check` and verify they pass; run the e2e suite with the pre-installed Chromium, and verify no new failures against the base branch.
 
 ## Workflow follow-up
 

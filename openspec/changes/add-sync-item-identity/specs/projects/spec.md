@@ -15,7 +15,7 @@ Covered by: src/features/projects/useProjects.test.tsx
 - **WHEN** a project or file is renamed
 - **THEN** its stable id is unchanged, its recorded name and rename time are updated, and the tombstone for the old name is still recorded
 
-Covered by: src/features/projects/useProjects.test.tsx
+Covered by: src/features/projects/useProjects.identities.test.tsx
 
 #### Scenario: Delete drops archived flags
 - **WHEN** an archived project or file is deleted
