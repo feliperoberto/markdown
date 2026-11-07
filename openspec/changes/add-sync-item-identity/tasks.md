@@ -2,14 +2,14 @@
 
 ## 1. Identity sidecar (pure module)
 
-- [ ] 1.1 Add `src/features/projects/identities.test.ts` with failing tests for `ensureIdentities` (assigns unique ids to unknown projects and files), `renameIdentity` (keeps the id, updates name and rename time) and `pruneIdentities` (drops entries for missing items). Verify with `npx vitest run src/features/projects/identities.test.ts` that they fail before the implementation.
-- [ ] 1.2 Implement `src/features/projects/identities.ts` (types, `ensureIdentities`, `renameIdentity`, `pruneIdentities`, `normalizeIdentities` for untrusted input, same-reference-on-no-op like the other sidecars). Verify the tests from 1.1 pass.
-- [ ] 1.3 Add local persistence (`loadIdentities` / `saveIdentities`) to `storage.ts` under a new key, with a test in `storage.test.ts` for round trip and for malformed stored data. Verify with `npx vitest run src/features/projects/storage.test.ts`.
+- [x] 1.1 Add `src/features/projects/identities.test.ts` with failing tests for `ensureIdentities` (assigns unique ids to unknown projects and files), `renameIdentity` (keeps the id, updates name and rename time) and `pruneIdentities` (drops entries for missing items). Verify with `npx vitest run src/features/projects/identities.test.ts` that they fail before the implementation.
+- [x] 1.2 Implement `src/features/projects/identities.ts` (types, `ensureIdentities`, `renameIdentity`, `pruneIdentities`, `normalizeIdentities` for untrusted input, same-reference-on-no-op like the other sidecars). Verify the tests from 1.1 pass.
+- [x] 1.3 Add local persistence (`loadIdentities` / `saveIdentities`) to `storage.ts` under a new key, with a test in `storage.test.ts` for round trip and for malformed stored data. Verify with `npx vitest run src/features/projects/storage.test.ts`.
 
 ## 2. Alignment and adoption (pure)
 
-- [ ] 2.1 Add failing tests in `identities.test.ts` for adoption by name (v1 remote takes local ids; unmatched get new ids; different ids for one name converge on the smaller), and for `alignRemote`: rename on one side, concurrent renames (later time wins, equal time uses the name tie-break), a name collision (suffix ` (2)`), and a file whose project was renamed. Verify they fail.
-- [ ] 2.2 Implement adoption, `mergeIdentities` and `alignRemote` so both sides' projects use the winning names before `mergeProjectsByFreshness`. Verify the tests from 2.1 pass.
+- [x] 2.1 Add failing tests in `identities.test.ts` for adoption by name (v1 remote takes local ids; unmatched get new ids; different ids for one name converge on the smaller), and for `alignRemote`: rename on one side, concurrent renames (later time wins, equal time uses the name tie-break), a name collision (suffix ` (2)`), and a file whose project was renamed. Verify they fail.
+- [x] 2.2 Implement adoption, `mergeIdentities` and `alignRemote` so both sides' projects use the winning names before `mergeProjectsByFreshness`. Verify the tests from 2.1 pass.
 
 ## 3. Wire into the projects hook
 

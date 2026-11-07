@@ -7,6 +7,8 @@ import {
   type StorageEnvelope,
 } from '@/lib/storage-migrations'
 import type { ProjectFile, ProjectsState } from './types'
+import { NO_IDENTITIES, normalizeIdentities } from './identities'
+import type { Identities } from './identities'
 
 const PROJECTS_STORAGE_KEY = 'projects'
 
@@ -117,6 +119,11 @@ const ARCHIVED_FILES_KEY = 'archivedFiles'
 // are opaque composite keys owned by model.ts's encodeArchivedFileKey/
 // encodeProjectTombstoneKey — same opacity convention as ARCHIVED_FILES_KEY.
 const TOMBSTONES_KEY = 'tombstones'
+// Stable-id sidecar (see identities.ts): per project/file id, its current
+// name and last-rename time. Like tombstones it is synced with the Drive
+// snapshot; this is the local copy. Opaque to this module beyond
+// normalization, same convention as the other sidecars.
+const IDENTITIES_KEY = 'identities'
 
 export interface LastEditedFile {
   project: string
@@ -502,5 +509,33 @@ export function saveTombstones(
     adapter.set(TOMBSTONES_KEY, JSON.stringify(tombstones))
   } catch (error) {
     console.error(`Failed to persist "${TOMBSTONES_KEY}"; continuing.`, error)
+  }
+}
+
+/**
+ * Reads the identity sidecar (see identities.ts). Missing or malformed
+ * data is "no ids known yet" — `ensureIdentities` assigns them on the next
+ * pass, so this never blocks loading projects.
+ */
+export function loadIdentities(adapter: StorageAdapter = localStorageAdapter): Identities {
+  const raw = adapter.get(IDENTITIES_KEY)
+  if (!raw) return NO_IDENTITIES
+  try {
+    return normalizeIdentities(JSON.parse(raw) as unknown)
+  } catch (error) {
+    console.error(`Failed to parse "${IDENTITIES_KEY}"; ignoring it.`, error)
+    return NO_IDENTITIES
+  }
+}
+
+/** Persists the identity sidecar. Best-effort. */
+export function saveIdentities(
+  identities: Identities,
+  adapter: StorageAdapter = localStorageAdapter,
+): void {
+  try {
+    adapter.set(IDENTITIES_KEY, JSON.stringify(identities))
+  } catch (error) {
+    console.error(`Failed to persist "${IDENTITIES_KEY}"; continuing.`, error)
   }
 }

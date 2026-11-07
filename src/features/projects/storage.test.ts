@@ -7,11 +7,13 @@ import {
   loadArchivedFiles,
   loadArchivedProjects,
   loadCollapsedProjects,
+  loadIdentities,
   loadLastEditedFile,
   loadProjects,
   saveArchivedFiles,
   saveArchivedProjects,
   saveCollapsedProjects,
+  saveIdentities,
   saveLastEditedFile,
   saveProjects,
   pruneExcessBackups,
@@ -373,5 +375,34 @@ describe('saveProjects — quota recovery by evicting backups (issue #120)', () 
 
     expect(() => saveProjects({}, adapter)).toThrow('boom')
     expect(values.get('projects_backup_1')).toBe('keep')
+  })
+})
+
+describe('identities sidecar', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  const ids = {
+    projects: { p1: { name: 'Notes', nameUpdatedAt: '2026-01-01T00:00:00.000Z' } },
+    files: {
+      f1: { projectId: 'p1', name: 'a.md', nameUpdatedAt: '2026-01-01T00:00:00.000Z' },
+    },
+  }
+
+  it('round-trips through localStorage', () => {
+    saveIdentities(ids)
+    expect(loadIdentities()).toEqual(ids)
+  })
+
+  it('returns an empty sidecar when nothing is stored', () => {
+    expect(loadIdentities()).toEqual({ projects: {}, files: {} })
+  })
+
+  it('ignores malformed stored data', () => {
+    localStorage.setItem('identities', '{not json')
+    expect(loadIdentities()).toEqual({ projects: {}, files: {} })
+    localStorage.setItem('identities', JSON.stringify({ projects: 3, files: [] }))
+    expect(loadIdentities()).toEqual({ projects: {}, files: {} })
   })
 })
