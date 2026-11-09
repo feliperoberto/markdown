@@ -8,7 +8,11 @@ export {
   PLACEHOLDER_CLIENT_ID,
 } from './config'
 export { driveSyncCopy } from './copy'
-export { GoogleDriveSyncProvider } from './google-drive-provider'
+export {
+  DriveSyncNotConnectedError,
+  DriveSyncOfflineError,
+  GoogleDriveSyncProvider,
+} from './google-drive-provider'
 export type { DriveSyncDotStatus, GoogleDriveSyncProviderOptions } from './google-drive-provider'
 export { loadGoogleIdentity, isGoogleIdentityAvailable } from './google-identity'
 export type {

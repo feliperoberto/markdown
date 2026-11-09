@@ -33,6 +33,9 @@ export const driveSyncCopy = {
   /** Header cloud-icon button `title` — the shortcut has no other in-app affordance pointing at it. */
   syncShortcutHint: 'Sincronização com Google Drive (Ctrl+S / Cmd+S)',
 
+  /** `push` with no access token (never connected, or the refresh failed): surfaced as "Erro ao sincronizar: …". */
+  notConnectedSyncError: 'Drive desconectado. Conecte novamente para sincronizar.',
+
   notConnectedStatus: 'Conecte sua conta Google para sincronizar seus projetos.',
   neverSyncedStatus: '⚠️ Nunca sincronizado',
 
